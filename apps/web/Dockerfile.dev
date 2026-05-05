@@ -1,0 +1,17 @@
+# ===== Web development image (hot reload via mounted volumes) =====
+FROM node:20-alpine
+RUN apk add --no-cache libc6-compat
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+WORKDIR /app
+
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+RUN pnpm install
+
+COPY tsconfig.base.json ./
+COPY packages/shared ./packages/shared
+COPY apps/web ./apps/web
+
+EXPOSE 3000
+CMD ["sh", "-c", "cd apps/web && pnpm dev"]

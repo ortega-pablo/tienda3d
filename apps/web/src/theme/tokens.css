@@ -1,0 +1,101 @@
+/*
+ * Plastik 3D — Theme tokens (single source of truth)
+ *
+ * Inspired by pulpos.com: teal primary, coral accent, warm off-white
+ * background, more rounded corners, slightly looser feel than the default
+ * shadcn slate palette.
+ *
+ * Format: HSL components (so we can use hsl(var(--token) / <alpha>) patterns).
+ */
+
+:root {
+  /* Layout */
+  --radius: 0.875rem;            /* 14px — pulpos-ish, friendlier than 10px */
+  --container-max: 1280px;
+
+  /* Brand — teal */
+  --brand-50:  170 70%  96%;
+  --brand-100: 170 70%  90%;
+  --brand-200: 172 70%  80%;
+  --brand-300: 173 72%  68%;
+  --brand-400: 173 75%  52%;
+  --brand-500: 173 80%  40%;     /* primary */
+  --brand-600: 174 84%  32%;
+  --brand-700: 175 85%  25%;
+  --brand-800: 178 80%  18%;
+  --brand-900: 180 75%  12%;
+
+  /* Accent — coral */
+  --coral-400: 15 90%  68%;
+  --coral-500: 15 90%  60%;
+  --coral-600: 12 85%  50%;
+
+  /* Semantic — light theme (default) */
+  --background:        40 25%  98%;     /* off-white, warm */
+  --foreground:        180 30% 12%;
+  --muted:             40 20%  95%;     /* beige tint */
+  --muted-foreground:  180 12% 40%;
+  --card:              0   0%   100%;
+  --card-foreground:   180 30% 12%;
+  --popover:           0   0%   100%;
+  --popover-foreground:180 30% 12%;
+  --border:            40 15%  88%;
+  --input:             40 15%  88%;
+  --ring:              173 80% 40%;
+
+  --primary:              173 80% 40%;
+  --primary-foreground:   0   0%   100%;
+  --secondary:            40 20%  93%;
+  --secondary-foreground: 180 30% 18%;
+  --accent:               15 90%  60%;
+  --accent-foreground:    0   0%   100%;
+  --destructive:          0 80%  55%;
+  --destructive-foreground: 0 0% 100%;
+  --success:              152 65% 38%;
+  --success-foreground:   0 0% 100%;
+  --warning:              38 92%  50%;
+  --warning-foreground:   180 30% 12%;
+
+  /* Chart palette — teal/coral/sand combo */
+  --chart-1: 173 80% 40%;
+  --chart-2: 15 90%  60%;
+  --chart-3: 200 60% 45%;
+  --chart-4: 38 92%  55%;
+  --chart-5: 280 50% 55%;
+
+  /* Subtle shadow with brand tint */
+  --shadow-sm:  0 1px 2px 0 hsl(180 50% 10% / 0.05);
+  --shadow:     0 4px 12px -2px hsl(180 50% 10% / 0.08);
+  --shadow-lg:  0 10px 30px -8px hsl(180 50% 10% / 0.12);
+}
+
+.dark {
+  --background:        180 30%  8%;
+  --foreground:        40 25%  96%;
+  --muted:             180 20% 14%;
+  --muted-foreground:  40 12%  65%;
+  --card:              180 30% 11%;
+  --card-foreground:   40 25%  96%;
+  --popover:           180 30% 11%;
+  --popover-foreground:40 25%  96%;
+  --border:            180 18% 20%;
+  --input:             180 18% 20%;
+  --ring:              173 80% 50%;
+
+  --primary:              173 80% 50%;
+  --primary-foreground:   180 50%  6%;
+  --secondary:            180 25% 16%;
+  --secondary-foreground: 40 25%  96%;
+  --accent:               15 90%  62%;
+  --accent-foreground:    180 50%  6%;
+  --destructive:          0 70%  55%;
+  --destructive-foreground: 0 0% 100%;
+  --success:              152 60% 50%;
+  --success-foreground:   0 0% 100%;
+  --warning:              38 92%  60%;
+  --warning-foreground:   180 50%  6%;
+
+  --shadow-sm:  0 1px 2px 0 hsl(0 0% 0% / 0.3);
+  --shadow:     0 4px 12px -2px hsl(0 0% 0% / 0.4);
+  --shadow-lg:  0 10px 30px -8px hsl(0 0% 0% / 0.5);
+}

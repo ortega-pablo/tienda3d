@@ -1,0 +1,23 @@
+# ===== API development image (hot reload via mounted volumes) =====
+FROM node:20-alpine
+RUN apk add --no-cache libc6-compat openssl tini
+RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+WORKDIR /app
+
+# Install workspace dependencies (cached in image)
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+RUN pnpm install
+
+# Copy sources (will be overridden by volume mounts in dev)
+COPY tsconfig.base.json ./
+COPY packages/shared ./packages/shared
+COPY apps/api ./apps/api
+
+# Generate Prisma client (re-runs on dev start via entrypoint script if schema changes)
+RUN cd apps/api && pnpm prisma:generate
+
+EXPOSE 3001
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["sh", "-c", "cd apps/api && pnpm prisma:generate && pnpm prisma migrate deploy && pnpm dev"]

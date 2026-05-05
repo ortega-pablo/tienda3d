@@ -1,0 +1,29 @@
+# Development overrides — auto-merged by `docker compose up`
+services:
+  api:
+    build:
+      dockerfile: apps/api/Dockerfile.dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+      - /app/apps/api/node_modules
+      - /app/packages/shared/node_modules
+    command: pnpm --filter @tienda3d/api dev
+
+  web:
+    build:
+      dockerfile: apps/web/Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      API_INTERNAL_URL: http://api:3001
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+      - /app/packages/shared/node_modules
+    command: pnpm --filter @tienda3d/web dev

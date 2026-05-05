@@ -1,0 +1,162 @@
+import { Injectable } from '@nestjs/common';
+import type {
+  ChannelPricingConfig,
+  PriceLine,
+  PricingGlobals,
+  PricingOptions,
+  ProductPricingInputs,
+  TierOverrides,
+} from './pricing.types';
+
+/**
+ * Pricing engine — Logic B (markup over cost).
+ *
+ * profit       = cost × markup%
+ * denominator  = 1 − commission% − regime%
+ * final_price  = (cost + profit) / denominator
+ *
+ * Profit per unit is the same absolute value across channels; the price
+ * adjusts so commissions/regime get deducted from the buyer's payment
+ * without eating into the seller's profit.
+ */
+
+interface TaxComputed {
+  /** Sum of regime + retentions (the deduction baked into the denominator). */
+  burdenPct: number;
+  /** Multiplier applied to the net price for the final buyer-facing price (e.g. IVA). */
+  finalMultiplier: number;
+}
+
+@Injectable()
+export class PricingEngine {
+  price(
+    cost: number,
+    channel: ChannelPricingConfig,
+    product: ProductPricingInputs,
+    globals: PricingGlobals,
+    tier: TierOverrides = {},
+    options: PricingOptions = {},
+  ): PriceLine {
+    const warnings: string[] = [];
+
+    // Resolve commission according to channel kind.
+    const commissionResult = this.resolveCommission(channel, product, tier, globals);
+    if (commissionResult.missing) {
+      warnings.push(
+        `${channel.name} requiere cargar la comisión por producto (canal MARKETPLACE).`,
+      );
+      return zeroLine({
+        markupPct: tier.markupPct ?? product.targetMarkupPct,
+        commissionPct: 0,
+        taxBurdenPct: 0,
+        missingCommission: true,
+        warnings,
+      });
+    }
+
+    const markupPct = tier.markupPct ?? product.targetMarkupPct;
+    const profit = cost * (markupPct / 100);
+
+    const tax = this.computeTaxes(channel, globals, options);
+    const commissionFraction = commissionResult.value / 100;
+    const denominator = 1 - commissionFraction - tax.burdenPct / 100;
+
+    if (denominator <= 0) {
+      warnings.push(
+        `Denominador no positivo en ${channel.name}: comisión + impuestos ≥ 100%.`,
+      );
+      return zeroLine({
+        markupPct,
+        commissionPct: commissionResult.value,
+        taxBurdenPct: tax.burdenPct,
+        missingCommission: false,
+        warnings,
+      });
+    }
+
+    const netPrice = (cost + profit) / denominator;
+    const finalPrice = netPrice * tax.finalMultiplier;
+    const effectiveMarginPct = netPrice > 0 ? (profit / netPrice) * 100 : 0;
+
+    return {
+      markupPct,
+      commissionPct: commissionResult.value,
+      taxBurdenPct: tax.burdenPct,
+      denominator,
+      netPrice,
+      finalPrice,
+      profit,
+      effectiveMarginPct,
+      missingCommission: false,
+      warnings,
+    };
+  }
+
+  private resolveCommission(
+    channel: ChannelPricingConfig,
+    product: ProductPricingInputs,
+    tier: TierOverrides,
+    globals: PricingGlobals,
+  ): { value: number; missing: boolean } {
+    // Tier override beats everything for CUSTOM/MARKETPLACE channels.
+    if (
+      tier.commissionPct != null &&
+      (channel.kind === 'CUSTOM' || channel.kind === 'MARKETPLACE')
+    ) {
+      return { value: tier.commissionPct, missing: false };
+    }
+    switch (channel.kind) {
+      case 'DIRECT_SALE':
+        return { value: globals.directSaleCommissionPct, missing: false };
+      case 'CASH':
+        return { value: 0, missing: false };
+      case 'MARKETPLACE': {
+        const fromProduct = product.marketplaceCommissionPct;
+        if (fromProduct == null) return { value: 0, missing: true };
+        return { value: fromProduct, missing: false };
+      }
+      case 'CUSTOM':
+      default:
+        return { value: channel.commissionPct, missing: false };
+    }
+  }
+
+  private computeTaxes(
+    channel: ChannelPricingConfig,
+    globals: PricingGlobals,
+    options: PricingOptions,
+  ): TaxComputed {
+    if (channel.taxMode === 'DETAILED') {
+      const iibb = channel.iibbPct ?? 0;
+      const retentions =
+        (channel.retentionIvaPct ?? 0) +
+        (channel.retentionIibbPct ?? 0) +
+        (channel.retentionIncomePct ?? 0);
+      return {
+        burdenPct: iibb + retentions,
+        finalMultiplier: channel.appliesIva ? 1.21 : 1,
+      };
+    }
+    // SIMPLE: régimen unificado is global; CASH can be exempted via admin toggle.
+    const skipRegime = options.withoutRegime === true && channel.kind === 'CASH';
+    const regime = skipRegime ? 0 : globals.unifiedRegimePct;
+    return { burdenPct: regime, finalMultiplier: 1 };
+  }
+}
+
+function zeroLine(partial: {
+  markupPct: number;
+  commissionPct: number;
+  taxBurdenPct: number;
+  missingCommission: boolean;
+  warnings: string[];
+}): PriceLine {
+  return {
+    ...partial,
+    denominator: 0,
+    netPrice: 0,
+    finalPrice: 0,
+    profit: 0,
+    effectiveMarginPct: 0,
+  };
+}

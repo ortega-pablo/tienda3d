@@ -1,0 +1,533 @@
+// ============================================================
+// Plastik 3D — Database schema
+// Replicates and extends the cost model from cotizador_cuaderno_plastik_v2.xlsx
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Identity & RBAC
+// ============================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  isActive     Boolean  @default(true)
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens      RefreshToken[]
+  productionsCreated ProductionOrder[] @relation("ProductionCreatedBy")
+  quotesCreated      Quote[]           @relation("QuoteCreatedBy")
+  stockMovements     StockMovement[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  isSystem    Boolean          @default(false)
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ============================================================
+// Global parameters (key-value, typed in service layer)
+// ============================================================
+
+model GlobalParam {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("global_params")
+}
+
+// Keys: kwh_cost, labor_hour_cost, contingency_pct, reinvestment_pct,
+//       unified_regime_pct, currency
+
+// ============================================================
+// Equipment
+// ============================================================
+
+model Machine {
+  id                String   @id @default(cuid())
+  name              String
+  isActive          Boolean  @default(true)
+  acquisitionCost   Decimal  @db.Decimal(14, 2)
+  residualValue     Decimal  @db.Decimal(14, 2)
+  usefulLifeHours   Decimal  @db.Decimal(10, 2)
+  powerW            Decimal  @db.Decimal(10, 2)
+  annualMaintenance Decimal  @db.Decimal(14, 2)
+  annualUsageHours  Decimal  @db.Decimal(10, 2)
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("machines")
+}
+
+// ============================================================
+// Suppliers & materials (catalog)
+// ============================================================
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prices SupplierMaterial[]
+
+  @@map("suppliers")
+}
+
+enum MaterialType {
+  FILAMENT
+  SHEET
+  PACKAGING
+  HARDWARE
+  OTHER
+}
+
+enum MaterialUnit {
+  KG
+  G
+  UNIT
+  REAM
+  METER
+  LITER
+}
+
+model Material {
+  id   String       @id @default(cuid())
+  name String
+  sku  String?      @unique
+  type MaterialType
+  unit MaterialUnit
+
+  // Filament hierarchy: parents group color variants of the same product line
+  // (e.g. "PLA Grilon" parent with "Rojo", "Azul", "Amarillo" children).
+  // Parents hold price (SupplierMaterial), unit, density, wastePct.
+  // Children hold currentStock, minStock, color, colorHex.
+  // Non-filament types stay flat (parentId always null).
+  parentId String?
+  parent   Material?  @relation("MaterialChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children Material[] @relation("MaterialChildren")
+
+  // Filament-only fields (nullable for other types)
+  brand       String?
+  color       String?
+  colorHex    String?
+  densityGCm3 Decimal? @db.Decimal(6, 3)
+
+  // Shared
+  wastePct      Decimal @default(5.0) @db.Decimal(5, 2)
+  currentStock  Decimal @default(0) @db.Decimal(14, 3)
+  minStock      Decimal @default(0) @db.Decimal(14, 3)
+  lowStockAlert Boolean @default(true)
+
+  notes     String?
+  imageUrl  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  suppliers        SupplierMaterial[]
+  productMaterials ProductMaterial[]
+  defaultForPieces ProductPiece[]     @relation("PieceDefaultFilament")
+  stockMovements   StockMovement[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([parentId])
+  @@map("materials")
+}
+
+model SupplierMaterial {
+  id         String   @id @default(cuid())
+  supplierId String
+  materialId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  // Per-unit price — source of truth for cost calculations. Always populated.
+  price    Decimal @db.Decimal(14, 4)
+  currency String  @default("ARS")
+  // Optional pack inputs: when present, `price` was derived from packPrice / packSize
+  // (ej. resma de 500 hojas a $17.844 → packSize=500, packPrice=17844, price=35.688).
+  packSize  Decimal? @db.Decimal(14, 3)
+  packPrice Decimal? @db.Decimal(14, 2)
+
+  link         String?
+  leadTimeDays Int?
+  isCurrent    Boolean  @default(false)
+  registeredAt DateTime @default(now())
+  notes        String?
+
+  @@index([materialId, isCurrent])
+  @@index([supplierId])
+  @@map("supplier_materials")
+}
+
+// ============================================================
+// Products & recipes
+// ============================================================
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  sku         String? @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean @default(true)
+
+  // From Excel — moved to per-product as agreed
+  marketingMonthly    Decimal @default(0) @db.Decimal(14, 2)
+  estimatedUnitsMonth Decimal @default(1) @db.Decimal(10, 2)
+
+  // Labor
+  assemblyMinutes   Decimal @default(0) @db.Decimal(8, 2)
+  managementMinutes Decimal @default(0) @db.Decimal(8, 2)
+
+  // Pricing — Logic B (markup over cost). Profit per unit = cost × markup%.
+  // Same absolute profit across channels regardless of commission/regime.
+  targetMarkupPct Decimal @default(60) @db.Decimal(6, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pieces           ProductPiece[]
+  materials        ProductMaterial[]
+  channels         ProductChannel[]
+  priceTiers       ProductPriceTier[]
+  productionOrders ProductionOrder[]
+  quoteItems       QuoteItem[]
+
+  @@map("products")
+}
+
+model ProductPiece {
+  id                String    @id @default(cuid())
+  productId         String
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name              String
+  grams             Decimal   @db.Decimal(10, 3)
+  printMinutes      Decimal   @db.Decimal(10, 2)
+  defaultFilamentId String?
+  defaultFilament   Material? @relation("PieceDefaultFilament", fields: [defaultFilamentId], references: [id])
+  sortOrder         Int       @default(0)
+
+  @@index([productId])
+  @@map("product_pieces")
+}
+
+model ProductMaterial {
+  id         String   @id @default(cuid())
+  productId  String
+  materialId String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  material   Material @relation(fields: [materialId], references: [id])
+  quantity   Decimal  @db.Decimal(14, 3)
+
+  @@unique([productId, materialId])
+  @@map("product_materials")
+}
+
+// ============================================================
+// Sales channels & pricing
+// ============================================================
+
+enum TaxMode {
+  SIMPLE
+  DETAILED
+}
+
+enum InvoiceType {
+  A
+  B
+  C
+  X // none
+}
+
+enum ChannelKind {
+  DIRECT_SALE  // commission read from global param, regime applies
+  CASH         // commission always 0, regime toggleable for admins
+  MARKETPLACE  // commission required per product (e.g. MercadoLibre)
+  CUSTOM       // user-defined channel, all fields free
+}
+
+model Channel {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  slug      String      @unique
+  icon      String?
+  isActive  Boolean     @default(true)
+  isSystem  Boolean     @default(false)
+  kind      ChannelKind @default(CUSTOM)
+  sortOrder Int         @default(0)
+
+  // Default commission used as fallback for CUSTOM kinds; ignored otherwise.
+  // Margin is no longer a channel-level concept under Logic B (markup over cost).
+  commissionPct      Decimal @default(0) @db.Decimal(5, 2)
+  withInvoiceDefault Boolean @default(false)
+
+  taxMode TaxMode @default(SIMPLE)
+
+  // SIMPLE mode
+  unifiedRegimePct Decimal? @db.Decimal(5, 2)
+
+  // DETAILED mode (prepared, optional until tax_mode flips)
+  iibbPct            Decimal?    @db.Decimal(5, 2)
+  appliesIva         Boolean     @default(false)
+  defaultInvoiceType InvoiceType @default(X)
+  retentionIvaPct    Decimal?    @db.Decimal(5, 2)
+  retentionIibbPct   Decimal?    @db.Decimal(5, 2)
+  retentionIncomePct Decimal?    @db.Decimal(5, 2)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productChannels ProductChannel[]
+  quotes          Quote[]
+
+  @@map("channels")
+}
+
+/// Per-product channel association: which channels a product is sold through,
+/// plus optional overrides. Only enabled rows are considered in pricing.
+model ProductChannel {
+  id            String   @id @default(cuid())
+  productId     String
+  channelId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channel       Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  isEnabled     Boolean  @default(true)
+  /// Required only for MARKETPLACE channels; ignored elsewhere.
+  commissionPct Decimal? @db.Decimal(5, 2)
+  notes         String?
+
+  @@unique([productId, channelId])
+  @@map("product_channels")
+}
+
+/// Wholesale scales declared once per product (1-9, 10-49, 50+, etc.).
+/// The same scale applies to every enabled channel — only the markup% changes.
+model ProductPriceTier {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQty    Int
+  maxQty    Int?
+  markupPct Decimal? @db.Decimal(6, 2)
+  notes     String?
+
+  @@unique([productId, minQty])
+  @@map("product_price_tiers")
+}
+
+// ============================================================
+// Quotes
+// ============================================================
+
+enum QuoteType {
+  PRODUCT
+  ADHOC
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Quote {
+  id     String      @id @default(cuid())
+  code   String      @unique
+  type   QuoteType
+  status QuoteStatus @default(DRAFT)
+
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  customerNotes String?
+
+  channelId   String?
+  channel     Channel? @relation(fields: [channelId], references: [id])
+  withInvoice Boolean  @default(false)
+
+  subtotal Decimal @default(0) @db.Decimal(14, 2)
+  discount Decimal @default(0) @db.Decimal(14, 2)
+  total    Decimal @default(0) @db.Decimal(14, 2)
+
+  validUntil DateTime?
+  notes      String?
+
+  createdById String
+  createdBy   User     @relation("QuoteCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items QuoteItem[]
+
+  @@index([status])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id      String @id @default(cuid())
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  // For ADHOC items: free-form payload (grams, time, filament, labor)
+  adhocPayload Json?
+
+  description String
+  quantity    Decimal @default(1) @db.Decimal(10, 2)
+  unitCost    Decimal @default(0) @db.Decimal(14, 2)
+  unitPrice   Decimal @default(0) @db.Decimal(14, 2)
+  lineTotal   Decimal @default(0) @db.Decimal(14, 2)
+
+  @@map("quote_items")
+}
+
+// ============================================================
+// Production & stock
+// ============================================================
+
+enum ProductionStatus {
+  PLANNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+model ProductionOrder {
+  id                String           @id @default(cuid())
+  code              String           @unique
+  productId         String
+  product           Product          @relation(fields: [productId], references: [id])
+  quantity          Decimal          @db.Decimal(10, 2)
+  status            ProductionStatus @default(PLANNED)
+  totalCostSnapshot Decimal          @default(0) @db.Decimal(14, 2)
+  filamentOverrides Json?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  notes             String?
+  createdById       String
+  createdBy         User             @relation("ProductionCreatedBy", fields: [createdById], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  movements StockMovement[]
+
+  @@index([status])
+  @@map("production_orders")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  WASTE
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  materialId   String
+  material     Material          @relation(fields: [materialId], references: [id])
+  type         StockMovementType
+  quantity     Decimal           @db.Decimal(14, 3)
+  unitCost     Decimal?          @db.Decimal(14, 2)
+  productionId String?
+  production   ProductionOrder?  @relation(fields: [productionId], references: [id])
+  notes        String?
+  createdById  String
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  createdAt    DateTime          @default(now())
+
+  @@index([materialId, createdAt])
+  @@map("stock_movements")
+}
+
+// ============================================================
+// Audit log
+// ============================================================
+
+model AuditLog {
+  id       String   @id @default(cuid())
+  actorId  String?
+  actor    User?    @relation(fields: [actorId], references: [id])
+  entity   String
+  entityId String
+  action   String
+  before   Json?
+  after    Json?
+  at       DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([at])
+  @@map("audit_logs")
+}
