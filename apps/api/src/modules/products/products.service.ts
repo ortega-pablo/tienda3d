@@ -46,6 +46,9 @@ export interface ProductDto {
   managementMinutes: number;
   /** Markup over cost — drives the absolute profit per unit (Logic B). */
   targetMarkupPct: number;
+  /** Operational metadata: which printer manufactures this product. */
+  machineId: string | null;
+  machineName: string | null;
   pieces: ProductPieceDto[];
   materials: ProductMaterialDto[];
   channels: ProductChannelDto[];
@@ -63,6 +66,8 @@ export interface ProductSummaryDto {
   materialCount: number;
   totalGrams: number;
   totalPrintMinutes: number;
+  machineId: string | null;
+  machineName: string | null;
 }
 
 interface PieceInput {
@@ -95,6 +100,7 @@ export interface ProductInput {
   assemblyMinutes: number;
   managementMinutes: number;
   targetMarkupPct: number;
+  machineId: string | null;
   pieces: PieceInput[];
   materials: MaterialLineInput[];
   channels?: ProductChannelInput[];
@@ -110,6 +116,7 @@ export class ProductsService {
       include: {
         pieces: true,
         materials: true,
+        machine: { select: { name: true } },
       },
     });
     return products.map((p) => ({
@@ -122,6 +129,8 @@ export class ProductsService {
       materialCount: p.materials.length,
       totalGrams: p.pieces.reduce((acc, piece) => acc + dec(piece.grams), 0),
       totalPrintMinutes: p.pieces.reduce((acc, piece) => acc + dec(piece.printMinutes), 0),
+      machineId: p.machineId,
+      machineName: p.machine?.name ?? null,
     }));
   }
 
@@ -135,6 +144,7 @@ export class ProductsService {
         },
         materials: { include: { material: true } },
         channels: { include: { channel: true } },
+        machine: { select: { name: true } },
       },
     });
     if (!p) throw new NotFoundException('Producto inexistente');
@@ -146,6 +156,13 @@ export class ProductsService {
       const exists = await this.prisma.product.findUnique({ where: { sku: input.sku } });
       if (exists) throw new ConflictException('SKU ya registrado');
     }
+
+    if (!input.machineId) {
+      throw new BadRequestException(
+        'Asigná la máquina (impresora) en la que se fabrica este producto.',
+      );
+    }
+    await this.assertMachineExists(input.machineId);
 
     const channels = await this.resolveChannels(input.channels);
     await this.validateChannels(channels);
@@ -162,6 +179,7 @@ export class ProductsService {
         assemblyMinutes: input.assemblyMinutes,
         managementMinutes: input.managementMinutes,
         targetMarkupPct: input.targetMarkupPct,
+        machineId: input.machineId,
         pieces: {
           create: input.pieces.map((piece, idx) => ({
             name: piece.name,
@@ -198,6 +216,15 @@ export class ProductsService {
       if (skuConflict) throw new ConflictException('SKU ya registrado');
     }
 
+    if (!input.machineId) {
+      throw new BadRequestException(
+        'Asigná la máquina (impresora) en la que se fabrica este producto.',
+      );
+    }
+    if (input.machineId !== exists.machineId) {
+      await this.assertMachineExists(input.machineId);
+    }
+
     const channelsToPersist = await this.resolveChannels(input.channels);
     await this.validateChannels(channelsToPersist);
 
@@ -215,6 +242,7 @@ export class ProductsService {
           assemblyMinutes: input.assemblyMinutes,
           managementMinutes: input.managementMinutes,
           targetMarkupPct: input.targetMarkupPct,
+          machineId: input.machineId,
         },
       });
       await tx.productPiece.deleteMany({ where: { productId: id } });
@@ -320,12 +348,18 @@ export class ProductsService {
     }
   }
 
+  private async assertMachineExists(machineId: string): Promise<void> {
+    const machine = await this.prisma.machine.findUnique({ where: { id: machineId } });
+    if (!machine) throw new BadRequestException('Máquina inexistente');
+  }
+
   private toDto(
     p: Prisma.ProductGetPayload<{
       include: {
         pieces: { include: { defaultFilament: true } };
         materials: { include: { material: true } };
         channels: { include: { channel: true } };
+        machine: { select: { name: true } };
       };
     }>,
   ): ProductDto {
@@ -341,6 +375,8 @@ export class ProductsService {
       assemblyMinutes: dec(p.assemblyMinutes),
       managementMinutes: dec(p.managementMinutes),
       targetMarkupPct: dec(p.targetMarkupPct),
+      machineId: p.machineId,
+      machineName: p.machine?.name ?? null,
       pieces: p.pieces.map((piece) => ({
         id: piece.id,
         name: piece.name,

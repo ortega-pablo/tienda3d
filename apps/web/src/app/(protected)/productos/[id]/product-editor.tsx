@@ -33,6 +33,12 @@ export interface ChannelLite {
   isSystem: boolean;
 }
 
+export interface MachineLite {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 interface PieceState {
   id?: string;
   name: string;
@@ -65,6 +71,8 @@ export interface ProductDto {
   assemblyMinutes: number;
   managementMinutes: number;
   targetMarkupPct: number;
+  machineId: string | null;
+  machineName: string | null;
   pieces: Array<{
     id: string;
     name: string;
@@ -126,6 +134,7 @@ interface FormState {
   assemblyMinutes: string;
   managementMinutes: string;
   targetMarkupPct: string;
+  machineId: string;
   pieces: PieceState[];
   materials: MaterialState[];
   channels: ChannelState[];
@@ -169,6 +178,7 @@ function buildInitialState(
       assemblyMinutes: product.assemblyMinutes.toString(),
       managementMinutes: product.managementMinutes.toString(),
       targetMarkupPct: product.targetMarkupPct.toString(),
+      machineId: product.machineId ?? '',
       pieces: product.pieces.map((piece) => ({
         id: piece.id,
         name: piece.name,
@@ -193,6 +203,7 @@ function buildInitialState(
     assemblyMinutes: '0',
     managementMinutes: '0',
     targetMarkupPct: '60',
+    machineId: '',
     pieces: [{ ...EMPTY_PIECE }],
     materials: [],
     channels: defaultChannelState(available),
@@ -204,10 +215,18 @@ interface Props {
   product?: ProductDto;
   materials: MaterialLite[];
   availableChannels: ChannelLite[];
+  machines: MachineLite[];
   initialCost?: CostingResult | null;
 }
 
-export function ProductEditor({ mode, product, materials, availableChannels, initialCost }: Props) {
+export function ProductEditor({
+  mode,
+  product,
+  materials,
+  availableChannels,
+  machines,
+  initialCost,
+}: Props) {
   const can = useHasPermission();
   const canWrite = can('product:write');
   const router = useRouter();
@@ -271,6 +290,7 @@ export function ProductEditor({ mode, product, materials, availableChannels, ini
     assemblyMinutes: Number(form.assemblyMinutes),
     managementMinutes: Number(form.managementMinutes),
     targetMarkupPct: Number(form.targetMarkupPct || '0'),
+    machineId: form.machineId || null,
     pieces: form.pieces
       .filter((p) => p.name && p.grams)
       .map((p, idx) => ({
@@ -395,6 +415,26 @@ export function ProductEditor({ mode, product, materials, availableChannels, ini
                     Igual en todos los canales — el precio se ajusta para que vos ganes lo mismo.
                   </p>
                 </div>
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Máquina (impresora)">
+                <select
+                  value={form.machineId}
+                  onChange={(e) => setForm({ ...form, machineId: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Seleccioná una máquina…</option>
+                  {machines.map((mc) => (
+                    <option key={mc.id} value={mc.id}>
+                      {mc.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Impresora donde se fabrica el producto. No afecta el costo (siempre se usa la
+                  máquina activa).
+                </p>
               </Field>
             </div>
             <div className="sm:col-span-2">

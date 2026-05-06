@@ -35,6 +35,8 @@ export interface FilamentLite {
 interface ProductDetail {
   id: string;
   name: string;
+  /** From the product's machineId — operational target printer for this product. */
+  machineName: string | null;
   pieces: Array<{
     id: string;
     name: string;
@@ -191,7 +193,14 @@ export function NewProductionForm({
       <div className="space-y-4 lg:col-span-2">
         <Card>
           <CardHeader>
-            <CardTitle>Producto y cantidad</CardTitle>
+            <div className="flex items-start justify-between gap-2">
+              <CardTitle>Producto y cantidad</CardTitle>
+              {product?.machineName && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  🖨 {product.machineName}
+                </span>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <Field label="Producto">

@@ -22,11 +22,18 @@ interface ChannelLite {
   isSystem: boolean;
 }
 
+interface MachineLite {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 export default async function NewProductPage() {
   await requirePermission('product:write');
-  const [materials, channels] = await Promise.all([
+  const [materials, channels, machines] = await Promise.all([
     api<MaterialLite[]>('/materials'),
     api<ChannelLite[]>('/channels'),
+    api<MachineLite[]>('/machines'),
   ]);
 
   return (
@@ -41,6 +48,7 @@ export default async function NewProductPage() {
         mode="create"
         materials={materials.filter((m) => m.isActive)}
         availableChannels={channels.filter((c) => c.isActive)}
+        machines={machines.filter((m) => m.isActive)}
       />
     </div>
   );

@@ -78,7 +78,7 @@ export class MaterialsService {
               take: 1,
               include: { supplier: { select: { name: true } } },
             },
-          },
+              },
         },
       },
     });
@@ -102,7 +102,7 @@ export class MaterialsService {
               take: 1,
               include: { supplier: { select: { name: true } } },
             },
-          },
+              },
         },
       },
     });
@@ -181,8 +181,6 @@ export class MaterialsService {
       );
     }
 
-    // Strip parentId from the update payload (Prisma rejects undefined cleanly anyway,
-    // but we want to be explicit since the field is sensitive).
     const { parentId: _ignored, ...updateData } = input;
     void _ignored;
 

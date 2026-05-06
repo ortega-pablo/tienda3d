@@ -115,6 +115,8 @@ model Machine {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  products Product[]
+
   @@map("machines")
 }
 
@@ -250,6 +252,12 @@ model Product {
   // Same absolute profit across channels regardless of commission/regime.
   targetMarkupPct Decimal @default(60) @db.Decimal(6, 2)
 
+  // Operational metadata: which printer this product is manufactured on.
+  // Required at the service layer; the cost model still uses the active
+  // global Machine (this field is purely informational).
+  machineId String?
+  machine   Machine? @relation(fields: [machineId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -260,6 +268,7 @@ model Product {
   productionOrders ProductionOrder[]
   quoteItems       QuoteItem[]
 
+  @@index([machineId])
   @@map("products")
 }
 

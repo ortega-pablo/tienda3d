@@ -5,6 +5,7 @@ import {
   ProductEditor,
   type ChannelLite,
   type CostingResult,
+  type MachineLite,
   type MaterialLite,
   type ProductDto,
 } from './product-editor';
@@ -26,12 +27,13 @@ export default async function ProductDetailPage({
     throw err;
   }
 
-  const [materials, cost, prices, channels, tiers] = await Promise.all([
+  const [materials, cost, prices, channels, tiers, machines] = await Promise.all([
     api<MaterialLite[]>('/materials'),
     api<CostingResult>(`/products/${id}/cost`).catch(() => null),
     api<ProductPricesResponse>(`/products/${id}/prices`).catch(() => null),
     api<ChannelLite[]>('/channels'),
     api<TierDto[]>(`/products/${id}/tiers`).catch(() => [] as TierDto[]),
+    api<MachineLite[]>('/machines'),
   ]);
 
   return (
@@ -49,6 +51,7 @@ export default async function ProductDetailPage({
         product={product}
         materials={materials.filter((m) => m.isActive)}
         availableChannels={channels.filter((c) => c.isActive)}
+        machines={machines.filter((m) => m.isActive)}
         initialCost={cost}
       />
 
