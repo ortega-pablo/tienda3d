@@ -3,8 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
 
 export interface QuoteDto {
@@ -54,34 +58,49 @@ const TRANSITIONS: Record<QuoteDto['status'], Array<{ to: QuoteDto['status']; la
   EXPIRED: [{ to: 'DRAFT', label: 'Volver a borrador' }],
 };
 
+const STATUS_TOAST: Record<QuoteDto['status'], string> = {
+  DRAFT: 'Cotización vuelta a borrador.',
+  SENT: 'Cotización marcada como enviada.',
+  ACCEPTED: 'Cotización aceptada.',
+  REJECTED: 'Cotización rechazada.',
+  EXPIRED: 'Cotización marcada como vencida.',
+};
+
 export function QuoteActions({ quote }: { quote: QuoteDto }) {
   const can = useHasPermission();
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const transitions = TRANSITIONS[quote.status] ?? [];
 
   const setStatus = async (status: QuoteDto['status']) => {
-    setError(null);
     setPending(true);
     try {
       await api(`/quotes/${quote.id}/status`, { method: 'PATCH', body: { status } });
+      toast.success(STATUS_TOAST[status]);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo cambiar el estado');
+      handleApiError(err);
     } finally {
       setPending(false);
     }
   };
 
   const remove = async () => {
-    if (!confirm('¿Eliminar esta cotización? Solo borradores pueden eliminarse.')) return;
+    const ok = await confirm({
+      title: '¿Eliminar esta cotización?',
+      description: 'Solo borradores pueden eliminarse.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await api(`/quotes/${quote.id}`, { method: 'DELETE' });
+      toast.success('Cotización eliminada.');
       router.replace('/cotizaciones');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     }
   };
 
@@ -106,6 +125,7 @@ export function QuoteActions({ quote }: { quote: QuoteDto }) {
               onClick={() => setStatus(t.to)}
               disabled={pending}
             >
+              {pending && <Spinner size="sm" />}
               {t.label}
             </Button>
           ))}
@@ -115,11 +135,6 @@ export function QuoteActions({ quote }: { quote: QuoteDto }) {
           </Button>
         )}
       </div>
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

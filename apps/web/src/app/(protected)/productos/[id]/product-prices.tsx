@@ -3,12 +3,16 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useCurrentUser, useHasPermission } from '@/components/user-provider';
 
 type ChannelKind = 'DIRECT_SALE' | 'CASH' | 'MARKETPLACE' | 'CUSTOM';
@@ -91,10 +95,10 @@ export function ProductPrices({
   const canSeeNoInvoice = user.permissions.includes('pricing:no-invoice:read');
   const router = useRouter();
 
+  const confirm = useConfirm();
   const [tiers, setTiers] = useState(initialTiers);
   const [prices, setPrices] = useState(initialPrices);
   const [withoutRegime, setWithoutRegime] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -121,7 +125,6 @@ export function ProductPrices({
     reloadAbortRef.current = controller;
 
     setWithoutRegime(next);
-    setError(null);
     try {
       const url = next
         ? `/products/${productId}/prices?withoutRegime=true`
@@ -132,7 +135,7 @@ export function ProductPrices({
     } catch (err) {
       if (controller.signal.aborted) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      setError('No se pudo recargar precios');
+      handleApiError(err, { fallback: 'No se pudo recargar precios' });
     }
   };
 
@@ -157,22 +160,23 @@ export function ProductPrices({
   const canAppend = expectedMinQty != null;
 
   const addTier = async () => {
-    setError(null);
     if (expectedMinQty == null) {
-      setError('La última escala cubre infinito. No se pueden agregar más.');
+      toast.warning('La última escala cubre infinito. No se pueden agregar más.');
       return;
     }
     const markup = draft.markupPct ? Number(draft.markupPct) : null;
     if (markupCeiling != null) {
       const effective = markup != null ? markup : prices.targetMarkupPct;
       if (effective >= markupCeiling) {
-        setError(`El markup debe ser menor a ${formatNumber(markupCeiling)}% (escala anterior)`);
+        toast.warning(
+          `El markup debe ser menor a ${formatNumber(markupCeiling)}% (escala anterior)`,
+        );
         return;
       }
     }
     const maxQty = draft.maxQty ? Number(draft.maxQty) : null;
     if (maxQty != null && maxQty < expectedMinQty) {
-      setError(`Hasta debe ser ≥ ${expectedMinQty}`);
+      toast.warning(`Hasta debe ser ≥ ${expectedMinQty}`);
       return;
     }
 
@@ -196,16 +200,22 @@ export function ProductPrices({
       ]);
       setTiers(tFresh);
       setPrices(pFresh);
+      toast.success('Escala creada.');
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo crear la escala');
+      handleApiError(err);
     } finally {
       setCreating(false);
     }
   };
 
   const removeTier = async (tierId: string) => {
-    if (!confirm('¿Eliminar escala?')) return;
+    const ok = await confirm({
+      title: '¿Eliminar escala?',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await api(`/products/${productId}/tiers/${tierId}`, { method: 'DELETE' });
       const [tFresh, pFresh] = await Promise.all([
@@ -216,13 +226,13 @@ export function ProductPrices({
       ]);
       setTiers(tFresh);
       setPrices(pFresh);
+      toast.success('Escala eliminada.');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     }
   };
 
   const startEditTier = (t: TierDto) => {
-    setError(null);
     setEditingTierId(t.id);
     setEditDraft({
       maxQty: t.maxQty == null ? '' : String(t.maxQty),
@@ -233,7 +243,6 @@ export function ProductPrices({
 
   const cancelEditTier = () => {
     setEditingTierId(null);
-    setError(null);
   };
 
   const saveEditTier = async () => {
@@ -247,25 +256,23 @@ export function ProductPrices({
     const next = idx < tiers.length - 1 ? tiers[idx + 1] : null;
     const fallback = prices.targetMarkupPct;
 
-    setError(null);
-
     const markup = editDraft.markupPct.trim() === '' ? null : Number(editDraft.markupPct);
     if (markup != null && Number.isNaN(markup)) {
-      setError('Markup inválido');
+      toast.warning('Markup inválido');
       return;
     }
     const effective = markup != null ? markup : fallback;
     if (prev) {
       const ceiling = prev.markupPct ?? fallback;
       if (effective >= ceiling) {
-        setError(`Markup debe ser menor a ${formatNumber(ceiling)}% (escala anterior)`);
+        toast.warning(`Markup debe ser menor a ${formatNumber(ceiling)}% (escala anterior)`);
         return;
       }
     }
     if (next) {
       const floor = next.markupPct ?? fallback;
       if (effective <= floor) {
-        setError(`Markup debe ser mayor a ${formatNumber(floor)}% (escala siguiente)`);
+        toast.warning(`Markup debe ser mayor a ${formatNumber(floor)}% (escala siguiente)`);
         return;
       }
     }
@@ -274,11 +281,11 @@ export function ProductPrices({
     if (isLast) {
       maxQty = editDraft.maxQty.trim() === '' ? null : Number(editDraft.maxQty);
       if (maxQty != null && Number.isNaN(maxQty)) {
-        setError('Hasta inválido');
+        toast.warning('Hasta inválido');
         return;
       }
       if (maxQty != null && maxQty < tier.minQty) {
-        setError(`Hasta debe ser ≥ ${tier.minQty} (o vacío para infinito)`);
+        toast.warning(`Hasta debe ser ≥ ${tier.minQty} (o vacío para infinito)`);
         return;
       }
     }
@@ -301,9 +308,10 @@ export function ProductPrices({
       setTiers(tFresh);
       setPrices(pFresh);
       setEditingTierId(null);
+      toast.success('Escala actualizada.');
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar la escala');
+      handleApiError(err);
     } finally {
       setSavingEdit(false);
     }
@@ -415,12 +423,6 @@ export function ProductPrices({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
           {tiers.length === 0 && (
             <p className="text-sm text-muted-foreground">
               Sin escalas. Todos los canales usan el markup objetivo del producto.
@@ -511,7 +513,7 @@ export function ProductPrices({
                       Cancelar
                     </Button>
                     <Button size="sm" onClick={saveEditTier} disabled={savingEdit}>
-                      <Check className="h-4 w-4" />
+                      {savingEdit ? <Spinner size="sm" /> : <Check className="h-4 w-4" />}
                       {savingEdit ? 'Guardando…' : 'Guardar'}
                     </Button>
                   </div>
@@ -619,7 +621,7 @@ export function ProductPrices({
                     disabled={creating}
                     className="w-full"
                   >
-                    <Plus className="h-4 w-4" />
+                    {creating ? <Spinner size="sm" /> : <Plus className="h-4 w-4" />}
                     {creating ? 'Agregando…' : 'Agregar escala'}
                   </Button>
                 </>

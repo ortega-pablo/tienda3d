@@ -12,7 +12,10 @@ import {
   Palette,
   Plus,
 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
+import { useConfirm } from '@/components/confirm-provider';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -92,13 +95,13 @@ export function MaterialsView({
   const can = useHasPermission();
   const canWrite = can('material:write');
   const router = useRouter();
+  const confirm = useConfirm();
   const [materials, setMaterials] = useState(initialMaterials);
   const [activeTab, setActiveTab] = useState<MaterialType | 'ALL'>('ALL');
   const [dialog, setDialog] = useState<DialogContext | null>(null);
   const [showingPricesFor, setShowingPricesFor] = useState<MaterialDto | null>(null);
   const [showingStockFor, setShowingStockFor] = useState<MaterialDto | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(
     () => materials.filter((m) => (activeTab === 'ALL' ? true : m.type === activeTab)),
@@ -163,12 +166,18 @@ export function MaterialsView({
 
   const remove = async (m: MaterialDto) => {
     const label = m.parentId ? 'variante' : 'insumo';
-    if (!confirm(`¿Eliminar ${label} "${m.name}"?`)) return;
+    const ok = await confirm({
+      title: `¿Eliminar ${label} "${m.name}"?`,
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await api(`/materials/${m.id}`, { method: 'DELETE' });
+      toast.success(`${label === 'variante' ? 'Variante' : 'Insumo'} eliminado.`);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     }
   };
 
@@ -222,12 +231,6 @@ export function MaterialsView({
             <strong>{lowStockCount}</strong> insumo(s) bajo stock mínimo.
           </span>
         </div>
-      )}
-
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-          {error}
-        </p>
       )}
 
       <Card>

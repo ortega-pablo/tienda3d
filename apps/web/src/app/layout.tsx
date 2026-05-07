@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import { Toaster } from 'sonner';
+import { ConfirmProvider } from '@/components/confirm-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import './globals.css';
 
@@ -29,7 +31,10 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-background font-sans antialiased" suppressHydrationWarning>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+          <Toaster richColors closeButton position="top-right" />
+        </ThemeProvider>
       </body>
     </html>
   );

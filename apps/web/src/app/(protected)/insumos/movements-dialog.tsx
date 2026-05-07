@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Minus } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { useHasPermission } from '@/components/user-provider';
 import type { MaterialDto } from './materials-view';
 
@@ -51,7 +54,6 @@ export function MovementsDialog({
   const [delta, setDelta] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const reload = async () => {
     const data = await api<StockMovement[]>(
@@ -67,7 +69,7 @@ export function MovementsDialog({
         if (!cancelled) setMovements(d);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'No se pudieron cargar los movimientos');
+        if (!cancelled) handleApiError(err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -80,10 +82,9 @@ export function MovementsDialog({
   const adjust = async (sign: 1 | -1) => {
     const value = Number(delta);
     if (!value || value <= 0) {
-      setError('Ingresá una cantidad mayor a 0');
+      toast.warning('Ingresá una cantidad mayor a 0');
       return;
     }
-    setError(null);
     setSaving(true);
     try {
       const updated = await api<MaterialDto>(`/materials/${material.id}/stock-adjust`, {
@@ -93,9 +94,10 @@ export function MovementsDialog({
       onMaterialUpdated(updated);
       setDelta('');
       setNotes('');
+      toast.success(sign > 0 ? 'Stock incrementado.' : 'Stock descontado.');
       await reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo ajustar el stock');
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
@@ -120,18 +122,14 @@ export function MovementsDialog({
             </Button>
           </div>
 
-          {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
           {canAdjust && (
             <div className="rounded-md border bg-muted/20 p-3">
               <p className="mb-3 text-sm font-medium">Ajuste manual</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Cantidad</Label>
+                  <Label className="text-xs" required>
+                    Cantidad
+                  </Label>
                   <Input
                     type="number"
                     step="any"
@@ -151,11 +149,16 @@ export function MovementsDialog({
                 </div>
               </div>
               <div className="mt-3 flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => adjust(-1)} disabled={saving}>
-                  <Minus className="h-4 w-4" /> Restar
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => adjust(-1)}
+                  disabled={saving || !Number(delta)}
+                >
+                  {saving ? <Spinner size="sm" /> : <Minus className="h-4 w-4" />} Restar
                 </Button>
-                <Button size="sm" onClick={() => adjust(1)} disabled={saving}>
-                  <Plus className="h-4 w-4" /> Sumar
+                <Button size="sm" onClick={() => adjust(1)} disabled={saving || !Number(delta)}>
+                  {saving ? <Spinner size="sm" /> : <Plus className="h-4 w-4" />} Sumar
                 </Button>
               </div>
             </div>

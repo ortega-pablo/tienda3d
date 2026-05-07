@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Spinner } from '@/components/ui/spinner';
 import type { MaterialDto, MaterialType, MaterialUnit } from './materials-view';
 
 const TYPES: Array<{ value: MaterialType; label: string }> = [
@@ -106,7 +109,6 @@ export function MaterialDialog({
   onSaved: (m: MaterialDto, isNew: boolean) => void;
 }) {
   const [form, setForm] = useState<FormState>(initialFromMaterial(material, parent));
-  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const isFilament = form.type === 'FILAMENT';
@@ -120,8 +122,14 @@ export function MaterialDialog({
     return 'Nuevo insumo';
   })();
 
+  const isFormValid = (() => {
+    if (!form.name.trim()) return false;
+    if (isFilamentParent && !form.brand.trim()) return false;
+    if (isVariant && !form.color.trim()) return false;
+    return true;
+  })();
+
   const save = async () => {
-    setError(null);
     setSaving(true);
     try {
       const variantParentId = isVariant
@@ -150,9 +158,10 @@ export function MaterialDialog({
       const result = material
         ? await api<MaterialDto>(`/materials/${material.id}`, { method: 'PATCH', body })
         : await api<MaterialDto>('/materials', { method: 'POST', body });
+      toast.success(material ? 'Insumo actualizado.' : 'Insumo creado.');
       onSaved(result, !material);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar');
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
@@ -172,7 +181,7 @@ export function MaterialDialog({
           )}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={isVariant ? 'Nombre completo (ej. PLA Grilon · Rojo)' : 'Nombre'}>
+            <Field label={isVariant ? 'Nombre completo (ej. PLA Grilon · Rojo)' : 'Nombre'} required>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -185,7 +194,7 @@ export function MaterialDialog({
                 placeholder="Opcional"
               />
             </Field>
-            <Field label="Tipo">
+            <Field label="Tipo" required>
               <Select
                 value={form.type}
                 onChange={(v) => setForm({ ...form, type: v as MaterialType })}
@@ -198,7 +207,7 @@ export function MaterialDialog({
                 ))}
               </Select>
             </Field>
-            <Field label="Unidad">
+            <Field label="Unidad" required>
               <Select
                 value={form.unit}
                 onChange={(v) => setForm({ ...form, unit: v as MaterialUnit })}
@@ -215,7 +224,7 @@ export function MaterialDialog({
 
           {isFilament && !isVariant && (
             <div className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:grid-cols-2">
-              <Field label="Marca">
+              <Field label="Marca" required>
                 <Input
                   value={form.brand}
                   onChange={(e) => setForm({ ...form, brand: e.target.value })}
@@ -234,7 +243,7 @@ export function MaterialDialog({
 
           {isVariant && (
             <div className="grid gap-3 rounded-md border bg-muted/20 p-3 sm:grid-cols-2">
-              <Field label="Color">
+              <Field label="Color" required>
                 <Input
                   value={form.color}
                   onChange={(e) => setForm({ ...form, color: e.target.value })}
@@ -313,17 +322,12 @@ export function MaterialDialog({
             />
           </Field>
 
-          {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
-
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
-            <Button onClick={save} disabled={!form.name || saving}>
+            <Button onClick={save} disabled={!isFormValid || saving}>
+              {saving && <Spinner size="sm" />}
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
           </div>
@@ -333,10 +337,18 @@ export function MaterialDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );

@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
 
 export type ProductionStatus = 'PLANNED' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
@@ -32,7 +36,10 @@ export interface ProductionDto {
   }>;
 }
 
-const TRANSITIONS: Record<ProductionStatus, Array<{ to: ProductionStatus; label: string; primary?: boolean }>> = {
+const TRANSITIONS: Record<
+  ProductionStatus,
+  Array<{ to: ProductionStatus; label: string; primary?: boolean }>
+> = {
   PLANNED: [
     { to: 'IN_PROGRESS', label: 'Iniciar producción', primary: true },
     { to: 'DONE', label: 'Marcar completada (descuenta stock)' },
@@ -46,29 +53,47 @@ const TRANSITIONS: Record<ProductionStatus, Array<{ to: ProductionStatus; label:
   CANCELLED: [],
 };
 
+const STATUS_TOAST: Record<ProductionStatus, string> = {
+  PLANNED: 'Orden vuelta a planificada.',
+  IN_PROGRESS: 'Producción iniciada.',
+  DONE: 'Orden completada. Stock descontado.',
+  CANCELLED: 'Orden cancelada.',
+};
+
 export function ProductionActions({ order }: { order: ProductionDto }) {
   const can = useHasPermission();
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   if (!can('production:execute')) return null;
   const transitions = TRANSITIONS[order.status] ?? [];
 
   const setStatus = async (status: ProductionStatus) => {
     if (status === 'DONE') {
-      const ok = confirm(
-        '¿Marcar esta orden como completada? Se descontará el stock de todos los insumos consumidos.',
-      );
+      const ok = await confirm({
+        title: '¿Marcar esta orden como completada?',
+        description: 'Se descontará el stock de todos los insumos consumidos.',
+        confirmLabel: 'Completar',
+        variant: 'destructive',
+      });
+      if (!ok) return;
+    } else if (status === 'CANCELLED') {
+      const ok = await confirm({
+        title: '¿Cancelar la orden?',
+        confirmLabel: 'Cancelar orden',
+        cancelLabel: 'Volver',
+        variant: 'destructive',
+      });
       if (!ok) return;
     }
-    setError(null);
     setPending(true);
     try {
       await api(`/productions/${order.id}/status`, { method: 'PATCH', body: { status } });
+      toast.success(STATUS_TOAST[status]);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo cambiar el estado');
+      handleApiError(err);
     } finally {
       setPending(false);
     }
@@ -84,15 +109,11 @@ export function ProductionActions({ order }: { order: ProductionDto }) {
             onClick={() => setStatus(t.to)}
             disabled={pending}
           >
+            {pending && <Spinner size="sm" />}
             {t.label}
           </Button>
         ))}
       </div>
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

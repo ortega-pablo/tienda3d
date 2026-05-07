@@ -3,13 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2, Zap } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 export interface ChannelLite {
   id: string;
@@ -72,7 +75,6 @@ export function RapidQuoteForm({
   const [managementMinutes, setManagementMinutes] = useState('0');
 
   const [preview, setPreview] = useState<Preview | 'loading' | 'error' | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const buildItem = () => ({
@@ -106,12 +108,11 @@ export function RapidQuoteForm({
       setPreview(result);
     } catch (err) {
       setPreview('error');
-      setError(err instanceof ApiError ? err.message : 'Error al calcular');
+      handleApiError(err, { fallback: 'Error al calcular' });
     }
   };
 
   const submit = async () => {
-    setError(null);
     setSaving(true);
     try {
       const created = await api<{ id: string }>('/quotes', {
@@ -129,9 +130,10 @@ export function RapidQuoteForm({
           items: [buildItem()],
         },
       });
+      toast.success('Cotización rápida creada.');
       router.replace(`/cotizaciones/${created.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo crear la cotización');
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
@@ -155,6 +157,12 @@ export function RapidQuoteForm({
   const lineTotal = preview && typeof preview === 'object' ? preview.lineTotal : 0;
   const total = Math.max(lineTotal - Number(discount || '0'), 0);
 
+  const isFormValid =
+    customer.name.trim().length > 0 &&
+    Number(quantity || '0') > 0 &&
+    description.trim().length > 0 &&
+    pieces.some((p) => p.filamentId && Number(p.grams || '0') > 0);
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
@@ -163,7 +171,7 @@ export function RapidQuoteForm({
             <CardTitle>Cliente y canal</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Field label="Cliente">
+            <Field label="Cliente" required>
               <Input
                 value={customer.name}
                 onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
@@ -239,7 +247,7 @@ export function RapidQuoteForm({
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-12">
               <div className="sm:col-span-9">
-                <Field label="Descripción">
+                <Field label="Descripción" required>
                   <Input
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -248,7 +256,7 @@ export function RapidQuoteForm({
                 </Field>
               </div>
               <div className="sm:col-span-3">
-                <Field label="Cantidad">
+                <Field label="Cantidad" required>
                   <Input
                     type="number"
                     min="1"
@@ -282,7 +290,9 @@ export function RapidQuoteForm({
                     <Input value={p.name} onChange={(e) => setPiece(idx, { name: e.target.value })} />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label className="text-xs">Gramos</Label>
+                    <Label className="text-xs" required>
+                      Gramos
+                    </Label>
                     <Input
                       type="number"
                       step="any"
@@ -300,7 +310,9 @@ export function RapidQuoteForm({
                     />
                   </div>
                   <div className="sm:col-span-3">
-                    <Label className="text-xs">Filamento</Label>
+                    <Label className="text-xs" required>
+                      Filamento
+                    </Label>
                     <select
                       value={p.filamentId}
                       onChange={(e) => setPiece(idx, { filamentId: e.target.value })}
@@ -350,7 +362,9 @@ export function RapidQuoteForm({
               {materials.map((m, idx) => (
                 <div key={idx} className="mb-2 grid gap-2 rounded border p-2 sm:grid-cols-12">
                   <div className="sm:col-span-7">
-                    <Label className="text-xs">Insumo</Label>
+                    <Label className="text-xs" required>
+                      Insumo
+                    </Label>
                     <select
                       value={m.materialId}
                       onChange={(e) => setMaterial(idx, { materialId: e.target.value })}
@@ -364,7 +378,9 @@ export function RapidQuoteForm({
                     </select>
                   </div>
                   <div className="sm:col-span-3">
-                    <Label className="text-xs">Cantidad</Label>
+                    <Label className="text-xs" required>
+                      Cantidad
+                    </Label>
                     <Input
                       type="number"
                       step="any"
@@ -404,18 +420,12 @@ export function RapidQuoteForm({
           </CardContent>
         </Card>
 
-        {error && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
         <div className="flex justify-between gap-2">
           <Button variant="outline" onClick={calc}>
             Calcular precio
           </Button>
-          <Button onClick={submit} disabled={!customer.name || saving}>
-            <Save className="h-4 w-4" />
+          <Button onClick={submit} disabled={!isFormValid || saving}>
+            {saving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
             {saving ? 'Guardando…' : 'Crear cotización'}
           </Button>
         </div>
@@ -457,10 +467,18 @@ export function RapidQuoteForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );

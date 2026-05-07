@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 export interface ProductLite {
   id: string;
@@ -74,7 +77,6 @@ export function NewProductionForm({
   const [notes, setNotes] = useState('');
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [unitCost, setUnitCost] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Index filaments by parent id and by variant id, so we can look up either
@@ -162,9 +164,8 @@ export function NewProductionForm({
   }, [product, overrides, quantity, filaments]);
 
   const submit = async () => {
-    setError(null);
     if (!allColorsPicked) {
-      setError('Asigná un color a cada pieza antes de crear la orden.');
+      toast.warning('Asigná un color a cada pieza antes de crear la orden.');
       return;
     }
     setSaving(true);
@@ -178,9 +179,10 @@ export function NewProductionForm({
           notes: notes || null,
         },
       });
+      toast.success('Orden de producción creada.');
       router.replace(`/produccion/${created.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo crear la orden');
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
@@ -203,7 +205,7 @@ export function NewProductionForm({
             </div>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Field label="Producto">
+            <Field label="Producto" required>
               <select
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
@@ -216,7 +218,7 @@ export function NewProductionForm({
                 ))}
               </select>
             </Field>
-            <Field label="Cantidad">
+            <Field label="Cantidad" required>
               <Input
                 type="number"
                 min="1"
@@ -284,7 +286,9 @@ export function NewProductionForm({
                         </p>
                       ) : (
                         <>
-                          <Label className="text-xs">Color</Label>
+                          <Label className="text-xs" required>
+                            Color
+                          </Label>
                           <select
                             value={selected}
                             onChange={(e) =>
@@ -314,18 +318,12 @@ export function NewProductionForm({
           </Card>
         )}
 
-        {error && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
         <div className="flex justify-end">
           <Button
             onClick={submit}
             disabled={!productId || !quantity || saving || !allColorsPicked}
           >
-            <Save className="h-4 w-4" />
+            {saving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
             {saving ? 'Creando…' : 'Crear orden'}
           </Button>
         </div>
@@ -375,10 +373,18 @@ export function NewProductionForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );

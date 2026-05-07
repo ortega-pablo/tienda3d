@@ -3,13 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 
 export interface ProductLite {
   id: string;
@@ -57,7 +60,6 @@ export function ProductQuoteForm({
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<ItemDraft[]>([newItem(products[0]?.id ?? '')]);
   const [previews, setPreviews] = useState<Record<number, ItemPreview | 'loading' | 'error'>>({});
-  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const setItem = (idx: number, patch: Partial<ItemDraft>) => {
@@ -92,7 +94,6 @@ export function ProductQuoteForm({
   };
 
   const submit = async () => {
-    setError(null);
     setSaving(true);
     try {
       const created = await api<{ id: string }>('/quotes', {
@@ -115,9 +116,10 @@ export function ProductQuoteForm({
           })),
         },
       });
+      toast.success('Cotización creada.');
       router.replace(`/cotizaciones/${created.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo crear la cotización');
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
@@ -129,6 +131,11 @@ export function ProductQuoteForm({
   );
   const total = Math.max(subtotal - Number(discount || '0'), 0);
 
+  const isFormValid =
+    customer.name.trim().length > 0 &&
+    items.length > 0 &&
+    items.every((i) => i.productId && Number(i.quantity || '0') > 0);
+
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
@@ -137,7 +144,7 @@ export function ProductQuoteForm({
             <CardTitle>Cliente y canal</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Field label="Cliente">
+            <Field label="Cliente" required>
               <Input
                 value={customer.name}
                 onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
@@ -223,7 +230,9 @@ export function ProductQuoteForm({
                 <div key={idx} className="rounded-md border p-3">
                   <div className="grid gap-3 sm:grid-cols-12">
                     <div className="sm:col-span-7">
-                      <Label className="text-xs">Producto</Label>
+                      <Label className="text-xs" required>
+                        Producto
+                      </Label>
                       <select
                         value={item.productId}
                         onChange={(e) => setItem(idx, { productId: e.target.value })}
@@ -237,7 +246,9 @@ export function ProductQuoteForm({
                       </select>
                     </div>
                     <div className="sm:col-span-2">
-                      <Label className="text-xs">Cantidad</Label>
+                      <Label className="text-xs" required>
+                        Cantidad
+                      </Label>
                       <Input
                         type="number"
                         min="1"
@@ -278,15 +289,9 @@ export function ProductQuoteForm({
           </CardContent>
         </Card>
 
-        {error && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
         <div className="flex justify-end">
-          <Button onClick={submit} disabled={!customer.name || saving}>
-            <Save className="h-4 w-4" />
+          <Button onClick={submit} disabled={!isFormValid || saving}>
+            {saving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
             {saving ? 'Guardando…' : 'Crear cotización'}
           </Button>
         </div>
@@ -320,10 +325,18 @@ export function ProductQuoteForm({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );

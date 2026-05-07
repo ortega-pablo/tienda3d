@@ -2,13 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Save, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { useEditMode } from '@/hooks/use-edit-mode';
 import { useHasPermission } from '@/components/user-provider';
 
 export interface MaterialLite {
@@ -230,10 +234,16 @@ export function ProductEditor({
   const can = useHasPermission();
   const canWrite = can('product:write');
   const router = useRouter();
-  const [form, setForm] = useState<FormState>(buildInitialState(product, availableChannels));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const initialFormState = useMemo(
+    () => buildInitialState(product, availableChannels),
+    [product, availableChannels],
+  );
+  const [form, setForm] = useState<FormState>(initialFormState);
   const [cost, setCost] = useState<CostingResult | null>(initialCost ?? null);
+
+  // Create flow stays editable; edit flow starts read-only and toggles via "Editar".
+  const editMode = useEditMode(mode === 'create');
+  const readOnly = !editMode.editing || !canWrite;
 
   const channelsById = useMemo(
     () => new Map(availableChannels.map((c) => [c.id, c])),
@@ -326,43 +336,99 @@ export function ProductEditor({
     return null;
   };
 
+  /**
+   * All required fields must be filled before the save button enables. This
+   * mirrors the backend rules so the user gets immediate feedback on the
+   * button state. Marketplace commission validation surfaces via toast on
+   * submit attempt — kept inline here too so the button reflects readiness.
+   */
+  const isFormValid = useMemo<boolean>(() => {
+    if (!form.name.trim()) return false;
+    if (!form.machineId) return false;
+    if (!form.targetMarkupPct || Number(form.targetMarkupPct) < 0) return false;
+    // Each piece needs name + grams + filament; at least 1 piece total.
+    const validPieces = form.pieces.filter(
+      (p) => p.name.trim() && Number(p.grams || '0') > 0 && p.defaultFilamentId,
+    );
+    if (validPieces.length === 0) return false;
+    // Materials are optional, but if a row exists it must have material + qty.
+    for (const m of form.materials) {
+      if (!m.materialId || !Number(m.quantity || '0')) return false;
+    }
+    // MARKETPLACE channels enabled need commission filled.
+    for (const c of form.channels) {
+      if (!c.isEnabled) continue;
+      const channel = channelsById.get(c.channelId);
+      if (channel?.kind === 'MARKETPLACE' && !c.commissionPct) return false;
+    }
+    return true;
+  }, [form, channelsById]);
+
   const handleSave = async () => {
-    setError(null);
     const validation = validateBeforeSave();
     if (validation) {
-      setError(validation);
+      toast.warning(validation);
       return;
     }
-    setSaving(true);
-    try {
-      const payload = buildPayload();
-      const result =
-        mode === 'create'
-          ? await api<ProductDto>('/products', { method: 'POST', body: payload })
-          : await api<ProductDto>(`/products/${product!.id}`, { method: 'PUT', body: payload });
-
-      // Always re-fetch the cost after save so the panel reflects persisted state.
-      const fresh = await api<CostingResult>(`/products/${result.id}/cost`).catch(() => null);
-      setCost(fresh);
-
-      if (mode === 'create') router.replace(`/productos/${result.id}`);
-      else router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar');
-    } finally {
-      setSaving(false);
-    }
+    await editMode.save(
+      async () => {
+        const payload = buildPayload();
+        const result =
+          mode === 'create'
+            ? await api<ProductDto>('/products', { method: 'POST', body: payload })
+            : await api<ProductDto>(`/products/${product!.id}`, { method: 'PUT', body: payload });
+        // Always re-fetch the cost after save so the panel reflects persisted state.
+        const fresh = await api<CostingResult>(`/products/${result.id}/cost`).catch(() => null);
+        setCost(fresh);
+        if (mode === 'create') router.replace(`/productos/${result.id}`);
+        else router.refresh();
+      },
+      { successMessage: mode === 'create' ? 'Producto creado.' : 'Producto actualizado.' },
+    );
   };
+
+  const cancelEdit = () => editMode.cancel(() => setForm(initialFormState));
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {canWrite && (
+          <div className="flex justify-end gap-2">
+            {mode === 'edit' && !editMode.editing ? (
+              <Button variant="outline" onClick={editMode.start}>
+                <Pencil className="h-4 w-4" />
+                Editar
+              </Button>
+            ) : (
+              <>
+                {mode === 'edit' && (
+                  <Button variant="ghost" onClick={cancelEdit} disabled={editMode.saving}>
+                    <X className="h-4 w-4" />
+                    Cancelar
+                  </Button>
+                )}
+                <Button onClick={handleSave} disabled={!isFormValid || editMode.saving}>
+                  {editMode.saving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+                  {editMode.saving
+                    ? 'Guardando…'
+                    : mode === 'create'
+                      ? 'Crear producto'
+                      : 'Guardar cambios'}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* fieldset cascades disabled to every form control inside;
+            display:contents removes its box so layout stays the same. */}
+        <fieldset disabled={readOnly} className="contents">
         <Card>
           <CardHeader>
             <CardTitle>Datos del producto</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nombre">
+            <Field label="Nombre" required>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </Field>
             <Field label="SKU">
@@ -401,7 +467,7 @@ export function ProductEditor({
               />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Markup objetivo (% sobre costo)">
+              <Field label="Markup objetivo (% sobre costo)" required>
                 <div className="space-y-1">
                   <Input
                     type="number"
@@ -418,7 +484,7 @@ export function ProductEditor({
               </Field>
             </div>
             <div className="sm:col-span-2">
-              <Field label="Máquina (impresora)">
+              <Field label="Máquina (impresora)" required>
                 <select
                   value={form.machineId}
                   onChange={(e) => setForm({ ...form, machineId: e.target.value })}
@@ -466,7 +532,9 @@ export function ProductEditor({
             {form.pieces.map((piece, idx) => (
               <div key={idx} className="grid gap-2 rounded-md border p-3 sm:grid-cols-12">
                 <div className="sm:col-span-5">
-                  <Label className="text-xs">Nombre</Label>
+                  <Label className="text-xs" required>
+                    Nombre
+                  </Label>
                   <Input
                     value={piece.name}
                     onChange={(e) => setPiece(idx, { name: e.target.value })}
@@ -474,7 +542,9 @@ export function ProductEditor({
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label className="text-xs">Gramos</Label>
+                  <Label className="text-xs" required>
+                    Gramos
+                  </Label>
                   <Input
                     type="number"
                     step="any"
@@ -492,7 +562,9 @@ export function ProductEditor({
                   />
                 </div>
                 <div className="sm:col-span-3">
-                  <Label className="text-xs">Filamento por defecto</Label>
+                  <Label className="text-xs" required>
+                    Filamento por defecto
+                  </Label>
                   <select
                     value={piece.defaultFilamentId}
                     onChange={(e) => setPiece(idx, { defaultFilamentId: e.target.value })}
@@ -539,7 +611,9 @@ export function ProductEditor({
               return (
                 <div key={idx} className="grid gap-2 rounded-md border p-3 sm:grid-cols-12">
                   <div className="sm:col-span-7">
-                    <Label className="text-xs">Insumo</Label>
+                    <Label className="text-xs" required>
+                      Insumo
+                    </Label>
                     <select
                       value={mat.materialId}
                       onChange={(e) => setMaterial(idx, { materialId: e.target.value })}
@@ -553,7 +627,9 @@ export function ProductEditor({
                     </select>
                   </div>
                   <div className="sm:col-span-3">
-                    <Label className="text-xs">Cantidad</Label>
+                    <Label className="text-xs" required>
+                      Cantidad
+                    </Label>
                     <Input
                       type="number"
                       step="any"
@@ -682,21 +758,7 @@ export function ProductEditor({
             })}
           </CardContent>
         </Card>
-
-        {error && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        {canWrite && (
-          <div className="flex justify-end gap-2">
-            <Button onClick={handleSave} disabled={!form.name || saving}>
-              <Save className="h-4 w-4" />
-              {saving ? 'Guardando…' : mode === 'create' ? 'Crear producto' : 'Guardar cambios'}
-            </Button>
-          </div>
-        )}
+        </fieldset>
       </div>
 
       <CostPanel cost={cost} mode={mode} />
@@ -704,10 +766,18 @@ export function ProductEditor({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );

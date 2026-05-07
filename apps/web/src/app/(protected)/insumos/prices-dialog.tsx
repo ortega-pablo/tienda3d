@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Plus, Star, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
 import type { MaterialDto, SupplierLite } from './materials-view';
 
@@ -41,9 +45,9 @@ export function PricesDialog({
 }) {
   const can = useHasPermission();
   const canWrite = can('material:write');
+  const confirm = useConfirm();
   const [prices, setPrices] = useState<PriceEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [mode, setMode] = useState<PriceMode>('unit');
   const [newEntry, setNewEntry] = useState({
@@ -74,7 +78,7 @@ export function PricesDialog({
         if (!cancelled) setPrices(data);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'No se pudieron cargar los precios');
+        if (!cancelled) handleApiError(err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -94,7 +98,6 @@ export function PricesDialog({
   };
 
   const addPrice = async () => {
-    setError(null);
     setAdding(true);
     try {
       const priceFields =
@@ -125,9 +128,10 @@ export function PricesDialog({
         leadTimeDays: '',
         notes: '',
       });
+      toast.success('Precio registrado.');
       await refreshAll();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo agregar el precio');
+      handleApiError(err);
     } finally {
       setAdding(false);
     }
@@ -136,19 +140,26 @@ export function PricesDialog({
   const setCurrent = async (priceId: string) => {
     try {
       await api(`/materials/${material.id}/prices/${priceId}/current`, { method: 'PATCH' });
+      toast.success('Precio vigente actualizado.');
       await refreshAll();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo cambiar el vigente');
+      handleApiError(err);
     }
   };
 
   const remove = async (priceId: string) => {
-    if (!confirm('¿Eliminar este registro de precio?')) return;
+    const ok = await confirm({
+      title: '¿Eliminar este registro de precio?',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     try {
       await api(`/materials/${material.id}/prices/${priceId}`, { method: 'DELETE' });
+      toast.success('Precio eliminado.');
       await refreshAll();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     }
   };
 
@@ -167,12 +178,6 @@ export function PricesDialog({
               Cerrar
             </Button>
           </div>
-
-          {error && (
-            <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-              {error}
-            </p>
-          )}
 
           {canWrite && (
             <div className="rounded-md border bg-muted/20 p-3">
@@ -198,7 +203,7 @@ export function PricesDialog({
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label>Proveedor</Label>
+                  <Label required>Proveedor</Label>
                   <select
                     value={newEntry.supplierId}
                     onChange={(e) => setNewEntry({ ...newEntry, supplierId: e.target.value })}
@@ -214,7 +219,7 @@ export function PricesDialog({
 
                 {mode === 'unit' ? (
                   <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-                    <Label>Precio por unidad</Label>
+                    <Label required>Precio por unidad</Label>
                     <Input
                       type="number"
                       step="any"
@@ -225,7 +230,7 @@ export function PricesDialog({
                 ) : (
                   <>
                     <div className="space-y-1.5">
-                      <Label>Cantidad por paquete</Label>
+                      <Label required>Cantidad por paquete</Label>
                       <Input
                         type="number"
                         step="any"
@@ -238,7 +243,7 @@ export function PricesDialog({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Precio del paquete</Label>
+                      <Label required>Precio del paquete</Label>
                       <Input
                         type="number"
                         step="any"
@@ -304,7 +309,7 @@ export function PricesDialog({
                       : !newEntry.packSize || !newEntry.packPrice)
                   }
                 >
-                  <Plus className="h-4 w-4" />
+                  {adding ? <Spinner size="sm" /> : <Plus className="h-4 w-4" />}
                   {adding ? 'Agregando…' : 'Agregar precio'}
                 </Button>
               </div>

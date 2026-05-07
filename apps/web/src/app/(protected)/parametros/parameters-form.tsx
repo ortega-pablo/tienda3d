@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { Pencil, Save, X } from 'lucide-react';
+import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { useEditMode } from '@/hooks/use-edit-mode';
 import { useHasPermission } from '@/components/user-provider';
 
 interface ParameterDto {
@@ -40,34 +42,74 @@ export function ParametersForm({ initial }: { initial: ParameterDto[] }) {
   const can = useHasPermission();
   const canWrite = can('parameter:write');
   const router = useRouter();
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(initial.map((p) => [p.key, p.value])),
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const initialValues = Object.fromEntries(initial.map((p) => [p.key, p.value]));
+  const [values, setValues] = useState<Record<string, string>>(initialValues);
+  const editMode = useEditMode();
+
+  const reset = () => setValues(initialValues);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      await api('/parameters', { method: 'PATCH', body: { values } });
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar');
-    } finally {
-      setSaving(false);
-    }
+    await editMode.save(
+      async () => {
+        await api('/parameters', { method: 'PATCH', body: { values } });
+        router.refresh();
+      },
+      { successMessage: 'Parámetros actualizados.' },
+    );
   };
 
+  const disabled = !editMode.editing;
+
+  const isFormValid = initial.every((p) => {
+    const meta = META[p.key];
+    const raw = values[p.key];
+    if (raw == null || raw.trim() === '') return false;
+    if ((meta?.type ?? 'text') === 'number') {
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0;
+    }
+    return true;
+  });
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={submit} className="space-y-4">
+      {canWrite && (
+        <div className="flex justify-end">
+          {!editMode.editing ? (
+            <Button type="button" variant="outline" onClick={editMode.start}>
+              <Pencil className="h-4 w-4" />
+              Editar
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => editMode.cancel(reset)}
+                disabled={editMode.saving}
+              >
+                <X className="h-4 w-4" />
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={editMode.saving || !isFormValid}>
+                {editMode.saving ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+                {editMode.saving ? 'Guardando…' : 'Guardar cambios'}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {initial.map((p) => {
           const meta = META[p.key] ?? { label: p.key };
           return (
             <div key={p.key} className="space-y-1.5">
-              <Label htmlFor={p.key}>{meta.label}</Label>
+              <Label htmlFor={p.key} required>
+                {meta.label}
+              </Label>
               <div className="relative">
                 <Input
                   id={p.key}
@@ -75,7 +117,7 @@ export function ParametersForm({ initial }: { initial: ParameterDto[] }) {
                   step="any"
                   value={values[p.key] ?? ''}
                   onChange={(e) => setValues((v) => ({ ...v, [p.key]: e.target.value }))}
-                  disabled={!canWrite}
+                  disabled={disabled}
                   className={meta.suffix ? 'pr-12' : ''}
                 />
                 {meta.suffix && (
@@ -89,21 +131,6 @@ export function ParametersForm({ initial }: { initial: ParameterDto[] }) {
           );
         })}
       </div>
-
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
-      {canWrite && (
-        <div className="flex justify-end">
-          <Button type="submit" disabled={saving}>
-            <Save className="h-4 w-4" />
-            {saving ? 'Guardando…' : 'Guardar cambios'}
-          </Button>
-        </div>
-      )}
     </form>
   );
 }

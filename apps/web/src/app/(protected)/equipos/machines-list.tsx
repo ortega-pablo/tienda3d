@@ -3,11 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Plus, Power, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
 
 interface MachineDto {
@@ -66,9 +70,9 @@ export function MachinesList({
   const can = useHasPermission();
   const canWrite = can('machine:write');
   const router = useRouter();
+  const confirm = useConfirm();
   const [machines, setMachines] = useState(initialMachines);
   const [editing, setEditing] = useState<MachineDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const refresh = () => router.refresh();
@@ -78,7 +82,6 @@ export function MachinesList({
 
   const handleSave = async () => {
     if (!editing) return;
-    setError(null);
     setPendingId(editing.id || 'new');
     try {
       const payload = {
@@ -97,14 +100,16 @@ export function MachinesList({
           body: payload,
         });
         setMachines((list) => list.map((m) => (m.id === updated.id ? updated : m)));
+        toast.success('Equipo actualizado.');
       } else {
         const created = await api<MachineDto>('/machines', { method: 'POST', body: payload });
         setMachines((list) => [...list, created]);
+        toast.success('Equipo creado.');
       }
       setEditing(null);
       refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar');
+      handleApiError(err);
     } finally {
       setPendingId(null);
     }
@@ -115,23 +120,30 @@ export function MachinesList({
     try {
       await api(`/machines/${id}/activate`, { method: 'PATCH' });
       setMachines((list) => list.map((m) => ({ ...m, isActive: m.id === id })));
+      toast.success('Equipo activado.');
       refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo activar');
+      handleApiError(err);
     } finally {
       setPendingId(null);
     }
   };
 
   const remove = async (id: string) => {
-    if (!confirm('¿Eliminar este equipo?')) return;
+    const ok = await confirm({
+      title: '¿Eliminar este equipo?',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setPendingId(id);
     try {
       await api(`/machines/${id}`, { method: 'DELETE' });
       setMachines((list) => list.filter((m) => m.id !== id));
+      toast.success('Equipo eliminado.');
       refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     } finally {
       setPendingId(null);
     }
@@ -154,12 +166,6 @@ export function MachinesList({
           </Button>
         )}
       </div>
-
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
 
       <div className="grid gap-3">
         {machines.map((m) => (
@@ -225,7 +231,9 @@ export function MachinesList({
                 {editing.id ? 'Editar equipo' : 'Nuevo equipo'}
               </h2>
               <div className="space-y-1.5">
-                <Label htmlFor="name">Nombre</Label>
+                <Label htmlFor="name" required>
+                  Nombre
+                </Label>
                 <Input
                   id="name"
                   value={editing.name}
@@ -269,7 +277,8 @@ export function MachinesList({
                   Cancelar
                 </Button>
                 <Button onClick={handleSave} disabled={!editing.name || pendingId !== null}>
-                  Guardar
+                  {pendingId !== null && <Spinner size="sm" />}
+                  {pendingId !== null ? 'Guardando…' : 'Guardar'}
                 </Button>
               </div>
             </div>

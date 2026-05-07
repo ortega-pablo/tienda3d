@@ -3,10 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
 
 interface SupplierDto {
@@ -35,14 +39,13 @@ export function SuppliersList({ initial }: { initial: SupplierDto[] }) {
   const can = useHasPermission();
   const canWrite = can('supplier:write');
   const router = useRouter();
+  const confirm = useConfirm();
   const [items, setItems] = useState(initial);
   const [editing, setEditing] = useState<SupplierDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const save = async () => {
     if (!editing || !editing.name) return;
-    setError(null);
     setPending(true);
     try {
       const payload = {
@@ -59,27 +62,36 @@ export function SuppliersList({ initial }: { initial: SupplierDto[] }) {
           body: payload,
         });
         setItems((list) => list.map((s) => (s.id === updated.id ? updated : s)));
+        toast.success('Proveedor actualizado.');
       } else {
         const created = await api<SupplierDto>('/suppliers', { method: 'POST', body: payload });
         setItems((list) => [...list, created]);
+        toast.success('Proveedor creado.');
       }
       setEditing(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar');
+      handleApiError(err);
     } finally {
       setPending(false);
     }
   };
 
   const remove = async (id: string) => {
-    if (!confirm('¿Eliminar proveedor? Si tiene precios asociados será desactivado.')) return;
+    const ok = await confirm({
+      title: '¿Eliminar proveedor?',
+      description: 'Si tiene precios asociados será desactivado en lugar de eliminarse.',
+      confirmLabel: 'Eliminar',
+      variant: 'destructive',
+    });
+    if (!ok) return;
     setPending(true);
     try {
       await api(`/suppliers/${id}`, { method: 'DELETE' });
+      toast.success('Proveedor eliminado.');
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     } finally {
       setPending(false);
     }
@@ -94,12 +106,6 @@ export function SuppliersList({ initial }: { initial: SupplierDto[] }) {
             Nuevo proveedor
           </Button>
         </div>
-      )}
-
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-          {error}
-        </p>
       )}
 
       <div className="overflow-x-auto">
@@ -165,7 +171,9 @@ export function SuppliersList({ initial }: { initial: SupplierDto[] }) {
                 {editing.id ? 'Editar proveedor' : 'Nuevo proveedor'}
               </h2>
               <div className="space-y-1.5">
-                <Label htmlFor="name">Nombre</Label>
+                <Label htmlFor="name" required>
+                  Nombre
+                </Label>
                 <Input
                   id="name"
                   value={editing.name}
@@ -214,7 +222,8 @@ export function SuppliersList({ initial }: { initial: SupplierDto[] }) {
                   Cancelar
                 </Button>
                 <Button onClick={save} disabled={!editing.name || pending}>
-                  Guardar
+                  {pending && <Spinner size="sm" />}
+                  {pending ? 'Guardando…' : 'Guardar'}
                 </Button>
               </div>
             </div>

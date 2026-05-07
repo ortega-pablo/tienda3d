@@ -3,12 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
-import { api, ApiError } from '@/lib/api-client';
+import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+import { handleApiError } from '@/lib/handle-error';
 import { formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
 
 export type TaxMode = 'SIMPLE' | 'DETAILED';
@@ -85,10 +89,10 @@ export function ChannelsManager({ initial }: { initial: ChannelDto[] }) {
   const can = useHasPermission();
   const canWrite = can('channel:write');
   const router = useRouter();
+  const confirm = useConfirm();
   const [channels, setChannels] = useState(initial);
   const [editing, setEditing] = useState<ChannelDto | null>(null);
   const [originalActive, setOriginalActive] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const startNew = () => {
@@ -102,31 +106,45 @@ export function ChannelsManager({ initial }: { initial: ChannelDto[] }) {
 
   const save = async () => {
     if (!editing) return;
-    setError(null);
 
     // If the user is deactivating an active channel, surface impact first.
     if (editing.id && originalActive && !editing.isActive) {
       try {
         const impact = await api<ChannelImpact>(`/channels/${editing.id}/impact`);
-        const lines: string[] = [];
+        const description: React.ReactNode[] = [];
         if (impact.productsEnabled > 0) {
           const sample = impact.sampleProductNames.slice(0, 3).join(', ');
           const more = impact.productsEnabled > 3 ? ` (y ${impact.productsEnabled - 3} más)` : '';
-          lines.push(`• ${impact.productsEnabled} productos lo tienen habilitado: ${sample}${more}`);
-          lines.push('  Dejarán de mostrar precios en este canal.');
+          description.push(
+            <p key="prods">
+              <strong>{impact.productsEnabled}</strong> productos lo tienen habilitado:{' '}
+              {sample}
+              {more}. Dejarán de mostrar precios en este canal.
+            </p>,
+          );
         }
         if (impact.quotesUsing > 0) {
-          lines.push(`• ${impact.quotesUsing} cotizaciones lo referencian (no se modifican).`);
-        }
-        if (lines.length > 0) {
-          const ok = confirm(
-            `Vas a desactivar "${editing.name}".\n\n${lines.join('\n')}\n\n¿Continuar?`,
+          description.push(
+            <p key="quotes">
+              <strong>{impact.quotesUsing}</strong> cotizaciones lo referencian (no se modifican).
+            </p>,
           );
+        }
+        if (description.length > 0) {
+          const ok = await confirm({
+            title: `Desactivar "${editing.name}"`,
+            description: <div className="space-y-2">{description}</div>,
+            confirmLabel: 'Desactivar',
+            variant: 'destructive',
+          });
           if (!ok) return;
         }
       } catch {
-        // If impact fails, fall back to a generic confirm so the user still has a chance to abort.
-        if (!confirm(`Desactivar "${editing.name}"?`)) return;
+        const ok = await confirm({
+          title: `Desactivar "${editing.name}"?`,
+          variant: 'destructive',
+        });
+        if (!ok) return;
       }
     }
 
@@ -143,9 +161,10 @@ export function ChannelsManager({ initial }: { initial: ChannelDto[] }) {
         editing.id ? list.map((c) => (c.id === result.id ? result : c)) : [...list, result],
       );
       setEditing(null);
+      toast.success(editing.id ? 'Canal actualizado.' : 'Canal creado.');
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar');
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
@@ -158,11 +177,18 @@ export function ChannelsManager({ initial }: { initial: ChannelDto[] }) {
         impact.productsEnabled > 0 || impact.quotesUsing > 0
           ? `Está activo en ${impact.productsEnabled} productos y referenciado por ${impact.quotesUsing} cotizaciones. Si tiene cotizaciones se desactivará en lugar de eliminarse.`
           : 'No está siendo usado.';
-      if (!confirm(`¿Eliminar "${c.name}"?\n\n${summary}`)) return;
+      const ok = await confirm({
+        title: `¿Eliminar "${c.name}"?`,
+        description: summary,
+        confirmLabel: 'Eliminar',
+        variant: 'destructive',
+      });
+      if (!ok) return;
       await api(`/channels/${c.id}`, { method: 'DELETE' });
+      toast.success('Canal eliminado.');
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar');
+      handleApiError(err);
     }
   };
 
@@ -175,12 +201,6 @@ export function ChannelsManager({ initial }: { initial: ChannelDto[] }) {
             Nuevo canal
           </Button>
         </div>
-      )}
-
-      {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-sm text-destructive">
-          {error}
-        </p>
       )}
 
       <div className="overflow-x-auto">
@@ -310,7 +330,7 @@ function ChannelDialog({
           </h2>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nombre">
+            <Field label="Nombre" required>
               <Input
                 value={editing.name}
                 onChange={(e) => setEditing({ ...editing, name: e.target.value })}
@@ -503,6 +523,7 @@ function ChannelDialog({
               Cancelar
             </Button>
             <Button onClick={onSave} disabled={!editing.name || saving}>
+              {saving && <Spinner size="sm" />}
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
           </div>
@@ -512,10 +533,18 @@ function ChannelDialog({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  required,
+}: {
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
+      <Label required={required}>{label}</Label>
       {children}
     </div>
   );
