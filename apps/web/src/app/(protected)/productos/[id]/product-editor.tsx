@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
-import { handleApiError } from '@/lib/handle-error';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -420,9 +419,15 @@ export function ProductEditor({
           </div>
         )}
 
-        {/* fieldset cascades disabled to every form control inside;
-            display:contents removes its box so layout stays the same. */}
-        <fieldset disabled={readOnly} className="contents">
+        {/* Fieldset disabled cascades to every input/button/select inside.
+            Reset browser default styles (border/padding/margin/min-width) so
+            it acts like a transparent wrapper. We deliberately avoid
+            `display: contents` because it has interop issues with React's
+            DOM reconciliation in some browsers (insertBefore mismatches). */}
+        <fieldset
+          disabled={readOnly}
+          className="m-0 min-w-0 space-y-4 border-0 p-0"
+        >
         <Card>
           <CardHeader>
             <CardTitle>Datos del producto</CardTitle>
