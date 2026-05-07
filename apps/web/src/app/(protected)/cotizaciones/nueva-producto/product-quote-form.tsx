@@ -35,6 +35,7 @@ interface ItemDraft {
 interface ItemPreview {
   unitCost: number;
   unitPrice: number;
+  unitProfit: number;
   lineTotal: number;
 }
 
@@ -350,6 +351,12 @@ function PreviewLine({ result }: { result: ItemPreview | 'loading' | 'error' | u
     <div className="text-right text-sm">
       <div className="font-mono font-semibold">{formatMoney(result.lineTotal)}</div>
       <div className="text-xs text-muted-foreground">unit. {formatMoney(result.unitPrice)}</div>
+      <div
+        className="text-xs text-emerald-700 dark:text-emerald-300"
+        title="Ganancia de bolsillo por unidad."
+      >
+        ganancia {formatMoney(result.unitProfit)}
+      </div>
     </div>
   );
 }

@@ -35,6 +35,18 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
     type: 'number',
     help: 'Se descuenta del precio en el canal Venta Directa (no se carga al producto).',
   },
+  labor_markup_pct: {
+    label: 'Recargo extra mano de obra',
+    suffix: '%',
+    type: 'number',
+    help: 'Recargo sobre el costo crudo de la hora de obra. Cubre overhead que no entra en provisiones.',
+  },
+  kwh_markup_pct: {
+    label: 'Recargo extra energía eléctrica',
+    suffix: '%',
+    type: 'number',
+    help: 'Recargo sobre el costo del kWh. Plegado dentro de la hora-máquina.',
+  },
   currency: { label: 'Moneda', type: 'text', help: 'Código ISO 4217.' },
 };
 

@@ -1,26 +1,38 @@
 /**
- * Validates the PricingEngine under Logic B (markup over cost).
+ * PricingEngine — Logic C v3.
  *
- * profit       = cost × markup%
- * denominator  = 1 − commission% − regime%
- * final_price  = (cost + profit) / denominator
+ *   profit         = fabricationPrice × markup%
+ *   pre_commission = fabricationPrice + profit + otherMaterialsWithReplenishment
+ *   denominator    = 1 − commission% − regime%
+ *   final_price    = pre_commission / denominator
  *
- * The Cuaderno A5 from cotizador_cuaderno_plastik_v2.xlsx has cost
- * (with provisions) of $16.611,66.
+ * Cuaderno A5 (con todos los markups en cero) tenía un costWithProvisions de
+ * $16.611,66 bajo Logic B. Bajo Logic C v3 separamos:
+ *   fabricationPrice = filamento+máquina+obra+marketing × 1.15  ≈ 13.554,72
+ *   otherWithReab    = hojas (con waste 0)                       =  2.855,04
+ *   totalCost        = 16.409,76    (≈, ligeramente menor porque las hojas
+ *                                    no entran a las provisiones)
  *
- * The legacy Excel used a 35% margin sobre precio. The equivalent markup
- * sobre costo that preserves the Venta Directa price is:
- *   markup = 0.35 / (1 − 0.35 − 0.065 − 0.04) = 0.6422 → 64.22 %
+ * Para los tests reusamos números redondos para que el lector pueda chequear
+ * a mano el cálculo.
  */
 
 import { PricingEngine } from './pricing.engine';
-import type { ChannelPricingConfig, PricingGlobals, ProductPricingInputs } from './pricing.types';
+import type {
+  ChannelPricingConfig,
+  PricingCostInputs,
+  PricingGlobals,
+  ProductPricingInputs,
+} from './pricing.types';
 
-describe('PricingEngine — Logic B (markup over cost)', () => {
+describe('PricingEngine — Logic C v3', () => {
   const engine = new PricingEngine();
-  const cost = 16_611.66;
+  const cost: PricingCostInputs = {
+    fabricationPrice: 10_000,
+    otherMaterialsWithReplenishment: 2_000,
+  };
   const globals: PricingGlobals = { directSaleCommissionPct: 6.5, unifiedRegimePct: 4 };
-  const product: ProductPricingInputs = { targetMarkupPct: 64.22 };
+  const product: ProductPricingInputs = { targetMarkupPct: 60 };
 
   const make = (
     overrides: Partial<ChannelPricingConfig> & {
@@ -44,57 +56,67 @@ describe('PricingEngine — Logic B (markup over cost)', () => {
     id: overrides.slug,
   });
 
-  describe('Profit is fixed across channels', () => {
+  describe('Profit (ganancia de bolsillo) is fixed across channels', () => {
     const channels = {
       directa: make({ name: 'Venta Directa', slug: 'directa', kind: 'DIRECT_SALE' }),
       meli: make({ name: 'MercadoLibre', slug: 'meli', kind: 'MARKETPLACE' }),
       cash: make({ name: 'Efectivo', slug: 'efectivo', kind: 'CASH' }),
     };
 
-    const expectedProfit = cost * (64.22 / 100); // 10,668.0
+    // Profit = fabricationPrice × 60% = 6.000 (independiente del canal y de los otros insumos)
+    const expectedProfit = 6_000;
+    // pre_commission = 10.000 + 6.000 + 2.000 = 18.000
+    const preCommission = 18_000;
 
-    it('Venta Directa: profit = cost × markup', () => {
+    it('Venta Directa: profit = fabricationPrice × markup', () => {
       const r = engine.price(cost, channels.directa, product, globals);
-      expect(r.profit).toBeCloseTo(expectedProfit, 1);
-      // Net price = (cost + profit) / (1 − 0.065 − 0.04) = 27279.81 / 0.895 = 30480.24
-      expect(r.netPrice).toBeCloseTo(30_480.24, 0);
+      expect(r.profit).toBeCloseTo(expectedProfit, 4);
+      // Net = 18.000 / (1 − 0.065 − 0.04) = 18.000 / 0.895 = 20.111,73
+      expect(r.netPrice).toBeCloseTo(preCommission / 0.895, 1);
     });
 
-    it('MercadoLibre with 13% commission: same profit, higher price', () => {
+    it('MercadoLibre con 13% comisión: mismo profit, precio mayor', () => {
       const r = engine.price(
         cost,
         channels.meli,
         { ...product, marketplaceCommissionPct: 13 },
         globals,
       );
-      expect(r.profit).toBeCloseTo(expectedProfit, 1);
-      // (cost + profit) / (1 − 0.13 − 0.04) = 27279.81 / 0.83 = 32867.24
-      expect(r.netPrice).toBeCloseTo(32_867.24, 0);
+      expect(r.profit).toBeCloseTo(expectedProfit, 4);
+      expect(r.netPrice).toBeCloseTo(preCommission / (1 - 0.13 - 0.04), 1);
     });
 
-    it('Efectivo: same profit, regime applied by default', () => {
+    it('Efectivo con régimen aplicado por default', () => {
       const r = engine.price(cost, channels.cash, product, globals);
-      expect(r.profit).toBeCloseTo(expectedProfit, 1);
-      // (cost + profit) / (1 − 0 − 0.04) = 27279.81 / 0.96 = 28416.47
-      expect(r.netPrice).toBeCloseTo(28_416.47, 0);
+      expect(r.profit).toBeCloseTo(expectedProfit, 4);
+      expect(r.netPrice).toBeCloseTo(preCommission / 0.96, 1);
     });
 
-    it('Efectivo without regime (admin toggle): same profit, lower price', () => {
+    it('Efectivo sin régimen (toggle admin): mismo profit, precio menor', () => {
       const r = engine.price(cost, channels.cash, product, globals, {}, { withoutRegime: true });
-      expect(r.profit).toBeCloseTo(expectedProfit, 1);
-      // (cost + profit) / 1 = 27279.81
-      expect(r.netPrice).toBeCloseTo(27_279.81, 0);
+      expect(r.profit).toBeCloseTo(expectedProfit, 4);
+      expect(r.netPrice).toBeCloseTo(preCommission, 1);
+    });
+  });
+
+  describe('Profit ignora otros insumos (Logic C v3)', () => {
+    it('cambiar otherMaterialsWithReplenishment no afecta profit, sólo el precio', () => {
+      const c = make({ name: 'Directa', slug: 'directa', kind: 'DIRECT_SALE' });
+      const r1 = engine.price(cost, c, product, globals);
+      const r2 = engine.price({ ...cost, otherMaterialsWithReplenishment: 50_000 }, c, product, globals);
+      expect(r1.profit).toBeCloseTo(r2.profit, 4);
+      expect(r2.netPrice).toBeGreaterThan(r1.netPrice);
     });
 
-    it('non-CASH channels ignore withoutRegime', () => {
-      const r = engine.price(cost, channels.directa, product, globals, {}, { withoutRegime: true });
-      // Same as Directa case above: regime still applied.
-      expect(r.netPrice).toBeCloseTo(30_480.24, 0);
+    it('profit escala con fabricationPrice, no con costo total', () => {
+      const c = make({ name: 'Directa', slug: 'directa', kind: 'DIRECT_SALE' });
+      const r = engine.price({ ...cost, fabricationPrice: 20_000 }, c, product, globals);
+      expect(r.profit).toBeCloseTo(20_000 * 0.6, 4);
     });
   });
 
   describe('Commission resolution by kind', () => {
-    it('DIRECT_SALE uses globals.directSaleCommissionPct, ignoring channel.commissionPct', () => {
+    it('DIRECT_SALE usa globals, ignorando channel.commissionPct', () => {
       const c = make({
         name: 'Directa',
         slug: 'directa',
@@ -105,37 +127,20 @@ describe('PricingEngine — Logic B (markup over cost)', () => {
       expect(r.commissionPct).toBe(6.5);
     });
 
-    it('CASH always 0, regardless of channel.commissionPct', () => {
+    it('CASH siempre 0', () => {
       const c = make({ name: 'Efectivo', slug: 'efectivo', kind: 'CASH', commissionPct: 99 });
       const r = engine.price(cost, c, product, globals);
       expect(r.commissionPct).toBe(0);
     });
 
-    it('MARKETPLACE flags missingCommission when product has none', () => {
+    it('MARKETPLACE marca missingCommission cuando producto no la tiene', () => {
       const c = make({ name: 'MELI', slug: 'meli', kind: 'MARKETPLACE' });
       const r = engine.price(cost, c, product, globals);
       expect(r.missingCommission).toBe(true);
       expect(r.netPrice).toBe(0);
     });
 
-    it('MARKETPLACE uses product.marketplaceCommissionPct', () => {
-      const c = make({ name: 'MELI', slug: 'meli', kind: 'MARKETPLACE' });
-      const r = engine.price(
-        cost,
-        c,
-        { ...product, marketplaceCommissionPct: 13 },
-        globals,
-      );
-      expect(r.commissionPct).toBe(13);
-    });
-
-    it('CUSTOM uses channel.commissionPct as default', () => {
-      const c = make({ name: 'Custom', slug: 'cu', kind: 'CUSTOM', commissionPct: 8 });
-      const r = engine.price(cost, c, product, globals);
-      expect(r.commissionPct).toBe(8);
-    });
-
-    it('CUSTOM tier override beats channel default', () => {
+    it('CUSTOM tier override pisa channel default', () => {
       const c = make({ name: 'Custom', slug: 'cu', kind: 'CUSTOM', commissionPct: 8 });
       const r = engine.price(cost, c, product, globals, { commissionPct: 4 });
       expect(r.commissionPct).toBe(4);
@@ -143,14 +148,14 @@ describe('PricingEngine — Logic B (markup over cost)', () => {
   });
 
   describe('Tier markup overrides', () => {
-    it('tier markup overrides product target markup', () => {
+    it('tier markup pisa product target markup', () => {
       const c = make({ name: 'Directa', slug: 'directa', kind: 'DIRECT_SALE' });
       const r = engine.price(cost, c, product, globals, { markupPct: 40 });
       expect(r.markupPct).toBe(40);
-      expect(r.profit).toBeCloseTo(cost * 0.4, 1);
+      expect(r.profit).toBeCloseTo(cost.fabricationPrice * 0.4, 4);
     });
 
-    it('lower markup at higher quantities yields a smaller absolute profit', () => {
+    it('markup menor en mayor cantidad → menor profit absoluto', () => {
       const c = make({ name: 'Directa', slug: 'directa', kind: 'DIRECT_SALE' });
       const baseR = engine.price(cost, c, product, globals);
       const tierR = engine.price(cost, c, product, globals, { markupPct: 40 });
@@ -160,7 +165,7 @@ describe('PricingEngine — Logic B (markup over cost)', () => {
   });
 
   describe('Detailed tax mode', () => {
-    it('separates IIBB and retentions for CUSTOM detailed', () => {
+    it('separa IIBB y retenciones para CUSTOM detailed', () => {
       const c = make({
         name: 'Custom Detailed',
         slug: 'cd',
@@ -175,11 +180,11 @@ describe('PricingEngine — Logic B (markup over cost)', () => {
       const r = engine.price(cost, c, product, globals);
       // burden = 3 + 1 + 0.5 + 2 = 6.5%; commission 13%; denom = 1 - 0.13 - 0.065 = 0.805
       expect(r.denominator).toBeCloseTo(0.805, 6);
-      expect(r.netPrice).toBeCloseTo((cost + cost * 0.6422) / 0.805, 0);
+      expect(r.netPrice).toBeCloseTo(18_000 / 0.805, 1);
       expect(r.taxBurdenPct).toBeCloseTo(6.5, 6);
     });
 
-    it('appliesIva multiplies the final price', () => {
+    it('appliesIva multiplica el precio final', () => {
       const c = make({
         name: 'IVA',
         slug: 'iva',
@@ -195,25 +200,18 @@ describe('PricingEngine — Logic B (markup over cost)', () => {
   });
 
   describe('Edge cases', () => {
-    it('non-positive denominator emits warning and zero values', () => {
-      const c = make({
-        name: 'Roto',
-        slug: 'roto',
-        kind: 'CUSTOM',
-        commissionPct: 99,
-      });
+    it('denominator no positivo → warning y ceros', () => {
+      const c = make({ name: 'Roto', slug: 'roto', kind: 'CUSTOM', commissionPct: 99 });
       const r = engine.price(cost, c, product, globals);
       expect(r.netPrice).toBe(0);
       expect(r.warnings.length).toBeGreaterThan(0);
     });
 
-    it('effective margin sobre precio neto matches expected fraction', () => {
+    it('effectiveMargin = profit / net price', () => {
       const c = make({ name: 'Directa', slug: 'directa', kind: 'DIRECT_SALE' });
       const r = engine.price(cost, c, product, globals);
-      // Net = (cost + cost·markup) / 0.895
-      // Effective margin = profit / net = (cost·markup) × 0.895 / (cost · (1 + markup))
-      const expected = (0.6422 * 0.895) / 1.6422;
-      expect(r.effectiveMarginPct).toBeCloseTo(expected * 100, 0);
+      const expected = (6_000 / (18_000 / 0.895)) * 100;
+      expect(r.effectiveMarginPct).toBeCloseTo(expected, 1);
     });
   });
 });

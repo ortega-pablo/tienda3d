@@ -36,8 +36,18 @@ export interface ChannelPriceBlock {
 export interface ProductPricesResponse {
   productId: string;
   productName: string;
+  /** @deprecated alias de totalCost (Logic B). */
   costWithProvisions: number;
-  /** Profit per unit — fixed across channels under Logic B. */
+  /** Logic C v3 — precio de fabricación, base del profit. */
+  fabricationPrice: number;
+  /** Σ otros insumos con reab — se suman post-profit. */
+  otherMaterialsWithReplenishment: number;
+  /** Costo total: fabricationPrice + otherMaterialsWithReplenishment. */
+  totalCost: number;
+  /**
+   * Ganancia de bolsillo por unidad (Logic C v3): profit absoluto fijo entre
+   * canales. Se calcula como `fabricationPrice × targetMarkupPct%`.
+   */
   profitPerUnit: number;
   targetMarkupPct: number;
   channels: ChannelPriceBlock[];
@@ -85,6 +95,11 @@ export class PricingService {
       (a, b) => a.channel.sortOrder - b.channel.sortOrder,
     );
 
+    const costInputs = {
+      fabricationPrice: cost.fabricationPrice,
+      otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
+    };
+
     const blocks: ChannelPriceBlock[] = sorted
       .filter((pc) => pc.channel.isActive)
       .map((pc) => {
@@ -97,7 +112,7 @@ export class PricingService {
         const base =
           tiers.length === 0
             ? this.engine.price(
-                cost.costWithProvisions,
+                costInputs,
                 cfg,
                 productInputs,
                 globals,
@@ -111,7 +126,7 @@ export class PricingService {
           minQty: t.minQty,
           maxQty: t.maxQty,
           line: this.engine.price(
-            cost.costWithProvisions,
+            costInputs,
             cfg,
             productInputs,
             globals,
@@ -142,8 +157,11 @@ export class PricingService {
     return {
       productId: product.id,
       productName: product.name,
-      costWithProvisions: cost.costWithProvisions,
-      profitPerUnit: cost.costWithProvisions * (targetMarkupPct / 100),
+      costWithProvisions: cost.totalCost,
+      fabricationPrice: cost.fabricationPrice,
+      otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
+      totalCost: cost.totalCost,
+      profitPerUnit: cost.fabricationPrice * (targetMarkupPct / 100),
       targetMarkupPct,
       channels: blocks,
     };

@@ -45,6 +45,7 @@ interface MaterialDraft {
 interface Preview {
   unitCost: number;
   unitPrice: number;
+  unitProfit: number;
   lineTotal: number;
 }
 
@@ -446,6 +447,12 @@ export function RapidQuoteForm({
             <>
               <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
               <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
+              <div className="flex justify-between rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1">
+                <span className="text-emerald-700 dark:text-emerald-300">Ganancia / unidad</span>
+                <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatMoney(preview.unitProfit)}
+                </span>
+              </div>
               <Row label="Cantidad" value={quantity} />
               <div className="flex justify-between border-t pt-2">
                 <span className="text-muted-foreground">Subtotal</span>

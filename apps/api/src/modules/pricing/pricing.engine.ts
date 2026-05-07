@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   ChannelPricingConfig,
   PriceLine,
+  PricingCostInputs,
   PricingGlobals,
   PricingOptions,
   ProductPricingInputs,
@@ -9,15 +10,15 @@ import type {
 } from './pricing.types';
 
 /**
- * Pricing engine — Logic B (markup over cost).
+ * Pricing engine — Logic C v3 (markup over fabrication, replenishment per insumo).
  *
- * profit       = cost × markup%
- * denominator  = 1 − commission% − regime%
- * final_price  = (cost + profit) / denominator
+ *   profit         = fabricationPrice × markup%
+ *   pre_commission = fabricationPrice + profit + otherMaterialsWithReplenishment
+ *   denominator    = 1 − commission% − regime%
+ *   final_price    = pre_commission / denominator
  *
- * Profit per unit is the same absolute value across channels; the price
- * adjusts so commissions/regime get deducted from the buyer's payment
- * without eating into the seller's profit.
+ * El profit (ganancia de bolsillo) NO depende del valor de los otros insumos:
+ * cada uno ya recompone su stock vía replenishmentMarkupPct.
  */
 
 interface TaxComputed {
@@ -30,7 +31,7 @@ interface TaxComputed {
 @Injectable()
 export class PricingEngine {
   price(
-    cost: number,
+    cost: PricingCostInputs,
     channel: ChannelPricingConfig,
     product: ProductPricingInputs,
     globals: PricingGlobals,
@@ -55,7 +56,9 @@ export class PricingEngine {
     }
 
     const markupPct = tier.markupPct ?? product.targetMarkupPct;
-    const profit = cost * (markupPct / 100);
+    const profit = cost.fabricationPrice * (markupPct / 100);
+    const preCommission =
+      cost.fabricationPrice + profit + cost.otherMaterialsWithReplenishment;
 
     const tax = this.computeTaxes(channel, globals, options);
     const commissionFraction = commissionResult.value / 100;
@@ -74,7 +77,7 @@ export class PricingEngine {
       });
     }
 
-    const netPrice = (cost + profit) / denominator;
+    const netPrice = preCommission / denominator;
     const finalPrice = netPrice * tax.finalMultiplier;
     const effectiveMarginPct = netPrice > 0 ? (profit / netPrice) * 100 : 0;
 

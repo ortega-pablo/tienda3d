@@ -29,45 +29,59 @@ export default async function AccountingPage() {
 
       <Section
         icon={<Calculator className="h-5 w-5 text-primary" />}
-        title="1 · Costo unitario del producto"
-        subtitle="Replicado de cotizador_cuaderno_plastik_v2.xlsx, validado por tests automáticos"
+        title="1 · Costo unitario (Logic C v3)"
+        subtitle="Reabastecimiento por insumo + recargos sobre energía y mano de obra. Profit aplicado solo sobre el precio de fabricación."
       >
         <p className="mb-3">
-          El costo unitario suma cinco componentes y agrega provisiones. Cada componente se
-          calcula así:
+          La diferencia respecto a la lógica anterior: <strong>la ganancia ya no se calcula
+          sobre todo el costo</strong>. Se calcula solo sobre el "precio de fabricación"
+          (filamento, máquina, mano de obra, marketing y provisiones). Los <em>otros insumos</em>
+          {' '}quedan afuera del profit y se suman después, recompuestos por su propio% de
+          reabastecimiento. La ganancia que ves <strong>es lo que entra al bolsillo</strong>; los
+          insumos extra ya tienen su recargo para reposición.
         </p>
 
-        <Block heading="A · Filamento (con desperdicio por insumo)">
+        <Block heading="A · Filamento (con desperdicio + reabastecimiento)">
           <p>
             <Code>filamento_pieza = (gramos / 1000) × precio_kg</Code>
           </p>
           <p>
-            <Code>desperdicio_pieza = filamento_pieza × wastePct_filamento / 100</Code>
+            <Code>desperdicio = filamento_pieza × wastePct / 100</Code>
           </p>
           <p>
-            Cada filamento (marca + color = SKU independiente) tiene su propio
-            <Code>wastePct</Code> en el catálogo de insumos. Se suma por todas las piezas del
-            producto.
-          </p>
-        </Block>
-
-        <Block heading="B · Insumos no impresos">
-          <p>
-            <Code>insumo = quantity × precio_vigente × (1 + wastePct / 100)</Code>
+            <Code>filamento_total = (filamento_pieza + desperdicio) × (1 + reab%/100)</Code>
           </p>
           <p>
-            El <em>precio vigente</em> sale de <Code>SupplierMaterial.isCurrent = true</Code> en
-            el histórico de precios por proveedor.
+            El <Code>reab%</Code> (campo <Code>replenishmentMarkupPct</Code>) cubre la reposición
+            de stock — <strong>no es ganancia</strong>. Default 15%. Se carga por insumo en{' '}
+            <Code>/insumos</Code>; las variantes (colores) lo heredan del filamento padre.
           </p>
         </Block>
 
-        <Block heading="C · Hora-máquina">
+        <Block heading="B · Insumos no impresos (con desperdicio + reabastecimiento)">
           <p>
-            <Code>tiempo_h = sum(piezas.printMinutes) / 60</Code>
+            <Code>insumo_total = quantity × precio_vigente × (1 + waste%) × (1 + reab%)</Code>
+          </p>
+          <p>
+            <strong>Importante</strong>: estos insumos se suman <em>después del profit</em>, no
+            entran al cálculo del markup. Así, agregar un insumo caro al producto no infla
+            artificialmente la ganancia.
+          </p>
+        </Block>
+
+        <Block heading="C · Hora-máquina (con recargo de energía)">
+          <p>
+            <Code>energía_raw = (W / 1000) × kWh_cost</Code>
           </p>
           <p>
             <Code>
-              hora_maquina = depreciación + energía + mantenimiento
+              energía = energía_raw × (1 + kwh_markup_pct/100)
+            </Code>
+            {' '}({get('kwh_markup_pct')}% actual)
+          </p>
+          <p>
+            <Code>
+              hora_máquina = depreciación + energía + mantenimiento
             </Code>
           </p>
           <p>
@@ -75,25 +89,34 @@ export default async function AccountingPage() {
           </p>
           <ul className="ml-4 list-disc">
             <li>
-              <Code>depreciación = (acquisition - residual) / useful_life_h</Code>
-            </li>
-            <li>
-              <Code>energía = (W / 1000) × kWh_cost</Code>
+              <Code>depreciación = (acquisition − residual) / useful_life_h</Code>
             </li>
             <li>
               <Code>mantenimiento = annual_maint / annual_usage_h</Code>
             </li>
           </ul>
           <p>
-            La máquina activa se elige desde <Code>/equipos</Code>. Solo una está activa por vez.
+            El recargo sobre la energía cubre overhead que no entra en máquina ni provisiones
+            (cortes de luz, equipo de respaldo, etc.). Se configura en{' '}
+            <Code>/parametros → Recargo extra energía eléctrica</Code>.
           </p>
         </Block>
 
-        <Block heading="D · Mano de obra">
+        <Block heading="D · Mano de obra (con recargo)">
           <p>
             <Code>
-              labor = (assemblyMin + managementMin) / 60 × labor_hour_cost
+              labor_raw = (assemblyMin + managementMin) / 60 × labor_hour_cost
             </Code>
+          </p>
+          <p>
+            <Code>
+              labor = labor_raw × (1 + labor_markup_pct/100)
+            </Code>
+            {' '}({get('labor_markup_pct')}% actual)
+          </p>
+          <p>
+            El recargo cubre tiempo improductivo, retoques, soporte post-venta. Se configura en{' '}
+            <Code>/parametros → Recargo extra mano de obra</Code>.
           </p>
         </Block>
 
@@ -101,60 +124,79 @@ export default async function AccountingPage() {
           <p>
             <Code>marketing_unit = marketingMonthly / estimatedUnitsMonth</Code>
           </p>
-          <p>
-            Cada producto declara su propio presupuesto y unidades estimadas — distinto al Excel
-            original donde era global.
-          </p>
         </Block>
 
-        <Block heading="F · Provisiones">
+        <Block heading="F · Precio de fabricación + costo total">
           <p>
-            <Code>producción = A + B + C + D + E</Code>
+            <Code>proceso = A + C + D + E</Code>
+            {' '}<span className="text-muted-foreground">(¡sin B!)</span>
           </p>
           <p>
             <Code>
-              costo_con_provisiones = producción × (1 + contingencyPct/100 + reinvestmentPct/100)
+              precio_fabricación = proceso × (1 + contingency%/100 + reinvestment%/100)
             </Code>
+          </p>
+          <p>
+            <Code>
+              costo_total = precio_fabricación + B
+            </Code>
+          </p>
+          <p>
+            El <strong>precio de fabricación</strong> es la base para el profit (ver sección 2).
+            El <strong>costo total</strong> es el costo absoluto del producto y se usa para
+            reportes y márgenes brutos.
           </p>
         </Block>
 
         <p className="mt-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-xs">
-          Ejemplo del Cuaderno A5 con la receta original del Excel: A={`$4.002,17`} +{' '}
-          B={`$2.855,04`} + C={`$1.837,72`} + D={`$5.000,00`} + E={`$750,00`} ={' '}
-          <strong>{`$14.444,93`}</strong>; con +5% contingencia y +10% reinversión queda{' '}
-          <strong>{`$16.611,66`}</strong>. Ese valor es lo que el sistema llama{' '}
-          <Code>costWithProvisions</Code>.
+          <strong>Ejemplo Cuaderno A5</strong> (15% reab. en filamento + hojas, 5% en obra y
+          energía, 60% markup, 5% contingencia, 10% reinversión):
+          <br />
+          A_con_reab = 4.002,17 × 1,15 = 4.602,50 · B_con_reab = 2.855,04 × 1,15 = 3.283,30 ·
+          C ≈ 1.837,72 (incluye recargo de energía) · D = 5.000 × 1,05 = 5.250 ·
+          E = 750.
+          <br />
+          <strong>proceso</strong> = 4.602,50 + 1.837,72 + 5.250 + 750 = 12.440,22 ·
+          <strong> precio_fabricación</strong> = 12.440,22 × 1,15 = 14.306,25 ·
+          <strong> costo_total</strong> = 14.306,25 + 3.283,30 = 17.589,55.
         </p>
       </Section>
 
       <Section
         icon={<Coins className="h-5 w-5 text-primary" />}
-        title="2 · Precio y ganancia (Lógica B — markup sobre costo)"
-        subtitle="Ganancia absoluta fija por unidad, igual en todos los canales"
+        title="2 · Precio y ganancia de bolsillo (Logic C v3)"
+        subtitle="Profit aplicado solo sobre el precio de fabricación. Otros insumos pasan post-profit con su propio reabastecimiento."
       >
         <Block heading="Fórmula">
-          <p className="font-mono">profit = costo × markup%</p>
+          <p className="font-mono">profit = precio_fabricación × markup%</p>
+          <p className="font-mono">
+            pre_comisión = precio_fabricación + profit + Σ otros_insumos_con_reab
+          </p>
           <p className="font-mono">denominador = 1 − comisión% − régimen%</p>
-          <p className="font-mono">precio_final = (costo + profit) / denominador</p>
+          <p className="font-mono">precio_final = pre_comisión / denominador</p>
         </Block>
 
         <Block heading="Por qué el profit es fijo entre canales">
           <p>
-            La ganancia absoluta sale solo de <Code>cost × markup</Code>. La comisión y el régimen
-            se descuentan del precio que paga el cliente, no del bolsillo del vendedor. Para que
-            la ecuación cierre, el precio sube en canales con más comisión (MELI) y baja en
-            canales sin comisión (Efectivo) — pero <strong>vos ganás siempre lo mismo</strong>.
+            El <Code>profit</Code> sale solo de <Code>precio_fabricación × markup</Code> — no
+            depende de la comisión ni del régimen. Para que la ecuación cierre, el precio
+            sube en canales con más comisión (MELI) y baja en canales sin comisión (Efectivo),
+            pero <strong>la ganancia que entra a tu bolsillo es siempre la misma</strong>.
+          </p>
+          <p>
+            Y como los <em>otros insumos</em> tampoco entran al markup, agregar un insumo más
+            caro al producto no infla la ganancia: solo recompone su propio costo.
           </p>
         </Block>
 
-        <Block heading="Diferencia con la fórmula del Excel">
+        <Block heading="Diferencia con la lógica anterior (Logic B)">
           <p>
-            El Excel original usaba <em>margen sobre precio</em>:{' '}
-            <Code>precio = costo / (1 − margen − comisión − régimen)</Code>. Esa fórmula daba{' '}
-            <em>ganancias distintas por canal</em> (más en MELI, menos en Efectivo) y dificultaba
-            comparar productos. La migración convirtió todos los productos a{' '}
-            <Code>markup = margen / (1 − margen − dir_com − régimen)</Code>, que preserva el
-            precio de Venta Directa pero unifica la ganancia.
+            Antes (Logic B):{' '}
+            <Code>profit = costo_con_provisiones × markup%</Code>. La ganancia incluía un
+            recargo sobre todos los insumos extra — eso significaba que insumos como packaging
+            o hojas inflaban el profit aunque no los hubieras pagado vos como ganancia, sino
+            como costo de reposición. Logic C v3 separa los dos roles: <em>reab%</em> repone, {' '}
+            <em>markup%</em> da ganancia.
           </p>
         </Block>
 
@@ -220,18 +262,22 @@ export default async function AccountingPage() {
 
       <Section
         icon={<Factory className="h-5 w-5 text-primary" />}
-        title="3 · Cotizaciones — snapshot de costo y precio"
+        title="3 · Cotizaciones — snapshot de costo, precio y ganancia"
       >
         <p>
           Cada item de cotización <strong>congela</strong> los valores al momento de creación:
         </p>
         <ul className="ml-4 list-disc">
           <li>
-            <Code>unitCost</Code> = costo con provisiones del producto al momento.
+            <Code>unitCost</Code> = costo total del producto al momento.
           </li>
           <li>
             <Code>unitPrice</Code> = precio resuelto por el <Code>PricingEngine</Code> con la
             escala que aplica a esa cantidad.
+          </li>
+          <li>
+            <Code>unitProfit</Code> = ganancia de bolsillo por unidad{' '}
+            (<Code>fabricación × markup%</Code>) — fija entre canales.
           </li>
           <li>
             <Code>lineTotal</Code> = <Code>unitPrice × quantity</Code>.
@@ -240,6 +286,10 @@ export default async function AccountingPage() {
         <p>
           Si después cambia el costo del PLA o el markup del producto,{' '}
           <strong>las cotizaciones existentes no se recalculan</strong>. Las nuevas sí.
+        </p>
+        <p>
+          La página de detalle muestra la ganancia por línea + el subtotal de ganancia del
+          presupuesto.
         </p>
         <p>
           Códigos: <Code>Q-YYYY-NNNN</Code> para cotizaciones de productos del catálogo,{' '}

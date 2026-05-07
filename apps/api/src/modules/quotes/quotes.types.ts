@@ -7,6 +7,8 @@ export interface QuoteItemDto {
   quantity: number;
   unitCost: number;
   unitPrice: number;
+  /** Ganancia de bolsillo por unidad (Logic C v3) — snapshot al crear. */
+  unitProfit: number;
   lineTotal: number;
   adhocPayload: AdhocItemPayload | null;
 }

@@ -10,6 +10,8 @@ interface MachineHour {
   machineId: string | null;
   machineName: string | null;
   depreciationPerHour: number;
+  energyPerHourRaw?: number;
+  energyMarkupPct?: number;
   energyPerHour: number;
   maintenancePerHour: number;
   total: number;
@@ -52,7 +54,14 @@ export function MachineHourCard({ initial }: { initial: MachineHour }) {
         <div className="text-xs text-muted-foreground">por hora</div>
         <dl className="mt-4 space-y-2 text-sm">
           <Row label="Depreciación" value={hour.depreciationPerHour} />
-          <Row label="Energía" value={hour.energyPerHour} />
+          <Row
+            label={
+              hour.energyMarkupPct && hour.energyMarkupPct > 0
+                ? `Energía (incluye +${hour.energyMarkupPct}% reab.)`
+                : 'Energía'
+            }
+            value={hour.energyPerHour}
+          />
           <Row label="Mantenimiento" value={hour.maintenancePerHour} />
         </dl>
       </CardContent>

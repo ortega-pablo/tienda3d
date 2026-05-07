@@ -16,6 +16,19 @@ const NUMERIC_KEYS = new Set([
   'reinvestment_pct',
   'unified_regime_pct',
   'direct_sale_commission_pct',
+  // Logic C v3 — extra markup over labor and electricity costs.
+  'labor_markup_pct',
+  'kwh_markup_pct',
+]);
+
+/** Percentage params with a hard 0..100 ceiling (block typos like "1500"). */
+const PCT_KEYS = new Set([
+  'contingency_pct',
+  'reinvestment_pct',
+  'unified_regime_pct',
+  'direct_sale_commission_pct',
+  'labor_markup_pct',
+  'kwh_markup_pct',
 ]);
 
 @Injectable()
@@ -44,6 +57,9 @@ export class ParametersService {
         const n = Number(value);
         if (!Number.isFinite(n) || n < 0) {
           throw new BadRequestException(`Valor inválido para ${key}`);
+        }
+        if (PCT_KEYS.has(key) && n > 100) {
+          throw new BadRequestException(`${key} no puede superar 100%`);
         }
       }
       if (key === 'currency' && !/^[A-Z]{3}$/.test(value)) {

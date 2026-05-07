@@ -104,15 +104,38 @@ export interface CostingResult {
     raw: number;
     waste: number;
     total: number;
+    replenishment: number;
+    totalWithReplenishment: number;
     totalMinutes: number;
   };
   materials: {
-    items: Array<{ materialId: string; materialName: string; total: number }>;
+    items: Array<{
+      materialId: string;
+      materialName: string;
+      total: number;
+      replenishmentPct: number;
+      replenishmentAmount: number;
+      totalWithReplenishment: number;
+    }>;
     total: number;
+    replenishment: number;
+    totalWithReplenishment: number;
   };
   machine: { minutes: number; perHour: number; total: number };
-  labor: { minutes: number; perHour: number; total: number };
+  labor: {
+    minutes: number;
+    perHourRaw?: number;
+    markupPct?: number;
+    perHour: number;
+    markupAmount?: number;
+    total: number;
+  };
   marketing: { monthly: number; units: number; perUnit: number };
+  /** Logic C v3 */
+  process?: number;
+  fabricationPrice?: number;
+  totalCost?: number;
+  /** Legacy aliases (kept para compat). */
   productionCost: number;
   contingency: number;
   reinvestment: number;
@@ -767,7 +790,7 @@ export function ProductEditor({
         </fieldset>
       </div>
 
-      <CostPanel cost={cost} mode={mode} />
+      <CostPanel cost={cost} mode={mode} markupPct={Number(form.targetMarkupPct) || 0} />
     </div>
   );
 }
@@ -789,7 +812,15 @@ function Field({
   );
 }
 
-function CostPanel({ cost, mode }: { cost: CostingResult | null; mode: 'create' | 'edit' }) {
+function CostPanel({
+  cost,
+  mode,
+  markupPct,
+}: {
+  cost: CostingResult | null;
+  mode: 'create' | 'edit';
+  markupPct: number;
+}) {
   if (mode === 'create') {
     return (
       <Card className="lg:sticky lg:top-20">
@@ -810,31 +841,98 @@ function CostPanel({ cost, mode }: { cost: CostingResult | null; mode: 'create' 
       </Card>
     );
   }
+
+  // Logic C v3: profit = fabricationPrice × markup% (la "ganancia de bolsillo").
+  // Fallback al alias legacy si el backend aún no devuelve fabricationPrice.
+  const fabrication = cost.fabricationPrice ?? cost.costWithProvisions;
+  const otherWithReab = cost.materials.totalWithReplenishment ?? cost.materials.total;
+  const totalCost = cost.totalCost ?? cost.costWithProvisions;
+  const pocketProfit = fabrication * (markupPct / 100);
+  const filamentReab = cost.filament.replenishment ?? 0;
+  const filamentWithReab = cost.filament.totalWithReplenishment ?? cost.filament.total;
+  const materialsReab = cost.materials.replenishment ?? 0;
+  const laborMarkup = cost.labor.markupAmount ?? 0;
+
   return (
     <Card className="lg:sticky lg:top-20">
       <CardHeader>
         <CardTitle>Costo unitario</CardTitle>
-        <CardDescription>Con desperdicios, contingencia y reinversión.</CardDescription>
+        <CardDescription>Logic C v3 — fabricación + reabastecimiento por insumo.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
-          <div className="text-3xl font-bold">{formatMoney(cost.costWithProvisions)}</div>
-          <div className="text-xs text-muted-foreground">precio base para venta</div>
+          <div className="text-3xl font-bold">{formatMoney(totalCost)}</div>
+          <div className="text-xs text-muted-foreground">costo total por unidad</div>
         </div>
 
         <dl className="space-y-1 text-sm">
-          <Row label="Filamento" value={cost.filament.total} sub={`${formatNumber(cost.filament.totalMinutes, 0)} min`} />
-          <Row label="Insumos" value={cost.materials.total} />
-          <Row label="Hora-máquina" value={cost.machine.total} sub={formatMoney(cost.machine.perHour) + '/h'} />
-          <Row label="Mano de obra" value={cost.labor.total} sub={`${formatNumber(cost.labor.minutes, 0)} min`} />
-          <Row label="Marketing" value={cost.marketing.perUnit} sub={`${formatMoney(cost.marketing.monthly)}/${formatNumber(cost.marketing.units, 0)}`} />
-          <div className="my-2 border-t" />
-          <Row label="Costo de producción" value={cost.productionCost} bold />
+          <Row
+            label="Filamento"
+            value={filamentWithReab}
+            sub={
+              filamentReab > 0
+                ? `${formatNumber(cost.filament.totalMinutes, 0)} min · incluye ${formatMoney(filamentReab)} de reab.`
+                : `${formatNumber(cost.filament.totalMinutes, 0)} min`
+            }
+          />
+          <Row
+            label="Hora-máquina"
+            value={cost.machine.total}
+            sub={formatMoney(cost.machine.perHour) + '/h'}
+          />
+          <Row
+            label="Mano de obra"
+            value={cost.labor.total}
+            sub={
+              laborMarkup > 0
+                ? `${formatNumber(cost.labor.minutes, 0)} min · incluye ${formatMoney(laborMarkup)} de recargo`
+                : `${formatNumber(cost.labor.minutes, 0)} min`
+            }
+          />
+          <Row
+            label="Marketing"
+            value={cost.marketing.perUnit}
+            sub={`${formatMoney(cost.marketing.monthly)}/${formatNumber(cost.marketing.units, 0)}`}
+          />
           <Row label="+ Contingencia" value={cost.contingency} muted />
           <Row label="+ Reinversión" value={cost.reinvestment} muted />
           <div className="my-2 border-t" />
-          <Row label="Costo con provisiones" value={cost.costWithProvisions} bold />
+          <Row label="Precio de fabricación" value={fabrication} bold />
+
+          {otherWithReab > 0 && (
+            <>
+              <div className="my-2 border-t" />
+              <Row
+                label="Otros insumos (post-profit)"
+                value={otherWithReab}
+                sub={
+                  materialsReab > 0
+                    ? `incluye ${formatMoney(materialsReab)} de reab.`
+                    : undefined
+                }
+              />
+            </>
+          )}
+
+          <div className="my-2 border-t" />
+          <Row label="Costo total" value={totalCost} bold />
         </dl>
+
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                Ganancia de bolsillo
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {markupPct}% sobre fabricación · igual en todos los canales
+              </div>
+            </div>
+            <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+              {formatMoney(pocketProfit)}
+            </div>
+          </div>
+        </div>
 
         {cost.warnings.length > 0 && (
           <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs">

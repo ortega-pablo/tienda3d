@@ -132,15 +132,22 @@ export class QuotesService {
     await this.prisma.quote.delete({ where: { id } });
   }
 
-  /** Compute (cost, price) for an arbitrary item without persisting — used by the live preview. */
+  /** Compute (cost, price, profit) for an arbitrary item without persisting — used by the live preview. */
   async previewItem(
     item: QuoteItemInput,
     channelId: string | null,
-  ): Promise<{ unitCost: number; unitPrice: number; lineTotal: number; warnings: string[] }> {
+  ): Promise<{
+    unitCost: number;
+    unitPrice: number;
+    unitProfit: number;
+    lineTotal: number;
+    warnings: string[];
+  }> {
     const row = await this.buildItemRow(item, channelId);
     return {
       unitCost: Number(row.unitCost),
       unitPrice: Number(row.unitPrice),
+      unitProfit: Number(row.unitProfit ?? 0),
       lineTotal: Number(row.lineTotal),
       warnings: [],
     };
@@ -157,8 +164,12 @@ export class QuotesService {
       if (!product) throw new NotFoundException(`Producto ${item.productId} inexistente`);
 
       const cost = await this.costing.forProduct(item.productId);
-      const unitPrice = await this.computeUnitPrice(
-        cost.costWithProvisions,
+      const { unitPrice, unitProfit } = await this.computeUnitPrice(
+        {
+          fabricationPrice: cost.fabricationPrice,
+          otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
+          totalCost: cost.totalCost,
+        },
         channelId,
         item.productId,
         item.quantity,
@@ -169,8 +180,9 @@ export class QuotesService {
         productId: item.productId,
         description: item.description ?? product.name,
         quantity: item.quantity,
-        unitCost: cost.costWithProvisions,
+        unitCost: cost.totalCost,
         unitPrice,
+        unitProfit,
         lineTotal,
       };
     }
@@ -183,27 +195,45 @@ export class QuotesService {
       assemblyMinutes: item.payload.assemblyMinutes,
       managementMinutes: item.payload.managementMinutes,
     });
-    const unitPrice = await this.computeUnitPrice(cost.costWithProvisions, channelId, null, item.quantity);
+    const { unitPrice, unitProfit } = await this.computeUnitPrice(
+      {
+        fabricationPrice: cost.fabricationPrice,
+        otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
+        totalCost: cost.totalCost,
+      },
+      channelId,
+      null,
+      item.quantity,
+    );
     const lineTotal = unitPrice * item.quantity;
 
     return {
       productId: null,
       description: item.description,
       quantity: item.quantity,
-      unitCost: cost.costWithProvisions,
+      unitCost: cost.totalCost,
       unitPrice,
+      unitProfit,
       lineTotal,
       adhocPayload: item.payload as unknown as Prisma.InputJsonValue,
     };
   }
 
   private async computeUnitPrice(
-    cost: number,
+    cost: {
+      fabricationPrice: number;
+      otherMaterialsWithReplenishment: number;
+      totalCost: number;
+    },
     channelId: string | null,
     productId: string | null,
     quantity: number,
-  ): Promise<number> {
-    if (!channelId) return cost; // Without a channel the price equals the cost (caller can override).
+  ): Promise<{ unitPrice: number; unitProfit: number }> {
+    if (!channelId) {
+      // Sin canal el precio = costo total (caller puede sobreescribir).
+      // El profit no se puede calcular sin markup del producto, queda 0.
+      return { unitPrice: cost.totalCost, unitProfit: 0 };
+    }
 
     const channel = await this.prisma.channel.findUnique({ where: { id: channelId } });
     if (!channel) throw new NotFoundException('Canal inexistente');
@@ -231,8 +261,17 @@ export class QuotesService {
         productChannel && productChannel.commissionPct ? Number(productChannel.commissionPct) : null,
     };
     const tierOverrides = tier ? { markupPct: tier.markupPct ?? undefined } : {};
-    const line = this.engine.price(cost, cfg, productInputs, globals, tierOverrides);
-    return line.finalPrice;
+    const line = this.engine.price(
+      {
+        fabricationPrice: cost.fabricationPrice,
+        otherMaterialsWithReplenishment: cost.otherMaterialsWithReplenishment,
+      },
+      cfg,
+      productInputs,
+      globals,
+      tierOverrides,
+    );
+    return { unitPrice: line.finalPrice, unitProfit: line.profit };
   }
 
   private async nextCode(type: QuoteType): Promise<string> {
@@ -287,6 +326,7 @@ export class QuotesService {
       quantity: Prisma.Decimal;
       unitCost: Prisma.Decimal;
       unitPrice: Prisma.Decimal;
+      unitProfit: Prisma.Decimal;
       lineTotal: Prisma.Decimal;
       adhocPayload: Prisma.JsonValue;
     }>;
@@ -298,6 +338,7 @@ export class QuotesService {
       quantity: dec(i.quantity),
       unitCost: dec(i.unitCost),
       unitPrice: dec(i.unitPrice),
+      unitProfit: dec(i.unitProfit),
       lineTotal: dec(i.lineTotal),
       adhocPayload:
         i.adhocPayload && typeof i.adhocPayload === 'object'

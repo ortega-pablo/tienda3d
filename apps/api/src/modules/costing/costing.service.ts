@@ -108,6 +108,7 @@ export class CostingService {
         filamentName: priced.name,
         filamentPricePerKg: current ? dec(current.price) : 0,
         filamentWastePct: dec(priced.wastePct),
+        filamentReplenishmentPct: dec(priced.replenishmentMarkupPct),
       };
     });
 
@@ -128,6 +129,7 @@ export class CostingService {
         quantity: dec(row.quantity),
         unitPrice: price ? dec(price.price) : 0,
         wastePct: dec(row.material.wastePct),
+        replenishmentPct: dec(row.material.replenishmentMarkupPct),
       };
     });
 
@@ -135,7 +137,14 @@ export class CostingService {
       this.machineHour.computeActive(),
       this.prisma.globalParam.findMany({
         where: {
-          key: { in: ['labor_hour_cost', 'contingency_pct', 'reinvestment_pct'] },
+          key: {
+            in: [
+              'labor_hour_cost',
+              'contingency_pct',
+              'reinvestment_pct',
+              'labor_markup_pct',
+            ],
+          },
         },
       }),
     ]);
@@ -154,6 +163,7 @@ export class CostingService {
       laborHourCost: paramMap.get('labor_hour_cost') ?? 0,
       contingencyPct: paramMap.get('contingency_pct') ?? 0,
       reinvestmentPct: paramMap.get('reinvestment_pct') ?? 0,
+      laborMarkupPct: paramMap.get('labor_markup_pct') ?? 0,
     };
 
     return this.calculator.compute(input);
@@ -186,7 +196,16 @@ export class CostingService {
         : [],
       this.machineHour.computeActive(),
       this.prisma.globalParam.findMany({
-        where: { key: { in: ['labor_hour_cost', 'contingency_pct', 'reinvestment_pct'] } },
+        where: {
+          key: {
+            in: [
+              'labor_hour_cost',
+              'contingency_pct',
+              'reinvestment_pct',
+              'labor_markup_pct',
+            ],
+          },
+        },
       }),
     ]);
 
@@ -213,6 +232,7 @@ export class CostingService {
         filamentName: priced.name,
         filamentPricePerKg: current ? dec(current.price) : 0,
         filamentWastePct: dec(priced.wastePct),
+        filamentReplenishmentPct: dec(priced.replenishmentMarkupPct),
       };
     });
 
@@ -227,6 +247,7 @@ export class CostingService {
         quantity: m.quantity,
         unitPrice: current ? dec(current.price) : 0,
         wastePct: dec(mat.wastePct),
+        replenishmentPct: dec(mat.replenishmentMarkupPct),
       };
     });
 
@@ -243,6 +264,7 @@ export class CostingService {
       laborHourCost: paramMap.get('labor_hour_cost') ?? 0,
       contingencyPct: paramMap.get('contingency_pct') ?? 0,
       reinvestmentPct: paramMap.get('reinvestment_pct') ?? 0,
+      laborMarkupPct: paramMap.get('labor_markup_pct') ?? 0,
     };
 
     return this.calculator.compute(adhocInput);

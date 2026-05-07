@@ -39,6 +39,8 @@ export interface MaterialDto {
   colorHex: string | null;
   densityGCm3: number | null;
   wastePct: number;
+  /** Logic C v3 — % aplicado al costo bruto del insumo para reposición de stock. */
+  replenishmentMarkupPct: number;
   currentStock: number;
   minStock: number;
   lowStockAlert: boolean;
@@ -249,7 +251,7 @@ export function MaterialsView({
               <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="py-2 pr-4 font-medium">Insumo</th>
                 <th className="py-2 pr-4 font-medium">Stock</th>
-                <th className="py-2 pr-4 font-medium">Desperdicio</th>
+                <th className="py-2 pr-4 font-medium">Desperdicio · Reab.</th>
                 <th className="py-2 pr-4 font-medium">Precio vigente</th>
                 <th className="py-2 pr-4 font-medium">Proveedor</th>
                 <th className="py-2 font-medium" />
@@ -331,7 +333,13 @@ export function MaterialsView({
                           </>
                         )}
                       </td>
-                      <td className="py-3 pr-4 font-mono">{formatNumber(m.wastePct)}%</td>
+                      <td className="py-3 pr-4 font-mono">
+                        {formatNumber(m.wastePct)}%{' '}
+                        <span className="text-[10px] text-muted-foreground">·</span>{' '}
+                        <span className="text-muted-foreground">
+                          {formatNumber(m.replenishmentMarkupPct)}%
+                        </span>
+                      </td>
                       <td className="py-3 pr-4 font-mono">
                         {m.currentPrice ? (
                           <>

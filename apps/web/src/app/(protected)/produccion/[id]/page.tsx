@@ -7,6 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { StatusBadge } from '@/components/status-badge';
 import { ProductionActions, type ProductionDto } from './production-actions';
 
+interface CostShape {
+  fabricationPrice?: number;
+}
+
+interface ProductLite {
+  targetMarkupPct: number;
+}
+
 export default async function ProductionDetailPage({
   params,
 }: {
@@ -22,6 +30,20 @@ export default async function ProductionDetailPage({
     if (err instanceof ApiError && err.status === 404) notFound();
     throw err;
   }
+
+  // Estimated profit: fabricationPrice × markup × quantity (basado en el costo
+  // y markup *actuales* del producto — no en un snapshot histórico).
+  const [cost, product] = await Promise.all([
+    api<CostShape>(`/products/${order.productId}/cost`).catch(() => null),
+    api<ProductLite>(`/products/${order.productId}`).catch(() => null),
+  ]);
+  const fabricationPrice = cost?.fabricationPrice ?? null;
+  const markupPct = product?.targetMarkupPct ?? null;
+  const profitPerUnit =
+    fabricationPrice != null && markupPct != null
+      ? fabricationPrice * (markupPct / 100)
+      : null;
+  const profitTotal = profitPerUnit != null ? profitPerUnit * order.quantity : null;
 
   return (
     <div className="space-y-6">
@@ -103,6 +125,28 @@ export default async function ProductionDetailPage({
                   : '—'
               }
             />
+
+            {profitTotal != null && profitPerUnit != null && (
+              <div
+                className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3"
+                title="Ganancia estimada con el costo y markup actuales del producto. Se realiza al vender — no al producir."
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                      Ganancia de bolsillo estimada
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {formatMoney(profitPerUnit)} /unidad
+                      {markupPct != null && ` · ${formatNumber(markupPct)}%`}
+                    </div>
+                  </div>
+                  <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+                    {formatMoney(profitTotal)}
+                  </div>
+                </div>
+              </div>
+            )}
             <Row
               label="Creada"
               value={new Date(order.createdAt).toLocaleString('es-AR')}

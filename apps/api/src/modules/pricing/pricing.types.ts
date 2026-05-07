@@ -2,13 +2,16 @@
  * Pricing input/output types — kept framework-free so the engine is testable
  * in isolation against fixed values from the Excel.
  *
- * Logic B (markup over cost):
- *   profit       = cost × markup%
- *   denominator  = 1 − commission% − regime%
- *   final_price  = (cost + profit) / denominator
+ * Logic C v3:
+ *   profit            = fabricationPrice × markup%
+ *                       (NO se aplica sobre los otros insumos: el
+ *                        replenishmentMarkupPct ya cubre su reposición).
+ *   pre_commission    = fabricationPrice + profit + otherMaterialsWithReplenishment
+ *   denominator       = 1 − commission% − regime%
+ *   final_price       = pre_commission / denominator
  *
- * Profit is the same absolute value across channels; price varies because
- * commissions/regime differ.
+ * Profit es el mismo absoluto entre canales (sólo depende de fabricación);
+ * el precio varía porque comisiones/régimen difieren.
  */
 
 export type TaxMode = 'SIMPLE' | 'DETAILED';
@@ -46,7 +49,7 @@ export interface PricingGlobals {
 }
 
 export interface ProductPricingInputs {
-  /** % markup over cost — yields the absolute profit per unit. */
+  /** % markup over fabricationPrice — yields the absolute profit per unit. */
   targetMarkupPct: number;
   /** Required only for MARKETPLACE channels (e.g. MELI category fee). */
   marketplaceCommissionPct?: number | null;
@@ -64,6 +67,17 @@ export interface PricingOptions {
   withoutRegime?: boolean;
 }
 
+/**
+ * Logic C v3 — costing inputs for the engine. Replaces the single `cost`
+ * scalar with two components so profit can be computed only on fabrication.
+ */
+export interface PricingCostInputs {
+  /** Precio de fabricación (filamento + máquina + obra + marketing + provisiones). */
+  fabricationPrice: number;
+  /** Σ otros insumos con reabastecimiento — entran post-profit. */
+  otherMaterialsWithReplenishment: number;
+}
+
 export interface PriceLine {
   markupPct: number;
   commissionPct: number;
@@ -74,7 +88,10 @@ export interface PriceLine {
   finalPrice: number;
   /** Net price (without IVA when DETAILED+appliesIva). */
   netPrice: number;
-  /** Absolute profit per unit — fixed across channels (Logic B). */
+  /**
+   * Ganancia de bolsillo — profit absoluto por unidad. En Logic C v3 se
+   * calcula como `fabricationPrice × markup%` y queda fijo entre canales.
+   */
   profit: number;
   /** Effective profit margin sobre precio final (informational). */
   effectiveMarginPct: number;

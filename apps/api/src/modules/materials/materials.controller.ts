@@ -34,6 +34,12 @@ const inputSchema = z.object({
     .optional(),
   densityGCm3: z.number().positive().nullable().optional(),
   wastePct: z.number().min(0).max(100).optional(),
+  /**
+   * Logic C v3 — % aplicado sobre el costo bruto del insumo para cubrir
+   * reposición de stock. No es ganancia. Cap a 500% por si alguien necesita
+   * cubrir importaciones con costo de oportunidad alto.
+   */
+  replenishmentMarkupPct: z.number().min(0).max(500).optional(),
   currentStock: z.number().min(0).optional(),
   minStock: z.number().min(0).optional(),
   lowStockAlert: z.boolean().optional(),

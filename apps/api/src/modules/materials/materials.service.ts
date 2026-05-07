@@ -15,6 +15,8 @@ export interface MaterialDto {
   colorHex: string | null;
   densityGCm3: number | null;
   wastePct: number;
+  /** % de reabastecimiento aplicado sobre el costo bruto del insumo. */
+  replenishmentMarkupPct: number;
   currentStock: number;
   minStock: number;
   lowStockAlert: boolean;
@@ -44,6 +46,7 @@ export interface MaterialInput {
   colorHex?: string | null;
   densityGCm3?: number | null;
   wastePct?: number;
+  replenishmentMarkupPct?: number;
   currentStock?: number;
   minStock?: number;
   lowStockAlert?: boolean;
@@ -153,6 +156,7 @@ export class MaterialsService {
         colorHex: input.colorHex ?? null,
         densityGCm3: input.densityGCm3 ?? null,
         wastePct: input.wastePct ?? 5,
+        replenishmentMarkupPct: input.replenishmentMarkupPct ?? 15,
         currentStock: input.currentStock ?? 0,
         minStock: input.minStock ?? 0,
         lowStockAlert: input.lowStockAlert ?? true,
@@ -301,6 +305,7 @@ export class MaterialsService {
       colorHex: m.colorHex,
       densityGCm3: decOrNull(m.densityGCm3),
       wastePct: dec(m.wastePct),
+      replenishmentMarkupPct: dec(m.replenishmentMarkupPct),
       currentStock: dec(m.currentStock),
       minStock: dec(m.minStock),
       lowStockAlert: m.lowStockAlert,

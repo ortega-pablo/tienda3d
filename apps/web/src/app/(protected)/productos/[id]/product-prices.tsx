@@ -55,6 +55,11 @@ interface ChannelPriceBlock {
 export interface ProductPricesResponse {
   productId: string;
   productName: string;
+  /** Logic C v3 — base del profit. */
+  fabricationPrice?: number;
+  otherMaterialsWithReplenishment?: number;
+  totalCost?: number;
+  /** Legacy alias (= totalCost). */
   costWithProvisions: number;
   profitPerUnit: number;
   targetMarkupPct: number;
@@ -322,15 +327,28 @@ export function ProductPrices({
       <Card className="lg:col-span-2">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="space-y-2">
               <CardTitle>Precios por canal</CardTitle>
               <CardDescription>
-                Costo: {formatMoney(prices.costWithProvisions)} · Markup{' '}
-                {formatNumber(prices.targetMarkupPct)}% ·{' '}
-                <strong className="text-success">
-                  Ganancia fija: {formatMoney(prices.profitPerUnit)} / unidad
-                </strong>
+                Costo total: {formatMoney(prices.totalCost ?? prices.costWithProvisions)}
+                {prices.fabricationPrice != null && (
+                  <>
+                    {' '}· Fabricación: {formatMoney(prices.fabricationPrice)}
+                  </>
+                )}{' '}
+                · Markup {formatNumber(prices.targetMarkupPct)}%
               </CardDescription>
+              <div className="inline-flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5">
+                <span className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                  Ganancia de bolsillo
+                </span>
+                <span className="font-mono text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatMoney(prices.profitPerUnit)}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  /unidad · igual en todos los canales
+                </span>
+              </div>
             </div>
             {canSeeNoInvoice && (
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border bg-warning/10 px-3 py-1.5 text-xs">
@@ -361,7 +379,7 @@ export function ProductPrices({
                   <th className="py-2 pr-4 font-medium">Comisión</th>
                   <th className="py-2 pr-4 font-medium">Régimen</th>
                   <th className="py-2 pr-4 font-medium">Precio</th>
-                  <th className="py-2 pr-4 font-medium">Ganancia</th>
+                  <th className="py-2 pr-4 font-medium">Ganancia de bolsillo</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -666,7 +684,12 @@ function PriceRow({
         {formatNumber(line.taxBurdenPct)}%
       </td>
       <td className="py-2 pr-4 font-mono font-semibold">{formatMoney(line.finalPrice)}</td>
-      <td className="py-2 pr-4 font-mono text-success">{formatMoney(line.profit)}</td>
+      <td
+        className="py-2 pr-4 font-mono font-semibold text-emerald-700 dark:text-emerald-300"
+        title="Ganancia de bolsillo — profit puro por unidad."
+      >
+        {formatMoney(line.profit)}
+      </td>
     </tr>
   );
 }

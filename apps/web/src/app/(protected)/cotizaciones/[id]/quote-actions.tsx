@@ -37,6 +37,8 @@ export interface QuoteDto {
     quantity: number;
     unitCost: number;
     unitPrice: number;
+    /** Logic C v3 — ganancia de bolsillo por unidad (snapshot al crear). */
+    unitProfit: number;
     lineTotal: number;
   }>;
 }

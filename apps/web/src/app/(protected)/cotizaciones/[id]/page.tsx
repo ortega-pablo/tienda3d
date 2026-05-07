@@ -52,6 +52,7 @@ export default async function QuoteDetailPage({
                   <th className="py-2 pr-4 font-medium text-right">Cant.</th>
                   <th className="py-2 pr-4 font-medium text-right">Costo unit.</th>
                   <th className="py-2 pr-4 font-medium text-right">Precio unit.</th>
+                  <th className="py-2 pr-4 font-medium text-right">Ganancia unit.</th>
                   <th className="py-2 pr-4 font-medium text-right">Subtotal</th>
                 </tr>
               </thead>
@@ -69,6 +70,12 @@ export default async function QuoteDetailPage({
                       {formatMoney(i.unitCost)}
                     </td>
                     <td className="py-3 pr-4 text-right font-mono">{formatMoney(i.unitPrice)}</td>
+                    <td
+                      className="py-3 pr-4 text-right font-mono text-emerald-700 dark:text-emerald-300"
+                      title="Ganancia de bolsillo por unidad — snapshot al crear la cotización."
+                    >
+                      {formatMoney(i.unitProfit)}
+                    </td>
                     <td className="py-3 pr-4 text-right font-mono font-semibold">
                       {formatMoney(i.lineTotal)}
                     </td>
@@ -80,18 +87,26 @@ export default async function QuoteDetailPage({
                   <td colSpan={4} className="py-2 pr-4 text-right text-sm text-muted-foreground">
                     Subtotal
                   </td>
+                  <td
+                    className="py-2 pr-4 text-right font-mono text-emerald-700 dark:text-emerald-300"
+                    title="Ganancia de bolsillo total estimada (Σ unit_profit × cantidad)."
+                  >
+                    {formatMoney(
+                      quote.items.reduce((acc, i) => acc + i.unitProfit * i.quantity, 0),
+                    )}
+                  </td>
                   <td className="py-2 pr-4 text-right font-mono">{formatMoney(quote.subtotal)}</td>
                 </tr>
                 {quote.discount > 0 && (
                   <tr>
-                    <td colSpan={4} className="py-2 pr-4 text-right text-sm text-muted-foreground">
+                    <td colSpan={5} className="py-2 pr-4 text-right text-sm text-muted-foreground">
                       Descuento
                     </td>
                     <td className="py-2 pr-4 text-right font-mono">- {formatMoney(quote.discount)}</td>
                   </tr>
                 )}
                 <tr>
-                  <td colSpan={4} className="py-2 pr-4 text-right font-medium">
+                  <td colSpan={5} className="py-2 pr-4 text-right font-medium">
                     Total
                   </td>
                   <td className="py-2 pr-4 text-right font-mono text-lg font-bold">

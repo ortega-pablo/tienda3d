@@ -14,6 +14,8 @@ interface MachineHour {
   machineId: string | null;
   machineName: string | null;
   depreciationPerHour: number;
+  energyPerHourRaw?: number;
+  energyMarkupPct?: number;
   energyPerHour: number;
   maintenancePerHour: number;
   total: number;

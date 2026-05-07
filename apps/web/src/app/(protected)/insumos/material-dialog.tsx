@@ -38,6 +38,7 @@ interface FormState {
   colorHex: string;
   densityGCm3: string;
   wastePct: string;
+  replenishmentMarkupPct: string;
   currentStock: string;
   minStock: string;
   lowStockAlert: boolean;
@@ -56,6 +57,7 @@ function initialFromMaterial(m: MaterialDto | null, parent: MaterialDto | null):
       colorHex: m.colorHex ?? '',
       densityGCm3: m.densityGCm3?.toString() ?? '',
       wastePct: m.wastePct?.toString() ?? '5',
+      replenishmentMarkupPct: m.replenishmentMarkupPct?.toString() ?? '15',
       currentStock: m.currentStock?.toString() ?? '0',
       minStock: m.minStock?.toString() ?? '0',
       lowStockAlert: m.lowStockAlert,
@@ -74,6 +76,7 @@ function initialFromMaterial(m: MaterialDto | null, parent: MaterialDto | null):
       colorHex: '#000000',
       densityGCm3: parent.densityGCm3?.toString() ?? '',
       wastePct: parent.wastePct?.toString() ?? '5',
+      replenishmentMarkupPct: parent.replenishmentMarkupPct?.toString() ?? '15',
       currentStock: '0',
       minStock: '0',
       lowStockAlert: true,
@@ -90,6 +93,7 @@ function initialFromMaterial(m: MaterialDto | null, parent: MaterialDto | null):
     colorHex: '',
     densityGCm3: '1.24',
     wastePct: '5',
+    replenishmentMarkupPct: '15',
     currentStock: '0',
     minStock: '0',
     lowStockAlert: true,
@@ -150,6 +154,8 @@ export function MaterialDialog({
         densityGCm3:
           isFilament && form.densityGCm3 ? Number(form.densityGCm3) : null,
         wastePct: Number(form.wastePct),
+        // Variants inherit the parent's replenishmentMarkupPct (set by the parent).
+        ...(isVariant ? {} : { replenishmentMarkupPct: Number(form.replenishmentMarkupPct) }),
         currentStock: isFilamentParent ? 0 : Number(form.currentStock),
         minStock: isFilamentParent ? 0 : Number(form.minStock),
         lowStockAlert: isFilamentParent ? false : form.lowStockAlert,
@@ -262,13 +268,31 @@ export function MaterialDialog({
           )}
 
           {!isFilamentParent && (
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Desperdicio (%)">
                 <Input
                   type="number"
                   step="0.1"
                   value={form.wastePct}
                   onChange={(e) => setForm({ ...form, wastePct: e.target.value })}
+                  disabled={isVariant}
+                />
+              </Field>
+              <Field
+                label="Reabastecimiento (%)"
+                hint={
+                  isVariant
+                    ? 'Heredado del filamento padre.'
+                    : 'Recargo sobre el costo bruto para reponer stock. NO es ganancia.'
+                }
+              >
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form.replenishmentMarkupPct}
+                  onChange={(e) =>
+                    setForm({ ...form, replenishmentMarkupPct: e.target.value })
+                  }
                   disabled={isVariant}
                 />
               </Field>
@@ -292,7 +316,7 @@ export function MaterialDialog({
           )}
 
           {isFilamentParent && (
-            <div className="grid gap-3 sm:grid-cols-1">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Desperdicio (%)">
                 <Input
                   type="number"
@@ -301,8 +325,22 @@ export function MaterialDialog({
                   onChange={(e) => setForm({ ...form, wastePct: e.target.value })}
                 />
               </Field>
-              <p className="text-xs text-muted-foreground">
+              <Field
+                label="Reabastecimiento (%)"
+                hint="Recargo sobre el costo bruto para reponer stock. NO es ganancia."
+              >
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form.replenishmentMarkupPct}
+                  onChange={(e) =>
+                    setForm({ ...form, replenishmentMarkupPct: e.target.value })
+                  }
+                />
+              </Field>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
                 El padre no acumula stock — agregá variantes (colores) después de guardar.
+                Las variantes heredan el reabastecimiento de este filamento.
               </p>
             </div>
           )}
@@ -341,15 +379,18 @@ function Field({
   label,
   children,
   required,
+  hint,
 }: {
   label: string;
   children: React.ReactNode;
   required?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="space-y-1.5">
       <Label required={required}>{label}</Label>
       {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
