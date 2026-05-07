@@ -48,7 +48,7 @@ export default async function NewProductPage() {
         mode="create"
         materials={materials.filter((m) => m.isActive)}
         availableChannels={channels.filter((c) => c.isActive)}
-        machines={machines.filter((m) => m.isActive)}
+        machines={machines}
       />
     </div>
   );

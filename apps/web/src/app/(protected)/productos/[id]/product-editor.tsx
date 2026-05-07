@@ -494,6 +494,7 @@ export function ProductEditor({
                   {machines.map((mc) => (
                     <option key={mc.id} value={mc.id}>
                       {mc.name}
+                      {!mc.isActive ? ' (inactiva)' : ''}
                     </option>
                   ))}
                 </select>

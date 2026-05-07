@@ -51,7 +51,7 @@ export default async function ProductDetailPage({
         product={product}
         materials={materials.filter((m) => m.isActive)}
         availableChannels={channels.filter((c) => c.isActive)}
-        machines={machines.filter((m) => m.isActive)}
+        machines={machines}
         initialCost={cost}
       />
 

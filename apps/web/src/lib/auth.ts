@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { api, ApiError } from './api-server';
 
@@ -10,14 +11,20 @@ export interface AuthenticatedUser {
   permissions: string[];
 }
 
-export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
+/**
+ * `cache()` deduplicates the call within a single React render pass: layout +
+ * page + multiple `requirePermission()` checks all share one /auth/me hit.
+ * Cuts request count from N to 1 per render, which is what was tripping the
+ * rate limiter when the user navigated quickly.
+ */
+export const getCurrentUser = cache(async (): Promise<AuthenticatedUser | null> => {
   try {
     return await api<AuthenticatedUser>('/auth/me');
   } catch (err) {
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) return null;
     throw err;
   }
-}
+});
 
 export async function requireUser(): Promise<AuthenticatedUser> {
   const user = await getCurrentUser();

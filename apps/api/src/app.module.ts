@@ -23,9 +23,14 @@ import { UsersModule } from './modules/users/users.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, cache: true }),
+    // NestJS aplica TODOS los throttlers a cada ruta, no sólo el "matching".
+    // Por eso `auth` global queda generoso (similar al default) y los límites
+    // estrictos contra brute-force se ponen route-by-route con @Throttle()
+    // (login: 10/min, refresh: 30/min). Así /auth/me, que se llama por cada
+    // navegación a una ruta protegida, no se trabaja por el límite de auth.
     ThrottlerModule.forRoot([
       { name: 'default', ttl: 60_000, limit: 120 },
-      { name: 'auth', ttl: 60_000, limit: 10 },
+      { name: 'auth', ttl: 60_000, limit: 120 },
     ]),
     LoggerModule.forRoot({
       pinoHttp: {
