@@ -86,15 +86,12 @@ describe('PricingEngine — Logic C v3', () => {
       expect(r.netPrice).toBeCloseTo(preCommission / (1 - 0.13 - 0.04), 1);
     });
 
-    it('Efectivo con régimen aplicado por default', () => {
+    it('Efectivo (Contado S/F): exento de régimen — denominador = 1 - comisión', () => {
+      // CASH no factura → no aplica régimen unificado, sin importar globals.
       const r = engine.price(cost, channels.cash, product, globals);
       expect(r.profit).toBeCloseTo(expectedProfit, 4);
-      expect(r.netPrice).toBeCloseTo(preCommission / 0.96, 1);
-    });
-
-    it('Efectivo sin régimen (toggle admin): mismo profit, precio menor', () => {
-      const r = engine.price(cost, channels.cash, product, globals, {}, { withoutRegime: true });
-      expect(r.profit).toBeCloseTo(expectedProfit, 4);
+      expect(r.taxBurdenPct).toBe(0);
+      expect(r.denominator).toBeCloseTo(1, 6);
       expect(r.netPrice).toBeCloseTo(preCommission, 1);
     });
   });

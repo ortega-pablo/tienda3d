@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, EyeOff, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useConfirm } from '@/components/confirm-provider';
-import { useCurrentUser, useHasPermission } from '@/components/user-provider';
+import { useHasPermission } from '@/components/user-provider';
 
 type ChannelKind = 'DIRECT_SALE' | 'CASH' | 'MARKETPLACE' | 'CUSTOM';
 
@@ -95,15 +95,12 @@ export function ProductPrices({
   initialTiers: TierDto[];
 }) {
   const can = useHasPermission();
-  const user = useCurrentUser();
   const canWrite = can('product:write');
-  const canSeeNoInvoice = user.permissions.includes('pricing:no-invoice:read');
   const router = useRouter();
 
   const confirm = useConfirm();
   const [tiers, setTiers] = useState(initialTiers);
   const [prices, setPrices] = useState(initialPrices);
-  const [withoutRegime, setWithoutRegime] = useState(false);
   const [creating, setCreating] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -119,30 +116,6 @@ export function ProductPrices({
     markupPct: '',
     notes: '',
   });
-
-  const reloadAbortRef = useRef<AbortController | null>(null);
-
-  const reloadPrices = async (next: boolean): Promise<void> => {
-    // Cancel any in-flight reload so rapid toggling doesn't race or surface
-    // transient errors from a request that's already been superseded.
-    reloadAbortRef.current?.abort();
-    const controller = new AbortController();
-    reloadAbortRef.current = controller;
-
-    setWithoutRegime(next);
-    try {
-      const url = next
-        ? `/products/${productId}/prices?withoutRegime=true`
-        : `/products/${productId}/prices`;
-      const fresh = await api<ProductPricesResponse>(url, { signal: controller.signal });
-      if (controller.signal.aborted) return;
-      setPrices(fresh);
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      handleApiError(err, { fallback: 'No se pudo recargar precios' });
-    }
-  };
 
   if (!prices) {
     return (
@@ -200,7 +173,7 @@ export function ProductPrices({
       const [tFresh, pFresh] = await Promise.all([
         api<TierDto[]>(`/products/${productId}/tiers`),
         api<ProductPricesResponse>(
-          `/products/${productId}/prices${withoutRegime ? '?withoutRegime=true' : ''}`,
+          `/products/${productId}/prices`,
         ),
       ]);
       setTiers(tFresh);
@@ -226,7 +199,7 @@ export function ProductPrices({
       const [tFresh, pFresh] = await Promise.all([
         api<TierDto[]>(`/products/${productId}/tiers`),
         api<ProductPricesResponse>(
-          `/products/${productId}/prices${withoutRegime ? '?withoutRegime=true' : ''}`,
+          `/products/${productId}/prices`,
         ),
       ]);
       setTiers(tFresh);
@@ -307,7 +280,7 @@ export function ProductPrices({
       const [tFresh, pFresh] = await Promise.all([
         api<TierDto[]>(`/products/${productId}/tiers`),
         api<ProductPricesResponse>(
-          `/products/${productId}/prices${withoutRegime ? '?withoutRegime=true' : ''}`,
+          `/products/${productId}/prices`,
         ),
       ]);
       setTiers(tFresh);
@@ -350,18 +323,6 @@ export function ProductPrices({
                 </span>
               </div>
             </div>
-            {canSeeNoInvoice && (
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border bg-warning/10 px-3 py-1.5 text-xs">
-                <EyeOff className="h-3.5 w-3.5 text-warning" />
-                <span>Efectivo sin régimen</span>
-                <input
-                  type="checkbox"
-                  checked={withoutRegime}
-                  onChange={(e) => reloadPrices(e.target.checked)}
-                  className="h-3 w-3"
-                />
-              </label>
-            )}
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">

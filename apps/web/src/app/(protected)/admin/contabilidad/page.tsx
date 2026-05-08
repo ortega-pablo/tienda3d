@@ -242,11 +242,12 @@ export default async function AccountingPage() {
             de pricing).
           </p>
           <p>
-            Para canales <strong>CASH</strong>, los usuarios con permiso{' '}
-            <Code>pricing:no-invoice:read</Code> pueden activar el toggle{' '}
-            <em>"Sin factura"</em> que recalcula el precio sin régimen. Útil para informar al
-            cliente cuánto sale "en negro" — el profit del vendedor no cambia (sigue siendo{' '}
-            <Code>cost × markup</Code>).
+            <strong>Excepción: canales CASH (Contado S/F)</strong> están exentos de régimen por
+            naturaleza — operan sin factura, así que la deducción no corresponde. El motor
+            fuerza <Code>régimen = 0</Code> para todo canal con <Code>kind = CASH</Code>,
+            independientemente del valor global. El profit del vendedor sigue siendo el mismo
+            entre canales (Logic C v3:{' '}
+            <Code>fabricationPrice × markup</Code>).
           </p>
         </Block>
 
@@ -364,10 +365,6 @@ export default async function AccountingPage() {
           <li>
             <Code>parameter:write</Code> — modificar parámetros globales (afecta el precio de
             todos los productos).
-          </li>
-          <li>
-            <Code>pricing:no-invoice:read</Code> — ver el toggle "Efectivo sin régimen". Solo
-            admins.
           </li>
           <li>
             <Code>role:manage</Code> y <Code>user:manage</Code> — gestionar permisos. Los roles{' '}

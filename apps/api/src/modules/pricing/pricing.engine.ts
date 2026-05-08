@@ -4,7 +4,6 @@ import type {
   PriceLine,
   PricingCostInputs,
   PricingGlobals,
-  PricingOptions,
   ProductPricingInputs,
   TierOverrides,
 } from './pricing.types';
@@ -36,7 +35,6 @@ export class PricingEngine {
     product: ProductPricingInputs,
     globals: PricingGlobals,
     tier: TierOverrides = {},
-    options: PricingOptions = {},
   ): PriceLine {
     const warnings: string[] = [];
 
@@ -60,7 +58,7 @@ export class PricingEngine {
     const preCommission =
       cost.fabricationPrice + profit + cost.otherMaterialsWithReplenishment;
 
-    const tax = this.computeTaxes(channel, globals, options);
+    const tax = this.computeTaxes(channel, globals);
     const commissionFraction = commissionResult.value / 100;
     const denominator = 1 - commissionFraction - tax.burdenPct / 100;
 
@@ -127,7 +125,6 @@ export class PricingEngine {
   private computeTaxes(
     channel: ChannelPricingConfig,
     globals: PricingGlobals,
-    options: PricingOptions,
   ): TaxComputed {
     if (channel.taxMode === 'DETAILED') {
       const iibb = channel.iibbPct ?? 0;
@@ -140,9 +137,9 @@ export class PricingEngine {
         finalMultiplier: channel.appliesIva ? 1.21 : 1,
       };
     }
-    // SIMPLE: régimen unificado is global; CASH can be exempted via admin toggle.
-    const skipRegime = options.withoutRegime === true && channel.kind === 'CASH';
-    const regime = skipRegime ? 0 : globals.unifiedRegimePct;
+    // SIMPLE: régimen unificado aplica a todo canal SIMPLE excepto CASH.
+    // CASH (Contado S/F) opera sin factura, así que el régimen no corresponde.
+    const regime = channel.kind === 'CASH' ? 0 : globals.unifiedRegimePct;
     return { burdenPct: regime, finalMultiplier: 1 };
   }
 }

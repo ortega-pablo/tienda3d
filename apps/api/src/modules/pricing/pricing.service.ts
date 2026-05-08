@@ -53,10 +53,6 @@ export interface ProductPricesResponse {
   channels: ChannelPriceBlock[];
 }
 
-export interface PricingForProductOptions {
-  withoutRegime?: boolean;
-}
-
 @Injectable()
 export class PricingService {
   constructor(
@@ -65,10 +61,7 @@ export class PricingService {
     private readonly engine: PricingEngine,
   ) {}
 
-  async forProduct(
-    productId: string,
-    options: PricingForProductOptions = {},
-  ): Promise<ProductPricesResponse> {
+  async forProduct(productId: string): Promise<ProductPricesResponse> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: { id: true, name: true, targetMarkupPct: true },
@@ -111,28 +104,16 @@ export class PricingService {
 
         const base =
           tiers.length === 0
-            ? this.engine.price(
-                costInputs,
-                cfg,
-                productInputs,
-                globals,
-                {},
-                { withoutRegime: options.withoutRegime },
-              )
+            ? this.engine.price(costInputs, cfg, productInputs, globals)
             : null;
 
         const tierPrices: ChannelTierPrice[] = tiers.map((t) => ({
           tierId: t.id,
           minQty: t.minQty,
           maxQty: t.maxQty,
-          line: this.engine.price(
-            costInputs,
-            cfg,
-            productInputs,
-            globals,
-            { markupPct: t.markupPct ? dec(t.markupPct) : undefined },
-            { withoutRegime: options.withoutRegime },
-          ),
+          line: this.engine.price(costInputs, cfg, productInputs, globals, {
+            markupPct: t.markupPct ? dec(t.markupPct) : undefined,
+          }),
         }));
 
         const needsConfig =

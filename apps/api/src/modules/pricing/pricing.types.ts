@@ -62,11 +62,6 @@ export interface TierOverrides {
   commissionPct?: number | null;
 }
 
-export interface PricingOptions {
-  /** When true and channel.kind === 'CASH', recalculate without applying regime. */
-  withoutRegime?: boolean;
-}
-
 /**
  * Logic C v3 — costing inputs for the engine. Replaces the single `cost`
  * scalar with two components so profit can be computed only on fabrication.

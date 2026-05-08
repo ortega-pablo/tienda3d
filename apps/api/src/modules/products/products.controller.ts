@@ -2,21 +2,17 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   HttpCode,
   Param,
   Post,
   Put,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
-import type { AccessPayload } from '../auth/auth.service';
 import { CostingService } from '../costing/costing.service';
 import { PricingService } from '../pricing/pricing.service';
 import { ProductsService } from './products.service';
@@ -57,13 +53,6 @@ const inputSchema = z.object({
   pieces: z.array(pieceSchema).min(0),
   materials: z.array(materialLineSchema).min(0),
   channels: z.array(channelLineSchema).optional(),
-});
-
-const pricesQuerySchema = z.object({
-  withoutRegime: z
-    .union([z.boolean(), z.literal('true'), z.literal('false')])
-    .optional()
-    .transform((v) => v === true || v === 'true'),
 });
 
 const overridesSchema = z.object({
@@ -108,15 +97,8 @@ export class ProductsController {
 
   @Permissions('product:read')
   @Get(':id/prices')
-  prices(
-    @Param('id') id: string,
-    @Query(ZodValidation(pricesQuerySchema)) query: z.infer<typeof pricesQuerySchema>,
-    @CurrentUser() user: AccessPayload,
-  ) {
-    if (query.withoutRegime && !user.permissions.includes('pricing:no-invoice:read')) {
-      throw new ForbiddenException('Sin permiso para ver precios sin régimen');
-    }
-    return this.pricing.forProduct(id, { withoutRegime: query.withoutRegime });
+  prices(@Param('id') id: string) {
+    return this.pricing.forProduct(id);
   }
 
   @Permissions('product:write')

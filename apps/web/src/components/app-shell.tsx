@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { useCurrentUser } from '@/components/user-provider';
 import { NAVIGATION } from './nav';
 import { ThemeToggle } from './theme-toggle';
+
+const SIDEBAR_VISIBLE_KEY = 'tienda3d:sidebar-visible';
 
 function visibleItems(permissions: string[]) {
   return NAVIGATION.map((group) => ({
@@ -104,11 +106,32 @@ function UserMenu() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // En desktop el sidebar arranca visible. La preferencia del usuario se
+  // hidrata desde localStorage post-mount para evitar mismatch de SSR.
+  const [desktopVisible, setDesktopVisible] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_VISIBLE_KEY);
+    if (saved === '0') setDesktopVisible(false);
+  }, []);
+
+  const toggleDesktop = () => {
+    setDesktopVisible((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_VISIBLE_KEY, next ? '1' : '0');
+      return next;
+    });
+  };
 
   return (
     <div className="flex min-h-screen w-full bg-muted/40">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-card md:flex">
+      <aside
+        className={cn(
+          'hidden w-64 shrink-0 flex-col border-r bg-card md:flex',
+          !desktopVisible && 'md:hidden',
+        )}
+      >
         <SidebarContent />
       </aside>
 
@@ -132,9 +155,23 @@ export function AppShell({ children }: { children: ReactNode }) {
             size="icon"
             className="md:hidden"
             onClick={() => setMobileOpen((v) => !v)}
-            aria-label="Abrir menú"
+            aria-label={mobileOpen ? 'Cerrar menú' : 'Abrir menú'}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden md:inline-flex"
+            onClick={toggleDesktop}
+            aria-label={desktopVisible ? 'Ocultar menú' : 'Mostrar menú'}
+            title={desktopVisible ? 'Ocultar menú' : 'Mostrar menú'}
+          >
+            {desktopVisible ? (
+              <PanelLeftClose className="h-5 w-5" />
+            ) : (
+              <PanelLeftOpen className="h-5 w-5" />
+            )}
           </Button>
           <div className="flex-1" />
           <ThemeToggle />
