@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 import { ChannelsModule } from './modules/channels/channels.module';
+import { CustomersModule } from './modules/customers/customers.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { MachinesModule } from './modules/machines/machines.module';
@@ -32,6 +35,7 @@ import { UsersModule } from './modules/users/users.module';
       { name: 'default', ttl: 60_000, limit: 120 },
       { name: 'auth', ttl: 60_000, limit: 120 },
     ]),
+    ScheduleModule.forRoot(),
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
@@ -52,7 +56,9 @@ import { UsersModule } from './modules/users/users.module';
     SuppliersModule,
     MaterialsModule,
     ChannelsModule,
+    CategoriesModule,
     ProductsModule,
+    CustomersModule,
     QuotesModule,
     ProductionsModule,
     ReportsModule,
