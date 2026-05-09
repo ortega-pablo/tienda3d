@@ -27,6 +27,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// Cuando está poblado, este User es la cuenta de portal de un Customer
+  /// (no es staff). Mutuamente excluyente con uso interno.
+  customerId String?   @unique
+  customer   Customer? @relation("CustomerPortalUser", fields: [customerId], references: [id])
+
   refreshTokens      RefreshToken[]
   productionsCreated ProductionOrder[] @relation("ProductionCreatedBy")
   quotesCreated      Quote[]           @relation("QuoteCreatedBy")
@@ -237,6 +242,32 @@ model SupplierMaterial {
 // Products & recipes
 // ============================================================
 
+// Category hierarchy: 2 niveles. Padres con parentId = null;
+// subcategorías con parentId apuntando al padre. Una subcategoría no
+// puede tener hijos (validado en service layer).
+model Category {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  icon      String?
+  parentId  String?
+  parent    Category?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Restrict)
+  children  Category[] @relation("CategoryParent")
+  isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  products              Product[]
+  customerCommitments   CustomerCategoryCommitment[]
+  customerMonthlyVolumes CustomerMonthlyVolume[]
+
+  @@index([parentId])
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
 model Product {
   id          String  @id @default(cuid())
   name        String
@@ -263,6 +294,11 @@ model Product {
   machineId String?
   machine   Machine? @relation(fields: [machineId], references: [id])
 
+  // Categoría jerárquica (2 niveles). Opcional para no obligar a
+  // categorizar productos existentes en la migración.
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -272,8 +308,10 @@ model Product {
   priceTiers       ProductPriceTier[]
   productionOrders ProductionOrder[]
   quoteItems       QuoteItem[]
+  customerProducts CustomerProduct[]
 
   @@index([machineId])
+  @@index([categoryId])
   @@map("products")
 }
 
@@ -361,6 +399,8 @@ model Channel {
 
   productChannels ProductChannel[]
   quotes          Quote[]
+  /// Clientes que tienen este canal como default para sus pedidos del portal.
+  defaultForCustomers Customer[] @relation("CustomerDefaultChannel")
 
   @@map("channels")
 }
@@ -425,6 +465,18 @@ model Quote {
   customerPhone String?
   customerNotes String?
 
+  /// FK opcional al Customer persistido. Cuando está poblado, customerName/
+  /// email/phone se completan desde el Customer al crear, pero quedan
+  /// guardados en la cotización como snapshot por si el Customer cambia.
+  /// STANDARD = walk-in, no se persiste, así que customerId queda null.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  /// Snapshot del CustomerPricingProfile (flags, categorías, custom markups)
+  /// al momento de crear la cotización. JSON inmutable que asegura que la
+  /// cotización sigue siendo reproducible aunque el Customer cambie después.
+  customerProfileSnapshot Json?
+
   channelId   String?
   channel     Channel? @relation(fields: [channelId], references: [id])
   withInvoice Boolean  @default(false)
@@ -444,6 +496,7 @@ model Quote {
   items QuoteItem[]
 
   @@index([status])
+  @@index([customerId])
   @@map("quotes")
 }
 
@@ -548,4 +601,147 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([at])
   @@map("audit_logs")
+}
+
+// ============================================================
+// Customers (B2B: mayoristas, consignación, especiales)
+// ============================================================
+//
+// El cliente STANDARD (walk-in puntual) NO se persiste — sigue como
+// strings libres en Quote.customerName. Acá viven solo los clientes con
+// trato persistente: WHOLESALE, CONSIGNMENT, SPECIAL.
+
+enum CustomerType {
+  STANDARD     // existe en el enum por flexibilidad pero no se usa en MVP
+  WHOLESALE
+  CONSIGNMENT
+  SPECIAL
+}
+
+enum CustomerSuspensionReason {
+  MONTHLY_COMMITMENT_MISSED
+  MANUAL_ADMIN
+}
+
+model Customer {
+  id        String       @id @default(cuid())
+  name      String
+  type      CustomerType @default(WHOLESALE)
+  email     String?      @unique
+  phone     String?
+  taxId     String?
+  notes     String?
+  isActive  Boolean      @default(true)
+
+  // Pricing flags. El preset (type) sugiere defaults al crear desde la UI;
+  // los flags son la fuente de verdad y son sobrescribibles.
+  skipChannelCommission Boolean @default(false)
+  skipMarketing         Boolean @default(false)
+  skipRegime            Boolean @default(false)
+  skipReinvestment      Boolean @default(false)
+
+  /// Canal por defecto cuando el cliente cotiza desde el portal. Recomendado
+  /// en WHOLESALE/CONSIGNMENT (ej. canal "Mayorista transferencia"). Si null,
+  /// el portal pide elegir canal o falla con mensaje claro.
+  defaultChannelId String?
+  defaultChannel   Channel? @relation("CustomerDefaultChannel", fields: [defaultChannelId], references: [id])
+
+  /// Cuando true, este cliente tiene cuenta de portal. El User asociado vive
+  /// en User.customerId (1:1).
+  hasPortalAccess Boolean @default(false)
+  portalUser      User?   @relation("CustomerPortalUser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  /// Solo para SPECIAL. Productos puntuales asignados.
+  allowedProducts     CustomerProduct[]
+  /// Solo para WHOLESALE. Categorías asociadas con piso de tier y compromiso.
+  categoryCommitments CustomerCategoryCommitment[]
+  /// Tracking mensual de volúmenes (siempre se llena para WHOLESALE).
+  monthlyVolumes      CustomerMonthlyVolume[]
+  /// Cotizaciones vinculadas a este cliente.
+  quotes              Quote[]
+
+  @@index([type, isActive])
+  @@index([defaultChannelId])
+  @@map("customers")
+}
+
+/// Catálogo restringido para clientes SPECIAL. Si el cliente tiene rows acá,
+/// solo puede comprar esos productos. Si no tiene ninguno, no puede comprar
+/// nada (regla explícita, no permisivo).
+model CustomerProduct {
+  customerId String
+  productId  String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Override de markup específico cliente×producto. Pisa al markup del
+  /// producto y al de la tier (ver orden de precedencia en el plan).
+  customMarkupPct Decimal? @db.Decimal(6, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@id([customerId, productId])
+  @@index([productId])
+  @@map("customer_products")
+}
+
+/// Compromiso mayorista por categoría. Cada cliente WHOLESALE tiene una row
+/// por categoría asociada con su propio piso de tier, compromiso de volumen y
+/// estado de suspensión. La suspensión es granular (por categoría).
+model CustomerCategoryCommitment {
+  id         String   @id @default(cuid())
+  customerId String
+  categoryId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// Piso de tier permanente para productos de esta categoría. El motor
+  /// resuelve el markup como si la cantidad fuera ≥ minTierQty, aunque la
+  /// cantidad real sea menor. null = sin piso.
+  minTierQty           Int?
+  /// Meta de unidades/mes en esta categoría. null = sin compromiso.
+  monthlyCommitmentQty Int?
+
+  /// Estado de mayoreo en esta categoría.
+  isWholesaleSuspended Boolean                    @default(false)
+  suspensionReason     CustomerSuspensionReason?
+  suspendedAt          DateTime?
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, categoryId])
+  @@index([categoryId])
+  @@map("customer_category_commitments")
+}
+
+/// Snapshot por (cliente × categoría × mes) del volumen vendido. Se actualiza
+/// cuando una cotización con customerId pasa a ACCEPTED: por cada item se
+/// imputa la cantidad a la categoría del producto. Si el cliente está
+/// asociado a la categoría padre Y a una hija, se imputa a la más específica
+/// (la hija) para evitar doble conteo.
+model CustomerMonthlyVolume {
+  id         String   @id @default(cuid())
+  customerId String
+  categoryId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  /// Primer día del mes en UTC (YYYY-MM-01 00:00:00Z).
+  monthStart   DateTime
+  unitsSold    Decimal  @default(0) @db.Decimal(14, 2)
+  /// Snapshot del compromiso al cerrarse el mes, para auditoría.
+  committedQty Int?
+  /// True si al cerrar el mes no llegó al compromiso.
+  unfulfilled  Boolean  @default(false)
+
+  @@unique([customerId, categoryId, monthStart])
+  @@index([monthStart])
+  @@map("customer_monthly_volumes")
 }

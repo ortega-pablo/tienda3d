@@ -30,6 +30,9 @@ const PERMISSIONS = [
   // Products
   'product:read',
   'product:write',
+  // Categories
+  'category:read',
+  'category:write',
   // Channels
   'channel:read',
   'channel:write',
