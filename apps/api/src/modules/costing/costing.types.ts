@@ -156,6 +156,10 @@ export interface CostingResult {
   process: number;
   contingency: number;
   reinvestment: number;
+  /** % de contingencia y reinversión usados, expuestos para recálculos
+   *  customer-aware (ej. cliente con `skipReinvestment`). */
+  contingencyPct: number;
+  reinvestmentPct: number;
 
   /**
    * Costo total del producto incluyendo otros insumos con reabastecimiento.

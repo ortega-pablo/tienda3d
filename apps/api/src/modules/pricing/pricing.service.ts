@@ -4,9 +4,12 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec, decOrNull } from '@/common/utils/decimal';
 import { CostingService } from '../costing/costing.service';
 import { PricingEngine } from './pricing.engine';
+import type { CostingResult } from '../costing/costing.types';
 import type {
   ChannelPricingConfig,
+  CustomerPricingProfile,
   PriceLine,
+  PricingCostInputs,
   PricingGlobals,
   ProductPricingInputs,
 } from './pricing.types';
@@ -145,6 +148,44 @@ export class PricingService {
       profitPerUnit: cost.fabricationPrice * (targetMarkupPct / 100),
       targetMarkupPct,
       channels: blocks,
+    };
+  }
+
+  /**
+   * Recombina los componentes del costo aplicando los flags del cliente que
+   * afectan la fabricación (skipMarketing y skipReinvestment). Los flags que
+   * solo afectan el motor (skipChannelCommission, skipRegime, customMarkupPct,
+   * minTierQty) NO se aplican acá.
+   *
+   * Si el profile no toca fabricación, devuelve los valores originales.
+   */
+  applyCustomerCostAdjustments(
+    cost: CostingResult,
+    profile: CustomerPricingProfile & { skipMarketing?: boolean; skipReinvestment?: boolean },
+  ): PricingCostInputs {
+    const skipMarketing = profile.skipMarketing === true;
+    const skipReinvestment = profile.skipReinvestment === true;
+
+    if (!skipMarketing && !skipReinvestment) {
+      return {
+        fabricationPrice: cost.fabricationPrice,
+        otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
+      };
+    }
+
+    // process_eff = filament_with_reab + machine + labor_eff + (skipMarketing ? 0 : marketing)
+    // fabrication_eff = process_eff × (1 + cont% + (skipReinvestment ? 0 : reinv%))
+    const marketing = skipMarketing ? 0 : cost.marketing.perUnit;
+    const processEff =
+      cost.filament.totalWithReplenishment +
+      cost.machine.total +
+      cost.labor.total +
+      marketing;
+    const reinvFraction = skipReinvestment ? 0 : cost.reinvestmentPct / 100;
+    const fabricationEff = processEff * (1 + cost.contingencyPct / 100 + reinvFraction);
+    return {
+      fabricationPrice: fabricationEff,
+      otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
     };
   }
 

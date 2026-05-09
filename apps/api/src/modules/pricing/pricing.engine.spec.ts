@@ -211,4 +211,84 @@ describe('PricingEngine — Logic C v3', () => {
       expect(r.effectiveMarginPct).toBeCloseTo(expected, 1);
     });
   });
+
+  describe('CustomerPricingProfile (Fase 2)', () => {
+    const directa = make({ name: 'Venta Directa', slug: 'directa', kind: 'DIRECT_SALE' });
+
+    it('skipChannelCommission fuerza comisión 0 en DIRECT_SALE', () => {
+      const r = engine.price(cost, directa, product, globals, {}, { skipChannelCommission: true });
+      expect(r.commissionPct).toBe(0);
+      // denom = 1 − 0 − 0.04 = 0.96
+      expect(r.netPrice).toBeCloseTo(18_000 / 0.96, 1);
+      expect(r.profit).toBeCloseTo(6_000, 4);
+    });
+
+    it('skipChannelCommission cubre MARKETPLACE sin marcar missingCommission', () => {
+      const meli = make({ name: 'MELI', slug: 'meli', kind: 'MARKETPLACE' });
+      // Sin skipChannelCommission este caso requeriría marketplaceCommissionPct.
+      const r = engine.price(cost, meli, product, globals, {}, { skipChannelCommission: true });
+      expect(r.missingCommission).toBe(false);
+      expect(r.commissionPct).toBe(0);
+      expect(r.netPrice).toBeCloseTo(18_000 / 0.96, 1);
+    });
+
+    it('skipRegime fuerza régimen 0 en canal NO-CASH (generaliza la regla)', () => {
+      const r = engine.price(cost, directa, product, globals, {}, { skipRegime: true });
+      expect(r.taxBurdenPct).toBe(0);
+      // denom = 1 − 0.065 − 0 = 0.935
+      expect(r.netPrice).toBeCloseTo(18_000 / 0.935, 1);
+    });
+
+    it('customMarkupPct pisa al markup del producto y al de la tier', () => {
+      const r = engine.price(
+        cost,
+        directa,
+        product,
+        globals,
+        { markupPct: 30 },
+        { customMarkupPct: 40 },
+      );
+      expect(r.markupPct).toBe(40);
+      expect(r.profit).toBeCloseTo(cost.fabricationPrice * 0.4, 4);
+    });
+
+    it('customMarkupPct sin tier ni product target sigue mandando', () => {
+      const r = engine.price(cost, directa, product, globals, {}, { customMarkupPct: 25 });
+      expect(r.markupPct).toBe(25);
+    });
+
+    it('combinación CONSIGNACIÓN: skipChannelCommission + skipRegime → sin descuentos', () => {
+      const r = engine.price(
+        cost,
+        directa,
+        product,
+        globals,
+        {},
+        { skipChannelCommission: true, skipRegime: true },
+      );
+      expect(r.commissionPct).toBe(0);
+      expect(r.taxBurdenPct).toBe(0);
+      expect(r.denominator).toBeCloseTo(1, 6);
+      // Sin denominator, el precio iguala al pre_commission.
+      expect(r.netPrice).toBeCloseTo(18_000, 1);
+      expect(r.profit).toBeCloseTo(6_000, 4);
+    });
+
+    it('cliente sin profile (defaults vacíos) replica el cálculo público', () => {
+      const sinProfile = engine.price(cost, directa, product, globals);
+      const conProfileVacio = engine.price(cost, directa, product, globals, {}, {});
+      expect(sinProfileEqual(sinProfile, conProfileVacio)).toBe(true);
+    });
+  });
 });
+
+/** Helper: dos PriceLine son equivalentes en sus campos numéricos clave. */
+function sinProfileEqual(a: { profit: number; netPrice: number; finalPrice: number; commissionPct: number; taxBurdenPct: number }, b: typeof a) {
+  return (
+    Math.abs(a.profit - b.profit) < 0.001 &&
+    Math.abs(a.netPrice - b.netPrice) < 0.001 &&
+    Math.abs(a.finalPrice - b.finalPrice) < 0.001 &&
+    a.commissionPct === b.commissionPct &&
+    a.taxBurdenPct === b.taxBurdenPct
+  );
+}

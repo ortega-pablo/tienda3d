@@ -169,6 +169,8 @@ export class CostingCalculator {
       process,
       contingency,
       reinvestment,
+      contingencyPct: input.contingencyPct,
+      reinvestmentPct: input.reinvestmentPct,
       fabricationPrice,
       totalCost,
       productionCost: process,

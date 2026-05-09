@@ -63,6 +63,45 @@ export interface TierOverrides {
 }
 
 /**
+ * Profile aplicado por cliente. Todos los campos son opcionales:
+ * representan los efectos que el cliente tiene sobre el cálculo, no su
+ * configuración completa. El `pricing.service` arma este profile a partir
+ * del `Customer` + sus `CustomerCategoryCommitment` y se lo pasa al motor.
+ *
+ * Precedencia del markup:
+ *   customMarkupPct (cliente×producto)
+ *     > tier.markupPct (con piso por minTierQty)
+ *     > product.targetMarkupPct
+ */
+export interface CustomerPricingProfile {
+  /** Si true, fuerza comisión 0 sin importar el canal. */
+  skipChannelCommission?: boolean;
+  /** Si true, fuerza régimen 0 (generaliza la regla actual de CASH). */
+  skipRegime?: boolean;
+  /**
+   * Si true, recalcula `fabricationPrice` excluyendo el marketing prorrateado
+   * (lo aplica `pricing.service.applyCustomerCostAdjustments`, no el motor).
+   */
+  skipMarketing?: boolean;
+  /**
+   * Si true, recalcula `fabricationPrice` sin la provisión de reinversión
+   * (lo aplica `pricing.service.applyCustomerCostAdjustments`, no el motor).
+   */
+  skipReinvestment?: boolean;
+  /**
+   * Override del markup por cliente×producto. Si está, pisa todo lo demás
+   * (tier piso, tier override y product target). Solo aplicable a SPECIAL.
+   */
+  customMarkupPct?: number;
+  /**
+   * Tier piso por categoría: el motor resuelve la tier como si la cantidad
+   * fuera al menos este número. Aplica solo si la categoría correspondiente
+   * NO está suspendida en el commitment del cliente.
+   */
+  minTierQty?: number;
+}
+
+/**
  * Logic C v3 — costing inputs for the engine. Replaces the single `cost`
  * scalar with two components so profit can be computed only on fabrication.
  */

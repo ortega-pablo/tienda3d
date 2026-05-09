@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type {
   ChannelPricingConfig,
+  CustomerPricingProfile,
   PriceLine,
   PricingCostInputs,
   PricingGlobals,
@@ -35,17 +36,18 @@ export class PricingEngine {
     product: ProductPricingInputs,
     globals: PricingGlobals,
     tier: TierOverrides = {},
+    customer: CustomerPricingProfile = {},
   ): PriceLine {
     const warnings: string[] = [];
 
-    // Resolve commission according to channel kind.
-    const commissionResult = this.resolveCommission(channel, product, tier, globals);
+    // Resolve commission según el canal, con override del cliente al final.
+    const commissionResult = this.resolveCommission(channel, product, tier, globals, customer);
     if (commissionResult.missing) {
       warnings.push(
         `${channel.name} requiere cargar la comisión por producto (canal MARKETPLACE).`,
       );
       return zeroLine({
-        markupPct: tier.markupPct ?? product.targetMarkupPct,
+        markupPct: this.resolveMarkup(product, tier, customer),
         commissionPct: 0,
         taxBurdenPct: 0,
         missingCommission: true,
@@ -53,12 +55,12 @@ export class PricingEngine {
       });
     }
 
-    const markupPct = tier.markupPct ?? product.targetMarkupPct;
+    const markupPct = this.resolveMarkup(product, tier, customer);
     const profit = cost.fabricationPrice * (markupPct / 100);
     const preCommission =
       cost.fabricationPrice + profit + cost.otherMaterialsWithReplenishment;
 
-    const tax = this.computeTaxes(channel, globals);
+    const tax = this.computeTaxes(channel, globals, customer);
     const commissionFraction = commissionResult.value / 100;
     const denominator = 1 - commissionFraction - tax.burdenPct / 100;
 
@@ -93,12 +95,34 @@ export class PricingEngine {
     };
   }
 
+  /**
+   * Precedencia (de mayor a menor):
+   *   customer.customMarkupPct > tier.markupPct > product.targetMarkupPct
+   * El piso de tier (customer.minTierQty) no afecta acá: el caller resuelve
+   * la tier que aplica usando el piso antes de pasarla al motor.
+   */
+  private resolveMarkup(
+    product: ProductPricingInputs,
+    tier: TierOverrides,
+    customer: CustomerPricingProfile,
+  ): number {
+    if (customer.customMarkupPct != null) return customer.customMarkupPct;
+    if (tier.markupPct != null) return tier.markupPct;
+    return product.targetMarkupPct;
+  }
+
   private resolveCommission(
     channel: ChannelPricingConfig,
     product: ProductPricingInputs,
     tier: TierOverrides,
     globals: PricingGlobals,
+    customer: CustomerPricingProfile,
   ): { value: number; missing: boolean } {
+    // El flag del cliente pisa todo y NUNCA marca missing — un cliente
+    // exento de comisión no necesita la comisión MELI.
+    if (customer.skipChannelCommission) {
+      return { value: 0, missing: false };
+    }
     // Tier override beats everything for CUSTOM/MARKETPLACE channels.
     if (
       tier.commissionPct != null &&
@@ -125,7 +149,17 @@ export class PricingEngine {
   private computeTaxes(
     channel: ChannelPricingConfig,
     globals: PricingGlobals,
+    customer: CustomerPricingProfile,
   ): TaxComputed {
+    // Generaliza la regla de CASH: si el cliente está exento, régimen = 0
+    // sin importar el canal. Útil para mayoristas/consignación con régimen
+    // distinto al unificado.
+    if (customer.skipRegime) {
+      const finalMultiplier =
+        channel.taxMode === 'DETAILED' && channel.appliesIva ? 1.21 : 1;
+      return { burdenPct: 0, finalMultiplier };
+    }
+
     if (channel.taxMode === 'DETAILED') {
       const iibb = channel.iibbPct ?? 0;
       const retentions =
