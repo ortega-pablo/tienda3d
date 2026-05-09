@@ -58,7 +58,8 @@ const adhocItemSchema = z.object({
 const itemSchema = z.discriminatedUnion('type', [productItemSchema, adhocItemSchema]);
 
 const createSchema = z.object({
-  customerName: z.string().min(1).max(160),
+  customerId: z.string().min(1).nullable().optional(),
+  customerName: z.string().max(160).optional(),
   customerEmail: z.string().email().nullable().optional(),
   customerPhone: z.string().max(40).nullable().optional(),
   customerNotes: z.string().max(2000).nullable().optional(),
@@ -72,6 +73,7 @@ const createSchema = z.object({
 
 const previewSchema = z.object({
   channelId: z.string().nullable(),
+  customerId: z.string().min(1).nullable().optional(),
   item: itemSchema,
 });
 
@@ -115,13 +117,15 @@ export class QuotesController {
     @Body(ZodValidation(createSchema)) body: z.infer<typeof createSchema>,
     @CurrentUser() user: AccessPayload,
   ) {
-    return this.quotes.create(body, user.sub);
+    // customerName puede venir vacío si vino customerId; el service completa
+    // del Customer. Si no hay ninguno de los dos, falla en el service.
+    return this.quotes.create({ ...body, customerName: body.customerName ?? '' }, user.sub);
   }
 
   @Permissions('quote:create')
   @Post('preview-item')
   preview(@Body(ZodValidation(previewSchema)) body: z.infer<typeof previewSchema>) {
-    return this.quotes.previewItem(body.item, body.channelId);
+    return this.quotes.previewItem(body.item, body.channelId, body.customerId ?? null);
   }
 
   @Permissions('quote:create')

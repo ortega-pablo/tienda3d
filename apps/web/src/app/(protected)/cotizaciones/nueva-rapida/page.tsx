@@ -3,16 +3,22 @@ import { requirePermission } from '@/lib/auth';
 import {
   RapidQuoteForm,
   type ChannelLite,
+  type CustomerOption,
   type FilamentLite,
   type MaterialLite,
 } from './rapid-quote-form';
 
 export default async function NewRapidQuotePage() {
-  await requirePermission('quote:create');
-  const [channels, filaments, materials] = await Promise.all([
+  const user = await requirePermission('quote:create');
+  const canReadCustomers = user.permissions.includes('customer:read');
+
+  const [channels, filaments, materials, customers] = await Promise.all([
     api<ChannelLite[]>('/channels'),
     api<FilamentLite[]>('/materials?type=FILAMENT&activeOnly=true'),
     api<MaterialLite[]>('/materials'),
+    canReadCustomers
+      ? api<CustomerOption[]>('/customers?activeOnly=true')
+      : Promise.resolve([] as CustomerOption[]),
   ]);
   const nonFilaments = materials.filter((m) => m.type !== 'FILAMENT' && m.isActive);
 
@@ -29,6 +35,7 @@ export default async function NewRapidQuotePage() {
         channels={channels.filter((c) => c.isActive)}
         filaments={filaments}
         nonFilaments={nonFilaments}
+        customers={customers}
       />
     </div>
   );

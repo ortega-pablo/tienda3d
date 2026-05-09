@@ -20,6 +20,15 @@ export interface QuoteDto {
   customerEmail: string | null;
   customerPhone: string | null;
   customerNotes: string | null;
+  customerId: string | null;
+  customerProfileSnapshot: {
+    name?: string;
+    type?: 'STANDARD' | 'WHOLESALE' | 'CONSIGNMENT' | 'SPECIAL';
+    skipChannelCommission?: boolean;
+    skipMarketing?: boolean;
+    skipRegime?: boolean;
+    skipReinvestment?: boolean;
+  } | null;
   channelId: string | null;
   channelName: string | null;
   withInvoice: boolean;

@@ -121,6 +121,42 @@ export default async function QuoteDetailPage({
         <Card>
           <CardHeader>
             <CardTitle>Cliente</CardTitle>
+            {quote.customerId && quote.customerProfileSnapshot && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <a
+                  href={`/clientes/${quote.customerId}`}
+                  className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80"
+                >
+                  Ver cliente
+                </a>
+                {quote.customerProfileSnapshot.type && (
+                  <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs">
+                    {quote.customerProfileSnapshot.type === 'WHOLESALE'
+                      ? 'Mayorista'
+                      : quote.customerProfileSnapshot.type === 'CONSIGNMENT'
+                        ? 'Consignación'
+                        : quote.customerProfileSnapshot.type === 'SPECIAL'
+                          ? 'Especial'
+                          : 'Estándar'}
+                  </span>
+                )}
+                {quote.customerProfileSnapshot.skipChannelCommission && (
+                  <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    Sin comisión
+                  </span>
+                )}
+                {quote.customerProfileSnapshot.skipMarketing && (
+                  <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    Sin marketing
+                  </span>
+                )}
+                {quote.customerProfileSnapshot.skipRegime && (
+                  <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    Sin régimen
+                  </span>
+                )}
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <Row label="Nombre" value={quote.customerName} />
@@ -138,6 +174,11 @@ export default async function QuoteDetailPage({
               label="Creada"
               value={new Date(quote.createdAt).toLocaleDateString('es-AR')}
             />
+            {!quote.customerId && (
+              <p className="rounded-md border border-muted/40 bg-muted/20 p-2 text-xs text-muted-foreground">
+                Cotización walk-in (sin cliente registrado).
+              </p>
+            )}
             {quote.notes && (
               <div className="border-t pt-2">
                 <div className="text-xs text-muted-foreground">Notas</div>

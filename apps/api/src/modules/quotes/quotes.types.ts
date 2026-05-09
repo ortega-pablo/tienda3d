@@ -29,6 +29,10 @@ export interface QuoteDto extends QuoteSummaryDto {
   customerEmail: string | null;
   customerPhone: string | null;
   customerNotes: string | null;
+  /** FK al Customer persistido. null = walk-in (cliente STANDARD ad-hoc). */
+  customerId: string | null;
+  /** Snapshot del profile aplicado al crear (Fase 4). null si era walk-in. */
+  customerProfileSnapshot: Record<string, unknown> | null;
   channelId: string | null;
   withInvoice: boolean;
   subtotal: number;
@@ -73,6 +77,12 @@ export interface AdhocItemInput {
 export type QuoteItemInput = ProductItemInput | AdhocItemInput;
 
 export interface QuoteCreateInput {
+  /**
+   * FK opcional. Si está, los datos textuales se autocompletan desde el
+   * `Customer` y el motor aplica su profile (flags + minTierQty + customMarkup).
+   * Si no, la cotización es walk-in: `customerName` y compañía son strings libres.
+   */
+  customerId?: string | null;
   customerName: string;
   customerEmail?: string | null;
   customerPhone?: string | null;

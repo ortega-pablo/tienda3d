@@ -23,6 +23,20 @@ export interface FilamentLite {
   id: string;
   name: string;
 }
+export interface CustomerOption {
+  id: string;
+  name: string;
+  type: 'STANDARD' | 'WHOLESALE' | 'CONSIGNMENT' | 'SPECIAL';
+  email: string | null;
+  phone: string | null;
+  isActive: boolean;
+  defaultChannelId: string | null;
+  skipChannelCommission: boolean;
+  skipMarketing: boolean;
+  skipRegime: boolean;
+  skipReinvestment: boolean;
+}
+
 export interface MaterialLite {
   id: string;
   name: string;
@@ -53,14 +67,31 @@ export function RapidQuoteForm({
   channels,
   filaments,
   nonFilaments,
+  customers,
 }: {
   channels: ChannelLite[];
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
+  customers: CustomerOption[];
 }) {
   const router = useRouter();
+  const [customerId, setCustomerId] = useState('');
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', notes: '' });
   const [channelId, setChannelId] = useState(channels[0]?.id ?? '');
+
+  const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
+
+  const onCustomerChange = (id: string) => {
+    setCustomerId(id);
+    setPreview(null);
+    const c = customers.find((x) => x.id === id);
+    if (c) {
+      setCustomer({ name: c.name, email: c.email ?? '', phone: c.phone ?? '', notes: '' });
+      if (c.defaultChannelId) setChannelId(c.defaultChannelId);
+    } else {
+      setCustomer({ name: '', email: '', phone: '', notes: '' });
+    }
+  };
   const [withInvoice, setWithInvoice] = useState(false);
   const [validUntil, setValidUntil] = useState('');
   const [discount, setDiscount] = useState('0');
@@ -104,7 +135,11 @@ export function RapidQuoteForm({
     try {
       const result = await api<Preview>('/quotes/preview-item', {
         method: 'POST',
-        body: { channelId: channelId || null, item: buildItem() },
+        body: {
+          channelId: channelId || null,
+          customerId: customerId || null,
+          item: buildItem(),
+        },
       });
       setPreview(result);
     } catch (err) {
@@ -119,6 +154,7 @@ export function RapidQuoteForm({
       const created = await api<{ id: string }>('/quotes', {
         method: 'POST',
         body: {
+          customerId: customerId || null,
           customerName: customer.name,
           customerEmail: customer.email || null,
           customerPhone: customer.phone || null,
@@ -170,12 +206,59 @@ export function RapidQuoteForm({
         <Card>
           <CardHeader>
             <CardTitle>Cliente y canal</CardTitle>
+            {selectedCustomer && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                  {selectedCustomer.type === 'WHOLESALE'
+                    ? 'Mayorista'
+                    : selectedCustomer.type === 'CONSIGNMENT'
+                      ? 'Consignación'
+                      : selectedCustomer.type === 'SPECIAL'
+                        ? 'Especial'
+                        : 'Estándar'}
+                </span>
+                {selectedCustomer.skipChannelCommission && (
+                  <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    Sin comisión
+                  </span>
+                )}
+                {selectedCustomer.skipMarketing && (
+                  <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    Sin marketing
+                  </span>
+                )}
+                {selectedCustomer.skipRegime && (
+                  <span className="inline-flex rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                    Sin régimen
+                  </span>
+                )}
+              </div>
+            )}
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
+            {customers.length > 0 && (
+              <div className="sm:col-span-2">
+                <Field label="Cliente registrado (opcional)">
+                  <select
+                    value={customerId}
+                    onChange={(e) => onCustomerChange(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+                  >
+                    <option value="">— Sin cliente registrado (walk-in) —</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
             <Field label="Cliente" required>
               <Input
                 value={customer.name}
                 onChange={(e) => setCustomer({ ...customer, name: e.target.value })}
+                disabled={!!selectedCustomer}
               />
             </Field>
             <Field label="Canal">
