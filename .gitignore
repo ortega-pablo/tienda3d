@@ -42,3 +42,7 @@ docker-data/
 # Misc
 *.pem
 .turbo/
+
+# DB dumps (no se commitean — se transfieren por fuera del repo)
+*.dump
+*.sql.gz
