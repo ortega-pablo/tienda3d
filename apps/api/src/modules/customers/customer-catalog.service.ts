@@ -1,0 +1,163 @@
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { CustomerType } from '@prisma/client';
+import { PrismaService } from '@/common/prisma/prisma.service';
+import { dec } from '@/common/utils/decimal';
+import { CustomerPricingService } from './customer-pricing.service';
+import { CustomersService } from './customers.service';
+
+export interface CatalogTier {
+  minQty: number;
+  maxQty: number | null;
+  markupPct: number;
+  finalPrice: number;
+  profit: number;
+}
+
+export interface CatalogProduct {
+  productId: string;
+  name: string;
+  sku: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  categoryName: string | null;
+  /**
+   * Línea de precios para el canal default del cliente (o el primer canal
+   * activo del producto si no hay default).
+   */
+  channelName: string | null;
+  tiers: CatalogTier[];
+  /** Precio "base" si no hay tiers definidas. */
+  basePrice: number | null;
+  baseProfit: number | null;
+}
+
+export interface CustomerCatalog {
+  customerId: string;
+  customerName: string;
+  customerType: CustomerType;
+  channelName: string | null;
+  generatedAt: string;
+  products: CatalogProduct[];
+}
+
+@Injectable()
+export class CustomerCatalogService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly customers: CustomersService,
+    private readonly customerPricing: CustomerPricingService,
+  ) {}
+
+  /**
+   * Arma el catálogo completo del cliente con precios calculados para el
+   * canal default. Pensado para enviar como PDF antes de tener portal.
+   */
+  async forCustomer(customerId: string): Promise<CustomerCatalog> {
+    const customer = await this.customers.getWithRelations(customerId);
+    if (!customer.isActive) {
+      throw new ForbiddenException('El cliente está inactivo');
+    }
+
+    // Listo todos los productos activos y filtro por canBuy.
+    const allProducts = await this.prisma.product.findMany({
+      where: { isActive: true },
+      orderBy: [{ name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        description: true,
+        imageUrl: true,
+        categoryId: true,
+        category: { select: { name: true, parentId: true } },
+      },
+    });
+
+    const eligible: typeof allProducts = [];
+    for (const p of allProducts) {
+      const ok = await this.customers.canBuy(customerId, p.id);
+      if (ok) eligible.push(p);
+    }
+
+    // Resolvemos el nombre del canal default (puede venir null si el cliente
+    // todavía no tiene defaultChannelId asignado).
+    let channelName: string | null = null;
+    if (customer.defaultChannelId) {
+      const ch = await this.prisma.channel.findUnique({
+        where: { id: customer.defaultChannelId },
+        select: { name: true, isActive: true },
+      });
+      if (ch?.isActive) channelName = ch.name;
+    }
+
+    // Para cada producto, calculamos sus precios y filtramos al canal
+    // default (si está y existe en los canales del producto). Si no, usamos
+    // el primer canal con precio (típicamente Venta Directa).
+    const products: CatalogProduct[] = [];
+    for (const p of eligible) {
+      try {
+        const prices = await this.customerPricing.forCustomerProduct(customerId, p.id);
+        const candidate =
+          prices.channels.find(
+            (c) => customer.defaultChannelId && c.channelId === customer.defaultChannelId,
+          ) ??
+          prices.channels.find((c) => !c.needsConfig && (c.base != null || c.tiers.length > 0)) ??
+          null;
+
+        if (!candidate) {
+          products.push({
+            productId: p.id,
+            name: p.name,
+            sku: p.sku,
+            description: p.description,
+            imageUrl: p.imageUrl,
+            categoryName: p.category?.name ?? null,
+            channelName: null,
+            tiers: [],
+            basePrice: null,
+            baseProfit: null,
+          });
+          continue;
+        }
+
+        const tiers: CatalogTier[] = candidate.tiers.map((t) => ({
+          minQty: t.minQty,
+          maxQty: t.maxQty,
+          markupPct: t.line.markupPct,
+          finalPrice: t.line.finalPrice,
+          profit: t.line.profit,
+        }));
+
+        products.push({
+          productId: p.id,
+          name: p.name,
+          sku: p.sku,
+          description: p.description,
+          imageUrl: p.imageUrl,
+          categoryName: p.category?.name ?? null,
+          channelName: candidate.channelName,
+          tiers,
+          basePrice: candidate.base?.finalPrice ?? null,
+          baseProfit: candidate.base?.profit ?? null,
+        });
+      } catch {
+        // Si falla el cálculo de un producto puntual (ej. data inconsistente),
+        // lo skipeamos sin bloquear todo el catálogo.
+        continue;
+      }
+    }
+
+    return {
+      customerId: customer.id,
+      customerName: customer.name,
+      customerType: customer.type,
+      channelName,
+      generatedAt: new Date().toISOString(),
+      products,
+    };
+  }
+}
+
+// Para evitar warnings de imports.
+void NotFoundException;
+void dec;
