@@ -17,12 +17,14 @@ import { CostingService } from '../costing/costing.service';
 import { PricingService } from '../pricing/pricing.service';
 import { ProductsService } from './products.service';
 
+// Cuando una pieza impresa está cargada, todos sus campos son obligatorios:
+// nombre no vacío, gramos > 0, tiempo > 0 y filamento default asignado.
 const pieceSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1).max(120),
-  grams: z.number().positive(),
-  printMinutes: z.number().nonnegative(),
-  defaultFilamentId: z.string().nullable(),
+  name: z.string().min(1, 'El nombre de la pieza es obligatorio').max(120),
+  grams: z.number().positive('Los gramos deben ser mayores a 0'),
+  printMinutes: z.number().positive('El tiempo de impresión debe ser mayor a 0'),
+  defaultFilamentId: z.string().min(1, 'Asigná un filamento a la pieza'),
   sortOrder: z.number().int().optional(),
 });
 
@@ -38,22 +40,30 @@ const channelLineSchema = z.object({
   notes: z.string().max(1000).nullable().optional(),
 });
 
-const inputSchema = z.object({
-  name: z.string().min(1).max(160),
-  sku: z.string().max(60).nullable().optional(),
-  description: z.string().max(2000).nullable().optional(),
-  imageUrl: z.string().url().nullable().optional(),
-  isActive: z.boolean().optional(),
-  marketingMonthly: z.number().nonnegative(),
-  estimatedUnitsMonth: z.number().positive(),
-  assemblyMinutes: z.number().nonnegative(),
-  managementMinutes: z.number().nonnegative(),
-  targetMarkupPct: z.number().min(0).max(1000),
-  machineId: z.string().min(1).nullable(),
-  pieces: z.array(pieceSchema).min(0),
-  materials: z.array(materialLineSchema).min(0),
-  channels: z.array(channelLineSchema).optional(),
-});
+const inputSchema = z
+  .object({
+    name: z.string().min(1).max(160),
+    sku: z.string().max(60).nullable().optional(),
+    description: z.string().max(2000).nullable().optional(),
+    imageUrl: z.string().url().nullable().optional(),
+    isActive: z.boolean().optional(),
+    marketingMonthly: z.number().nonnegative(),
+    estimatedUnitsMonth: z.number().positive(),
+    assemblyMinutes: z.number().nonnegative(),
+    managementMinutes: z.number().nonnegative(),
+    targetMarkupPct: z.number().min(0).max(1000),
+    machineId: z.string().min(1).nullable(),
+    categoryId: z.string().nullable().optional(),
+    pieces: z.array(pieceSchema).min(0),
+    materials: z.array(materialLineSchema).min(0),
+    channels: z.array(channelLineSchema).optional(),
+  })
+  // El producto debe tener al menos una pieza impresa o un insumo extra.
+  // Sin ninguno de los dos no hay nada que costear.
+  .refine((data) => data.pieces.length > 0 || data.materials.length > 0, {
+    message: 'El producto debe tener al menos una pieza impresa o un insumo',
+    path: ['pieces'],
+  });
 
 const overridesSchema = z.object({
   filamentOverrides: z.record(z.string()).optional(),

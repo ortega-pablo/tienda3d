@@ -49,6 +49,11 @@ export interface ProductDto {
   /** Operational metadata: which printer manufactures this product. */
   machineId: string | null;
   machineName: string | null;
+  /** Categoría del producto (jerarquía de 2 niveles). Nullable. */
+  categoryId: string | null;
+  categoryName: string | null;
+  /** Si la categoría es subcategoría, el id de su padre. */
+  categoryParentId: string | null;
   pieces: ProductPieceDto[];
   materials: ProductMaterialDto[];
   channels: ProductChannelDto[];
@@ -68,6 +73,8 @@ export interface ProductSummaryDto {
   totalPrintMinutes: number;
   machineId: string | null;
   machineName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
 }
 
 interface PieceInput {
@@ -101,6 +108,7 @@ export interface ProductInput {
   managementMinutes: number;
   targetMarkupPct: number;
   machineId: string | null;
+  categoryId?: string | null;
   pieces: PieceInput[];
   materials: MaterialLineInput[];
   channels?: ProductChannelInput[];
@@ -117,6 +125,7 @@ export class ProductsService {
         pieces: true,
         materials: true,
         machine: { select: { name: true } },
+        category: { select: { name: true, parentId: true } },
       },
     });
     return products.map((p) => ({
@@ -131,6 +140,8 @@ export class ProductsService {
       totalPrintMinutes: p.pieces.reduce((acc, piece) => acc + dec(piece.printMinutes), 0),
       machineId: p.machineId,
       machineName: p.machine?.name ?? null,
+      categoryId: p.categoryId,
+      categoryName: p.category?.name ?? null,
     }));
   }
 
@@ -145,6 +156,7 @@ export class ProductsService {
         materials: { include: { material: true } },
         channels: { include: { channel: true } },
         machine: { select: { name: true } },
+        category: { select: { name: true, parentId: true } },
       },
     });
     if (!p) throw new NotFoundException('Producto inexistente');
@@ -163,6 +175,12 @@ export class ProductsService {
       );
     }
     await this.assertMachineExists(input.machineId);
+    if (input.categoryId) await this.assertCategoryExists(input.categoryId);
+    if (input.pieces.length === 0 && input.materials.length === 0) {
+      throw new BadRequestException(
+        'El producto debe tener al menos una pieza impresa o un insumo',
+      );
+    }
 
     const channels = await this.resolveChannels(input.channels);
     await this.validateChannels(channels);
@@ -180,6 +198,7 @@ export class ProductsService {
         managementMinutes: input.managementMinutes,
         targetMarkupPct: input.targetMarkupPct,
         machineId: input.machineId,
+        categoryId: input.categoryId ?? null,
         pieces: {
           create: input.pieces.map((piece, idx) => ({
             name: piece.name,
@@ -224,6 +243,14 @@ export class ProductsService {
     if (input.machineId !== exists.machineId) {
       await this.assertMachineExists(input.machineId);
     }
+    if (input.categoryId && input.categoryId !== exists.categoryId) {
+      await this.assertCategoryExists(input.categoryId);
+    }
+    if (input.pieces.length === 0 && input.materials.length === 0) {
+      throw new BadRequestException(
+        'El producto debe tener al menos una pieza impresa o un insumo',
+      );
+    }
 
     const channelsToPersist = await this.resolveChannels(input.channels);
     await this.validateChannels(channelsToPersist);
@@ -243,6 +270,7 @@ export class ProductsService {
           managementMinutes: input.managementMinutes,
           targetMarkupPct: input.targetMarkupPct,
           machineId: input.machineId,
+          categoryId: input.categoryId ?? null,
         },
       });
       await tx.productPiece.deleteMany({ where: { productId: id } });
@@ -353,6 +381,11 @@ export class ProductsService {
     if (!machine) throw new BadRequestException('Máquina inexistente');
   }
 
+  private async assertCategoryExists(categoryId: string): Promise<void> {
+    const category = await this.prisma.category.findUnique({ where: { id: categoryId } });
+    if (!category) throw new BadRequestException('Categoría inexistente');
+  }
+
   private toDto(
     p: Prisma.ProductGetPayload<{
       include: {
@@ -360,6 +393,7 @@ export class ProductsService {
         materials: { include: { material: true } };
         channels: { include: { channel: true } };
         machine: { select: { name: true } };
+        category: { select: { name: true; parentId: true } };
       };
     }>,
   ): ProductDto {
@@ -377,6 +411,9 @@ export class ProductsService {
       targetMarkupPct: dec(p.targetMarkupPct),
       machineId: p.machineId,
       machineName: p.machine?.name ?? null,
+      categoryId: p.categoryId,
+      categoryName: p.category?.name ?? null,
+      categoryParentId: p.category?.parentId ?? null,
       pieces: p.pieces.map((piece) => ({
         id: piece.id,
         name: piece.name,

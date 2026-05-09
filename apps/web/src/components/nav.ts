@@ -4,8 +4,10 @@ import {
   Boxes,
   ClipboardList,
   Cog,
+  Contact,
   Factory,
   FileText,
+  FolderTree,
   Layers,
   LayoutDashboard,
   Package,
@@ -70,6 +72,12 @@ export const NAVIGATION: NavGroup[] = [
         icon: BarChart3,
         permissions: ['quote:read'],
       },
+      {
+        label: 'Clientes',
+        href: '/clientes',
+        icon: Contact,
+        permissions: ['customer:read'],
+      },
     ],
   },
   {
@@ -80,6 +88,12 @@ export const NAVIGATION: NavGroup[] = [
         href: '/productos',
         icon: ShoppingBag,
         permissions: ['product:read'],
+      },
+      {
+        label: 'Categorías',
+        href: '/categorias',
+        icon: FolderTree,
+        permissions: ['category:read'],
       },
       {
         label: 'Insumos',

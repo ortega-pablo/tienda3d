@@ -42,6 +42,15 @@ export interface MachineLite {
   isActive: boolean;
 }
 
+export interface CategoryLite {
+  id: string;
+  name: string;
+  parentId: string | null;
+  isActive: boolean;
+  /** Subcategorías cuando es padre. */
+  children?: CategoryLite[];
+}
+
 interface PieceState {
   id?: string;
   name: string;
@@ -76,6 +85,9 @@ export interface ProductDto {
   targetMarkupPct: number;
   machineId: string | null;
   machineName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  categoryParentId: string | null;
   pieces: Array<{
     id: string;
     name: string;
@@ -161,6 +173,7 @@ interface FormState {
   managementMinutes: string;
   targetMarkupPct: string;
   machineId: string;
+  categoryId: string;
   pieces: PieceState[];
   materials: MaterialState[];
   channels: ChannelState[];
@@ -205,6 +218,7 @@ function buildInitialState(
       managementMinutes: product.managementMinutes.toString(),
       targetMarkupPct: product.targetMarkupPct.toString(),
       machineId: product.machineId ?? '',
+      categoryId: product.categoryId ?? '',
       pieces: product.pieces.map((piece) => ({
         id: piece.id,
         name: piece.name,
@@ -230,7 +244,10 @@ function buildInitialState(
     managementMinutes: '0',
     targetMarkupPct: '60',
     machineId: '',
-    pieces: [{ ...EMPTY_PIECE }],
+    categoryId: '',
+    // Form arranca vacío: el usuario decide si agregar piezas, insumos o ambos.
+    // El backend valida que tenga al menos uno de los dos.
+    pieces: [],
     materials: [],
     channels: defaultChannelState(available),
   };
@@ -242,6 +259,7 @@ interface Props {
   materials: MaterialLite[];
   availableChannels: ChannelLite[];
   machines: MachineLite[];
+  categories: CategoryLite[];
   initialCost?: CostingResult | null;
 }
 
@@ -251,6 +269,7 @@ export function ProductEditor({
   materials,
   availableChannels,
   machines,
+  categories,
   initialCost,
 }: Props) {
   const can = useHasPermission();
@@ -323,15 +342,14 @@ export function ProductEditor({
     managementMinutes: Number(form.managementMinutes),
     targetMarkupPct: Number(form.targetMarkupPct || '0'),
     machineId: form.machineId || null,
-    pieces: form.pieces
-      .filter((p) => p.name && p.grams)
-      .map((p, idx) => ({
-        name: p.name,
-        grams: Number(p.grams),
-        printMinutes: Number(p.printMinutes || '0'),
-        defaultFilamentId: p.defaultFilamentId || null,
-        sortOrder: idx,
-      })),
+    categoryId: form.categoryId || null,
+    pieces: form.pieces.map((p, idx) => ({
+      name: p.name,
+      grams: Number(p.grams),
+      printMinutes: Number(p.printMinutes || '0'),
+      defaultFilamentId: p.defaultFilamentId,
+      sortOrder: idx,
+    })),
     materials: form.materials
       .filter((m) => m.materialId && m.quantity)
       .map((m) => ({ materialId: m.materialId, quantity: Number(m.quantity) })),
@@ -359,24 +377,32 @@ export function ProductEditor({
   };
 
   /**
-   * All required fields must be filled before the save button enables. This
-   * mirrors the backend rules so the user gets immediate feedback on the
-   * button state. Marketplace commission validation surfaces via toast on
-   * submit attempt — kept inline here too so the button reflects readiness.
+   * Mirrors the backend rules so the save button reflects readiness:
+   *   - Producto debe tener al menos 1 pieza impresa O 1 insumo (no las dos).
+   *   - Si hay piezas, cada una requiere nombre, gramos > 0,
+   *     printMinutes > 0 y filamento default.
+   *   - Si hay insumos, cada uno requiere material + cantidad > 0.
    */
   const isFormValid = useMemo<boolean>(() => {
     if (!form.name.trim()) return false;
     if (!form.machineId) return false;
     if (!form.targetMarkupPct || Number(form.targetMarkupPct) < 0) return false;
-    // Each piece needs name + grams + filament; at least 1 piece total.
-    const validPieces = form.pieces.filter(
-      (p) => p.name.trim() && Number(p.grams || '0') > 0 && p.defaultFilamentId,
-    );
-    if (validPieces.length === 0) return false;
-    // Materials are optional, but if a row exists it must have material + qty.
-    for (const m of form.materials) {
-      if (!m.materialId || !Number(m.quantity || '0')) return false;
+
+    // Validar piezas (todos sus campos obligatorios cuando la pieza existe).
+    for (const p of form.pieces) {
+      if (!p.name.trim()) return false;
+      if (!(Number(p.grams || '0') > 0)) return false;
+      if (!(Number(p.printMinutes || '0') > 0)) return false;
+      if (!p.defaultFilamentId) return false;
     }
+    // Validar insumos (material + cantidad > 0 si existe la fila).
+    for (const m of form.materials) {
+      if (!m.materialId) return false;
+      if (!(Number(m.quantity || '0') > 0)) return false;
+    }
+    // Al menos pieza o insumo.
+    if (form.pieces.length === 0 && form.materials.length === 0) return false;
+
     // MARKETPLACE channels enabled need commission filled.
     for (const c of form.channels) {
       if (!c.isEnabled) continue;
@@ -533,6 +559,45 @@ export function ProductEditor({
               </Field>
             </div>
             <div className="sm:col-span-2">
+              <Field label="Categoría">
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Sin categoría</option>
+                  {categories.map((parent) => {
+                    const childOptions = (parent.children ?? [])
+                      .filter((c) => c.isActive || c.id === form.categoryId)
+                      .map((child) => (
+                        <option key={child.id} value={child.id}>
+                          {parent.name} → {child.name}
+                          {!child.isActive ? ' (inactiva)' : ''}
+                        </option>
+                      ));
+                    if (!parent.isActive && parent.id !== form.categoryId && childOptions.length === 0) {
+                      return null;
+                    }
+                    return (
+                      <optgroup key={parent.id} label={parent.name}>
+                        {(parent.isActive || parent.id === form.categoryId) && (
+                          <option value={parent.id}>
+                            {parent.name}
+                            {!parent.isActive ? ' (inactiva)' : ''}
+                          </option>
+                        )}
+                        {childOptions}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Usada para filtrar el catálogo de los clientes mayoristas asociados a esa
+                  categoría. <a className="underline" href="/categorias">Gestionar categorías</a>.
+                </p>
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
               <Field label="Descripción">
                 <Input
                   value={form.description}
@@ -542,6 +607,13 @@ export function ProductEditor({
             </div>
           </CardContent>
         </Card>
+
+        {form.pieces.length === 0 && form.materials.length === 0 && (
+          <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+            ⚠ El producto debe tener <strong>al menos una pieza impresa o un insumo</strong>.
+            Agregá lo que corresponda usando los botones abajo.
+          </div>
+        )}
 
         <Card>
           <CardHeader className="flex-row items-center justify-between gap-2">
@@ -582,7 +654,9 @@ export function ProductEditor({
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label className="text-xs">Min impr.</Label>
+                  <Label className="text-xs" required>
+                    Min impr.
+                  </Label>
                   <Input
                     type="number"
                     step="any"
@@ -607,7 +681,7 @@ export function ProductEditor({
                     ))}
                   </select>
                 </div>
-                {canWrite && form.pieces.length > 1 && (
+                {canWrite && (
                   <div className="flex items-end justify-end sm:col-span-12">
                     <Button variant="ghost" size="sm" onClick={() => removePiece(idx)}>
                       <Trash2 className="h-4 w-4 text-destructive" /> Quitar
@@ -616,6 +690,11 @@ export function ProductEditor({
                 )}
               </div>
             ))}
+            {form.pieces.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                Sin piezas impresas. Agregá una si el producto se fabrica en la impresora.
+              </p>
+            )}
           </CardContent>
         </Card>
 

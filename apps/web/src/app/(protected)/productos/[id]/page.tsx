@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import {
   ProductEditor,
+  type CategoryLite,
   type ChannelLite,
   type CostingResult,
   type MachineLite,
@@ -27,13 +28,14 @@ export default async function ProductDetailPage({
     throw err;
   }
 
-  const [materials, cost, prices, channels, tiers, machines] = await Promise.all([
+  const [materials, cost, prices, channels, tiers, machines, categories] = await Promise.all([
     api<MaterialLite[]>('/materials'),
     api<CostingResult>(`/products/${id}/cost`).catch(() => null),
     api<ProductPricesResponse>(`/products/${id}/prices`).catch(() => null),
     api<ChannelLite[]>('/channels'),
     api<TierDto[]>(`/products/${id}/tiers`).catch(() => [] as TierDto[]),
     api<MachineLite[]>('/machines'),
+    api<CategoryLite[]>('/categories'),
   ]);
 
   return (
@@ -52,6 +54,7 @@ export default async function ProductDetailPage({
         materials={materials.filter((m) => m.isActive)}
         availableChannels={channels.filter((c) => c.isActive)}
         machines={machines}
+        categories={categories}
         initialCost={cost}
       />
 
