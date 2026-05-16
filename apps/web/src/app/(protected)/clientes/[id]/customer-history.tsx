@@ -180,7 +180,7 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
                     <tr key={q.id}>
                       <td className="py-2 pr-4 font-mono">{q.code}</td>
                       <td className="py-2 pr-4">
-                        {q.type === 'PRODUCT' ? 'Producto' : 'Ad-hoc'}
+                        {q.type === 'PRODUCT' ? 'Catálogo' : 'A medida'}
                       </td>
                       <td className="py-2 pr-4">{q.itemCount}</td>
                       <td className="py-2 pr-4">

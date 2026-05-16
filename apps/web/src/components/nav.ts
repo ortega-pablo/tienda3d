@@ -49,14 +49,14 @@ export const NAVIGATION: NavGroup[] = [
         permissions: ['quote:read'],
       },
       {
-        label: 'Cotizar producto',
-        href: '/cotizaciones/nueva-producto',
+        label: 'Cotización de catálogo',
+        href: '/cotizaciones/nueva-catalogo',
         icon: Package,
         permissions: ['quote:create'],
       },
       {
-        label: 'Cotización rápida',
-        href: '/cotizaciones/nueva-rapida',
+        label: 'Cotización a medida',
+        href: '/cotizaciones/nueva-a-medida',
         icon: Zap,
         permissions: ['quote:create'],
       },

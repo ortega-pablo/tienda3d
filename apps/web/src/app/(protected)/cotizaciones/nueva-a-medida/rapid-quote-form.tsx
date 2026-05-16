@@ -167,7 +167,7 @@ export function RapidQuoteForm({
           items: [buildItem()],
         },
       });
-      toast.success('Cotización rápida creada.');
+      toast.success('Cotización a medida creada.');
       router.replace(`/cotizaciones/${created.id}`);
     } catch (err) {
       handleApiError(err);

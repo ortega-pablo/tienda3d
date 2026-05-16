@@ -25,10 +25,11 @@ export default async function NewRapidQuotePage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold">Cotización rápida</h1>
+        <h1 className="text-3xl font-bold">Cotización a medida</h1>
         <p className="text-muted-foreground">
-          Para piezas a medida o servicios sin un producto definido en el catálogo. Ideal para
-          consultas que llegan por WhatsApp con "tengo esta pieza, ¿cuánto sale?".
+          Para piezas personalizadas que no están en el catálogo. Cargás material, gramaje,
+          tiempo de impresión y mano de obra de cada componente para obtener un precio. Ideal
+          para consultas que llegan por WhatsApp con "tengo esta pieza, ¿cuánto sale?".
         </p>
       </header>
       <RapidQuoteForm

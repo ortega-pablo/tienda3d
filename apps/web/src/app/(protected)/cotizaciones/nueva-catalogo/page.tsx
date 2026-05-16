@@ -22,7 +22,7 @@ export default async function NewProductQuotePage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold">Cotizar producto del catálogo</h1>
+        <h1 className="text-3xl font-bold">Cotización de catálogo</h1>
         <p className="text-muted-foreground">
           Seleccioná uno o varios productos y la cantidad. El precio aplica la escala mayorista
           que corresponda al volumen — y los flags del cliente si elegís uno.

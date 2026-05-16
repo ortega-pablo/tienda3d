@@ -22,7 +22,7 @@ interface QuoteSummary {
 const TABS = [
   { key: 'all', label: 'Todas', icon: null },
   { key: 'PRODUCT', label: 'Productos', icon: Package },
-  { key: 'ADHOC', label: 'Rápidas', icon: Zap },
+  { key: 'ADHOC', label: 'A medida', icon: Zap },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -78,15 +78,15 @@ export default async function QuotesPage({
           {canCreate && (
             <>
               <Button asChild variant="outline">
-                <Link href="/cotizaciones/nueva-rapida">
+                <Link href="/cotizaciones/nueva-a-medida">
                   <Zap className="h-4 w-4" />
-                  Cotización rápida
+                  Cotización a medida
                 </Link>
               </Button>
               <Button asChild>
-                <Link href="/cotizaciones/nueva-producto">
+                <Link href="/cotizaciones/nueva-catalogo">
                   <Plus className="h-4 w-4" />
-                  Cotizar producto
+                  Cotización de catálogo
                 </Link>
               </Button>
             </>
