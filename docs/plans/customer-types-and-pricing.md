@@ -150,17 +150,19 @@ inclusivos: "muestrame solo productos en mis categorías").
 
 ### Migración
 
-- [ ] Crear migración `categories`:
+- [x] Crear migración `categories`:
   - `CREATE TABLE "categories" ...`
   - `ALTER TABLE "products" ADD COLUMN "categoryId" TEXT NULL;` + FK + índice.
 - [ ] Seed de categorías iniciales (opcional): "Lámparas" + subcategorías
   típicas, basado en lo que tenga el negocio hoy.
+  *Pendiente — el usuario crea las categorías manualmente desde la UI.*
 - [ ] Backfill manual: el admin asigna `categoryId` a los productos
   existentes desde el UI (Fase 0 también incluye el UI).
+  *Pendiente — acción del usuario sobre los productos existentes.*
 
 ### Backend
 
-- [ ] `categories.module.ts` + `categories.service.ts` +
+- [x] `categories.module.ts` + `categories.service.ts` +
   `categories.controller.ts`:
   - `GET /categories` — árbol de 2 niveles con productos contados por
     categoría. Filtros: `?activeOnly=true`, `?withProducts=true`.
@@ -168,61 +170,65 @@ inclusivos: "muestrame solo productos en mis categorías").
   - `POST /categories` — crear (valida regla de 2 niveles).
   - `PATCH /categories/:id` — editar.
   - `DELETE /categories/:id` — borra si está vacía; sino soft-delete.
-- [ ] Permisos: `category:read`, `category:write` (typical).
+- [x] Permisos: `category:read`, `category:write` (typical).
 
 ### UI staff
 
-- [ ] `apps/web/src/app/(protected)/categorias/page.tsx`:
+- [x] `apps/web/src/app/(protected)/categorias/page.tsx`:
   - Árbol expandible: padre → subcategorías.
   - Cada nodo muestra: nombre, ícono, # productos, sortOrder, toggle activo.
   - Botones por nodo: editar, agregar subcategoría (solo si es padre),
     eliminar.
   - Reordenamiento por drag-and-drop (opcional, simple subir/bajar
     también sirve si DnD es complejo).
-- [ ] Dialog `category-dialog.tsx`: nombre, slug (auto-generado editable),
+- [x] Dialog `category-dialog.tsx`: nombre, slug (auto-generado editable),
   ícono (selector con preview), parent (combobox; deshabilitado si está
   editando una categoría con hijos), notas.
-- [ ] Integración en `product-editor.tsx`: combobox de categoría agrupado
+- [x] Integración en `product-editor.tsx`: combobox de categoría agrupado
   por padre (ej. *Lámparas → Lámparas de mesa, Lámparas de pie...*).
-- [ ] Filtro por categoría en `/productos` (lista).
+- [x] Filtro por categoría en `/productos` (lista).
 
 ### Validaciones nuevas en el editor de productos
 
 **Independientes de categorías** pero parte del mismo bloque de mejoras al
 editor. Se incluyen acá para no fragmentar la fase.
 
-- [ ] Form arranca **vacío** (sin pieza inicial). El estado actual crea una
+- [x] Form arranca **vacío** (sin pieza inicial). El estado actual crea una
       pieza vacía por default — eso cambia. UX: se muestran dos botones
       grandes "Agregar pieza impresa" y "Agregar insumo" cuando el producto
       no tiene ninguno.
-- [ ] **Regla de validación**: el producto debe tener **al menos 1 pieza
+- [x] **Regla de validación**: el producto debe tener **al menos 1 pieza
       O 1 insumo**. Si no tiene ninguno, el botón "Guardar" queda
       deshabilitado con tooltip *"Agregá al menos una pieza impresa o un
       insumo"*.
-- [ ] **Si tiene piezas impresas**, cada pieza requiere **todos sus
+- [x] **Si tiene piezas impresas**, cada pieza requiere **todos sus
       campos**: nombre (no vacío), gramos (> 0), tiempo de impresión (> 0)
       y filamento default (no null). Hoy algunos campos eran opcionales —
       pasan a ser obligatorios. Validación tanto en frontend (Zod schema)
       como backend (`pieceSchema` en `products.controller.ts`).
-- [ ] **Si tiene insumos**, cada insumo requiere su material (FK no null) y
+- [x] **Si tiene insumos**, cada insumo requiere su material (FK no null) y
       cantidad > 0. (Ya estaba; confirmar.)
-- [ ] **Costo de un producto sin piezas**: el calculator ya lo soporta
-      (filament total = 0, machine cost = 0). Verificar que no haya
-      warnings espurios cuando `printMinutes = 0` y agregar un test
-      "producto solo con insumos calcula bien".
+- [x] **Costo de un producto sin piezas**: el calculator ya lo soporta
+      (filament total = 0, machine cost = 0). Verificado en smoke con
+      cliente sin piezas. *El test específico "solo con insumos calcula
+      bien" queda pendiente como TODO.*
 - [ ] **UI**: indicar visualmente la sección requerida (asterisco ★) en
       "Piezas impresas" y "Insumos" si no hay ninguna de las dos.
+      *Reemplazado por un banner ⚠ amarillo arriba de las dos secciones
+      cuando ambas están vacías. Sirve el mismo propósito.*
 
 ### Tareas backend para las validaciones
 
-- [ ] `apps/api/src/modules/products/products.controller.ts` —
+- [x] `apps/api/src/modules/products/products.controller.ts` —
       `pieceSchema` con `name min(1)`, `grams.positive()`,
       `printMinutes.positive()`, `defaultFilamentId` no nullable.
-- [ ] `inputSchema` con un `.refine()` global:
+- [x] `inputSchema` con un `.refine()` global:
       `pieces.length > 0 || materials.length > 0` con mensaje
       *"El producto debe tener al menos una pieza impresa o un insumo"*.
 - [ ] Tests `products.service.spec.ts` (si existe; sino crear) cubriendo
       ambos casos: solo piezas, solo insumos, ambas, ninguna (debe fallar).
+      *Pendiente — validación funcionando en runtime y verificada por
+      smoke real, pero no hay test unit dedicado.*
 
 ---
 
@@ -441,18 +447,22 @@ model User {
 
 ### Migración
 
-- [ ] Crear migración `20260YYYYMMHHMM_customers`:
+- [x] Crear migración `20260508010000_customers`:
   - `CREATE TYPE "CustomerType" ...`
   - `CREATE TABLE "customers" ...`
   - `CREATE TABLE "customer_products" ...`
+  - `CREATE TABLE "customer_category_commitments" ...`
   - `CREATE TABLE "customer_monthly_volumes" ...`
-  - `ALTER TABLE "quotes" ADD COLUMN "customerId" TEXT;`
+  - `ALTER TABLE "quotes" ADD COLUMN "customerId" TEXT;` + snapshot JSONB.
   - `ALTER TABLE "users" ADD COLUMN "customerId" TEXT;` + unique.
   - FKs con `ON DELETE` apropiado.
-- [ ] Permisos nuevos en seed:
+- [x] Permisos nuevos insertados directamente vía SQL en la migración
+  (idempotente, no depende del seed):
   - `customer:read`, `customer:write`, `customer:portal:manage` (staff).
-  - `portal:catalog:read`, `portal:order:create` (rol nuevo `customer-portal`).
-- [ ] Rol `customer-portal` con permisos mínimos del portal.
+  - `portal:catalog:read`, `portal:order:create`, `portal:profile:edit`
+    (rol nuevo `customer-portal`).
+- [x] Rol `customer-portal` (`isSystem=true`) creado en la migración con
+  sus 3 permisos asignados.
 
 ---
 
@@ -555,22 +565,26 @@ el profile completo. Útil para:
 
 ### Tareas
 
-- [ ] `pricing.types.ts`: agregar `CustomerPricingProfile` y extender
-      `PricingCostInputs` para aceptar overrides de fabricación.
-- [ ] `pricing.engine.ts`: aplicar flags en `resolveCommission`,
-      `computeTaxes`, y resolver `markupPct` con `customMarkupPct` y
-      `minTierQty`.
-- [ ] `pricing.service.ts`:
-  - `forCustomerProduct(customerId, productId)` — nuevo método que carga el
-    customer profile, recombina el costo según flags, y delega al engine.
-  - El método existente `forProduct(productId)` queda intacto (caso staff sin
-    cliente seleccionado).
-- [ ] Tests `pricing.engine.spec.ts`:
-  - `skipMarketing`: fabricationPrice baja; profit baja proporcionalmente.
-  - `skipChannelCommission`: el precio neto baja al perder la deducción.
-  - `minTierQty`: comprando 1 unidad con piso=5 da el precio de la tier 5-9.
-  - `customMarkupPct`: pisa a la tier y al producto.
-  - Combinaciones (consignación = skipChannelCommission + skipMarketing).
+- [x] `pricing.types.ts`: agregar `CustomerPricingProfile` (con flags
+      skipChannelCommission/skipRegime/skipMarketing/skipReinvestment +
+      customMarkupPct + minTierQty).
+- [x] `pricing.engine.ts`: 6º parámetro `customer` que aplica flags en
+      `resolveCommission`, `computeTaxes`, y resuelve `markupPct` con
+      precedencia `customMarkupPct > tier.markupPct > product.targetMarkupPct`.
+- [x] `pricing.service.ts`:
+  - `applyCustomerCostAdjustments(cost, profile)` — helper que recombina
+    fabrication cuando hay `skipMarketing` o `skipReinvestment`.
+  - `forCustomerProduct` lo orquesta el nuevo `CustomerPricingService`
+    (módulo customers), que llama a `applyCustomerCostAdjustments` antes
+    de pasar al engine. El método público `forProduct(productId)` queda
+    intacto.
+- [x] Tests `pricing.engine.spec.ts` — 7 casos nuevos cubriendo:
+  - `skipChannelCommission` en DIRECT_SALE y MARKETPLACE
+  - `skipRegime` en canal no-CASH
+  - `customMarkupPct` (con y sin tier override)
+  - Combinación CONSIGNACIÓN (skipChannelCommission + skipRegime)
+  - Profile vacío replica cálculo público
+  - 44/44 tests verdes.
 
 ---
 
@@ -578,10 +592,11 @@ el profile completo. Útil para:
 
 ### Estructura
 
-- [ ] `apps/web/src/app/(protected)/clientes/page.tsx` — lista de clientes con
-      filtros (tipo, activo, suspendido, con compromiso vencido).
-- [ ] `apps/web/src/app/(protected)/clientes/nuevo/page.tsx` — alta.
-- [ ] `apps/web/src/app/(protected)/clientes/[id]/page.tsx` — detalle:
+- [x] `apps/web/src/app/(protected)/clientes/page.tsx` — lista de clientes
+      con filtros por tipo + búsqueda. *Filtros "suspendido" y "compromiso
+      vencido" pendientes — quedan como mejora.*
+- [x] `apps/web/src/app/(protected)/clientes/nuevo/page.tsx` — alta.
+- [x] `apps/web/src/app/(protected)/clientes/[id]/page.tsx` — detalle:
   - **Datos básicos** (nombre, contacto, fiscal).
   - **Tipo + flags** (con presets que setean defaults pero permiten overrides
     individuales).
@@ -669,17 +684,21 @@ sobre las entidades del cliente** generen entradas en `AuditLog`:
 
 - [ ] `customers.service.ts`: en cada `update()`, comparar antes vs
       después y crear audit con before/after.
+      *Pendiente — el `CustomersWriteService` actual no audita. La pestaña
+      "Cambios de configuración" del histórico queda vacía hasta esto.*
 - [ ] Mismo para `customer-category-commitments.service.ts` y
       `customer-products.service.ts`.
-- [ ] La cron de cierre mensual (Fase 5) ya genera audit cuando suspende.
+      *Pendiente.*
+- [x] La cron de cierre mensual (Fase 5) ya genera audit cuando suspende.
 
 ### Tareas
 
-- [ ] Backend: `customers.controller.ts` con CRUD + listar productos
-      permitidos + togglear suspensión + crear cuenta portal.
-- [ ] Frontend: páginas `/clientes` (list, new, detail).
-- [ ] Componente `CustomerProductMatrix` reutilizable que pinta la matriz de
-      precios.
+- [x] Backend: `customers.controller.ts` con CRUD + commitments (upsert +
+      delete + toggle suspension) + productos asignados (upsert + delete).
+      *Endpoint "crear cuenta portal" queda para Fase 7.A.6.*
+- [x] Frontend: páginas `/clientes` (list, new, detail).
+- [x] Componente `CustomerPriceMatrix` reutilizable que pinta la matriz de
+      precios. *Nombre real del componente: `customer-price-matrix.tsx`.*
 
 ---
 
@@ -687,17 +706,22 @@ sobre las entidades del cliente** generen entradas en `AuditLog`:
 
 ### Cambios en el flujo
 
-- [ ] **Selector de cliente** en `nueva-producto` y `nueva-rapida`:
-  - Combobox con búsqueda (los clientes pueden ser muchos).
-  - Si se elige un cliente: autocompleta `customerName/email/phone/notes` y
-    aplica el profile al cálculo de precio.
+- [x] **Selector de cliente** en `nueva-producto` y `nueva-rapida`:
+  - Combobox con todos los clientes activos.
+    *Search avanzado pendiente — alcanza con el select nativo por ahora.*
+  - Si se elige un cliente: autocompleta `customerName/email/phone` y
+    aplica el profile al cálculo de precio. Setea `defaultChannelId`.
   - Si se deja vacío: comportamiento actual (cliente walk-in).
-- [ ] **Restricción de catálogo**: si el cliente seleccionado tiene productos
-      permitidos definidos, el selector de productos solo lista esos.
-- [ ] **Preview** muestra el profile aplicado: badge "Mayorista (piso tier
-      5-9)", "Consignación (sin canal, sin marketing)", etc.
-- [ ] **Detail page** de la cotización aceptada actualiza el contador
-      `CustomerMonthlyVolume` para el mes correspondiente.
+- [x] **Restricción de catálogo**: se valida en el backend al crear/preview
+      (canBuy). Si el cliente no puede comprar el producto, 403.
+      *El selector de productos del frontend todavía lista TODOS los
+      productos activos — la restricción se aplica al submit. Filtrar el
+      combobox por el catálogo del cliente queda como mejora.*
+- [x] **Preview** muestra el profile aplicado: badges en el header del card
+      ("Mayorista", "Sin comisión", "Sin marketing", "Sin régimen", etc.).
+- [x] **Cotización aceptada** actualiza el contador
+      `CustomerMonthlyVolume` para el mes correspondiente, imputando a la
+      categoría correcta (subcategoría con fallback a padre).
 
 ### Snapshot histórico
 
@@ -717,15 +741,17 @@ model Quote {
 
 ### Tareas
 
-- [ ] Schema: agregar `customerId` y `customerProfileSnapshot` a `Quote`
-      (parte de la migración Fase 1).
-- [ ] `quotes.service.ts`:
-  - Aceptar `customerId` opcional en el input de creación.
-  - Cargar el profile, validar productos permitidos, persistir snapshot.
-  - Al cambiar a `ACCEPTED`: incrementar `CustomerMonthlyVolume` del mes en
-    curso para ese cliente.
-- [ ] Frontend: combobox en los dos formularios + chip que muestra el
-      profile aplicado.
+- [x] Schema: `customerId` y `customerProfileSnapshot` (JSONB) agregados a
+      `Quote` en la migración Fase 1.
+- [x] `quotes.service.ts`:
+  - Acepta `customerId` opcional en el input de creación.
+  - Carga el profile, valida `canBuy` por cada item PRODUCT, persiste
+    snapshot (con `capturedAt`).
+  - Al cambiar a `ACCEPTED`: incrementa `CustomerMonthlyVolume`.
+    `applyMonthlyVolumeDelta` envuelto en transacción + soporta rollback
+    (-1) por si se revierte el estado.
+- [x] Frontend: combobox en los dos formularios + chip con el profile
+      aplicado en el header del card.
 
 ---
 
@@ -733,8 +759,10 @@ model Quote {
 
 ### Cron / job mensual
 
-- [ ] Endpoint protegido `POST /customers/cron/monthly-close` (o cron vía
-      NestJS `@Cron`) que se ejecuta el día 1 de cada mes a las 03:00 ART:
+- [x] Endpoint protegido `POST /customers/cron/monthly-close` (admin-only,
+      acepta `?asOf=YYYY-MM-DD` para testing) + cron NestJS
+      `@Cron('0 3 1 * *', { timeZone: 'America/Argentina/Buenos_Aires' })`
+      que se ejecuta el día 1 de cada mes a las 03:00 ART:
   1. Por cada `CustomerCategoryCommitment` con `monthlyCommitmentQty != null`
      y cuyo cliente esté activo:
   2. Tomar el `CustomerMonthlyVolume` correspondiente
@@ -769,26 +797,29 @@ model Quote {
 
 ### Reactivación manual
 
-- [ ] Botón "Levantar suspensión" en el detail del cliente. Solo accesible
-      con permiso `customer:write`.
-- [ ] Acción: setea `isWholesaleSuspended = false`, `suspensionReason = null`,
-      `suspendedAt = null`. Audit log con actor.
+- [x] Botón "Reactivar" en el detail del cliente, en cada commitment.
+      Sólo visible con permiso `customer:write`.
+- [x] Acción: setea `isWholesaleSuspended = false`, `suspensionReason = null`,
+      `suspendedAt = null`. *Audit log de la reactivación manual queda
+      pendiente — depende de la auditoría general de Fase 3.*
 
 ### Reportes
 
 - [ ] Página `/clientes/reportes/compromisos`: tabla con todos los clientes
       mayoristas, mes actual, unidades vendidas vs comprometidas, % de
-      cumplimiento, días restantes en el mes.
+      cumplimiento, días restantes en el mes. *Pendiente — los datos están
+      en `customer_monthly_volumes`; falta la página agregada.*
 - [ ] Alerta dashboard: "X clientes mayoristas a menos del 50% del compromiso
-      con menos de 7 días en el mes".
+      con menos de 7 días en el mes". *Pendiente.*
 
 ### Tareas
 
-- [ ] Job/cron mensual en backend.
-- [ ] Endpoint manual de cierre (para testing y para correr manualmente si
+- [x] Job/cron mensual en backend.
+- [x] Endpoint manual de cierre (para testing y para correr manualmente si
       el cron falla).
-- [ ] Banner de suspensión en UI.
-- [ ] Página de reportes de compromiso.
+- [x] Banner de suspensión en UI (en el detail del cliente, dentro de
+      `customer-commitments` y en `customer-month-progress`).
+- [ ] Página agregada de reportes de compromiso. *Pendiente.*
 
 ---
 
@@ -797,12 +828,12 @@ model Quote {
 Vista pre-portal: el staff puede generar un PDF/link compartible con el
 catálogo que el cliente vería, para enviárselo por mail antes de tener portal.
 
-- [ ] Endpoint `GET /customers/:id/catalog` — devuelve productos permitidos
+- [x] Endpoint `GET /customers/:id/catalog` — devuelve productos permitidos
       con sus precios calculados aplicando el profile. JSON.
-- [ ] Endpoint `GET /customers/:id/catalog.pdf` — versión PDF del catálogo
-      con branding, listo para enviar.
-- [ ] Página `/clientes/[id]/catalogo` — vista web idéntica al PDF para
-      preview en navegador.
+- [x] Endpoint `GET /customers/:id/catalog.pdf` — versión PDF del catálogo
+      con branding, paginación automática, listo para enviar.
+- [x] Página `/clientes/[id]/catalogo` — vista web del catálogo agrupado
+      por categoría + botón de descarga del PDF.
 
 ---
 
