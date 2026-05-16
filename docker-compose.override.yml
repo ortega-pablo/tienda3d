@@ -11,7 +11,11 @@ services:
       - /app/node_modules
       - /app/apps/api/node_modules
       - /app/packages/shared/node_modules
-    command: pnpm --filter @tienda3d/api dev
+    # Antes de arrancar Nest en watch mode, regenera el cliente Prisma
+    # (refleja cambios del schema montado por volumen) y aplica migraciones
+    # pendientes. `migrate deploy` es idempotente: si todo está al día, no
+    # hace nada.
+    command: sh -c "cd apps/api && pnpm prisma:generate && pnpm prisma migrate deploy && pnpm dev"
 
   web:
     build:
