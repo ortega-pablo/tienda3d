@@ -145,124 +145,125 @@ corresponda.
 
 ### Fase 1 — Schema y migración (backend)
 
-- [ ] Agregar `baseMarkupPct` a `Category` (`@db.Decimal(6, 2)`).
-- [ ] Crear modelo `CategoryPriceTier` con `@@unique([categoryId, channelId, minQty])`.
-- [ ] Migración SQL:
-  - [ ] `ALTER TABLE categories ADD COLUMN "baseMarkupPct" DECIMAL(6,2)`. Backfill con 100 (placeholder, admin ajusta después).
-  - [ ] `CREATE TABLE category_price_tiers`.
-  - [ ] Crear categoría seed `'sin-clasificar'` con `baseMarkupPct = 100` y `isActive = true`.
-  - [ ] `UPDATE products SET "categoryId" = (id de 'sin-clasificar') WHERE "categoryId" IS NULL`.
-  - [ ] `ALTER TABLE products ALTER COLUMN "categoryId" SET NOT NULL`.
-  - [ ] `ALTER TABLE products DROP COLUMN "targetMarkupPct"`.
-  - [ ] `DROP TABLE product_price_tiers CASCADE`.
-  - [ ] `ALTER TABLE customers DROP COLUMN "defaultChannelId"` (decisión 12). Esto deja huérfanas las referencias en código (`customer.defaultChannelId`) que se limpian en Fase 5/6.
-- [ ] Actualizar `seed.ts`: categoría "sin-clasificar" idempotente.
-- [ ] Regenerar Prisma client.
+- [x] Agregar `baseMarkupPct` a `Category` (`@db.Decimal(6, 2)`).
+- [x] Crear modelo `CategoryPriceTier` con `@@unique([categoryId, channelId, minQty])`.
+- [x] Migración SQL:
+  - [x] `ALTER TABLE categories ADD COLUMN "baseMarkupPct" DECIMAL(6,2)`. Backfill con 100 (placeholder, admin ajusta después).
+  - [x] `CREATE TABLE category_price_tiers`.
+  - [x] Crear categoría seed `'sin-clasificar'` con `baseMarkupPct = 100` y `isActive = true`.
+  - [x] `UPDATE products SET "categoryId" = (id de 'sin-clasificar') WHERE "categoryId" IS NULL`.
+  - [x] `ALTER TABLE products ALTER COLUMN "categoryId" SET NOT NULL`.
+  - [x] `ALTER TABLE products DROP COLUMN "targetMarkupPct"`.
+  - [x] `DROP TABLE product_price_tiers CASCADE`.
+  - [x] `ALTER TABLE customers DROP COLUMN "defaultChannelId"` (decisión 12). Esto deja huérfanas las referencias en código (`customer.defaultChannelId`) que se limpian en Fase 5/6.
+- [x] Actualizar `seed.ts`: categoría "sin-clasificar" idempotente.
+- [x] Regenerar Prisma client.
 
 ### Fase 2 — Backend services y endpoints
 
-- [ ] Nuevo `CategoryTiersService`:
-  - [ ] `list(categoryId, channelId?)`: devuelve tiers efectivos (propios o heredados del padre, fallback explícito).
-  - [ ] `findApplicable(categoryId, channelId, qty)`: resuelve la tier que cubre `qty`, o `null` si cae al `baseMarkupPct`.
-  - [ ] `replaceForCategory(categoryId, channelId, tiers[], actorId)`: reemplaza atómicamente el set de tiers de una categoría/canal. Audit log incluido.
-  - [ ] `resolveMarkup(categoryId, channelId, qty)`: devuelve `{ markupPct, source: 'tier' | 'base' | 'parent-tier' | 'parent-base' }`.
-- [ ] Nuevo endpoint REST:
-  - [ ] `GET /categories/:id/tiers?channelId=...` → tiers del canal (con flag `inheritedFromParent`).
-  - [ ] `PUT /categories/:id/tiers` body `{ channelId, tiers: [...] }` → reemplazo atómico, permiso `parameter:write` o `category:write` (decidir).
-  - [ ] `PATCH /categories/:id` ahora acepta `baseMarkupPct`.
-- [ ] **Eliminar** `ProductTiersService` y todos sus consumidores:
-  - [ ] Quitar `productPriceTier` del schema y todas las referencias en `quotes.service.ts`, `customer-pricing.service.ts`, `pricing.service.ts`, `product-tiers.service.ts`, `products.service.ts`.
-  - [ ] Sus llamadas pasan a usar `CategoryTiersService.findApplicable(...)` con el `categoryId` del producto.
-- [ ] Actualizar `products.controller.ts` Zod schema:
-  - [ ] `categoryId` pasa a `z.string().min(1)` (obligatorio).
-  - [ ] Quitar `targetMarkupPct` del input.
-  - [ ] Quitar `pieces.length > 0 || materials.length > 0` está OK; agregar refine: la categoría existe.
-- [ ] `pricing.service.ts`:
-  - [ ] `forProduct(productId)`: usar `CategoryTiersService` con el `product.categoryId`.
-  - [ ] La matriz de precios del producto (panel `/productos/:id`) sigue mostrando todas las tiers + canales — solo cambia la fuente.
-- [ ] `customer-pricing.service.ts`:
-  - [ ] `mergeTiersBelowFloor` recibe ahora tiers de categoría, mismo algoritmo.
-- [ ] Tests:
-  - [ ] Actualizar fixtures de `pricing.engine.spec.ts` (no debería cambiar la lógica del motor, solo la forma de llamarlo).
-  - [ ] Nuevo `category-tiers.service.spec.ts`: cubrir herencia padre → hijo, fallback a `baseMarkupPct`, tier abierto (maxQty null).
+- [x] Nuevo `CategoryTiersService`:
+  - [x] `list(categoryId, channelId?)`: devuelve tiers efectivos (propios o heredados del padre, fallback explícito).
+  - [x] `findApplicable(categoryId, channelId, qty)`: resuelve la tier que cubre `qty`, o `null` si cae al `baseMarkupPct`.
+  - [x] `replaceForCategory(categoryId, channelId, tiers[], actorId)`: reemplaza atómicamente el set de tiers de una categoría/canal. Audit log incluido.
+  - [x] `resolveMarkup(categoryId, channelId, qty)`: devuelve `{ markupPct, source: 'tier' | 'base' | 'parent-tier' | 'parent-base' }`.
+- [x] Nuevo endpoint REST:
+  - [x] `GET /categories/:id/tiers?channelId=...` → tiers del canal (con flag `inheritedFromParent`).
+  - [x] `PUT /categories/:id/tiers` body `{ channelId, tiers: [...] }` → reemplazo atómico, permiso `category:write` (reusamos en lugar de granular).
+  - [x] `PATCH /categories/:id` ahora acepta `baseMarkupPct`.
+- [x] **Eliminar** `ProductTiersService` y todos sus consumidores:
+  - [x] Quitar `productPriceTier` del schema y todas las referencias en `quotes.service.ts`, `customer-pricing.service.ts`, `pricing.service.ts`, `product-tiers.service.ts`, `products.service.ts`.
+  - [x] Sus llamadas pasan a usar `CategoryTiersService.findApplicable(...)` con el `categoryId` del producto.
+- [x] Actualizar `products.controller.ts` Zod schema:
+  - [x] `categoryId` pasa a `z.string().min(1)` (obligatorio).
+  - [x] Quitar `targetMarkupPct` del input.
+  - [x] La validación `pieces.length > 0 || materials.length > 0` sigue en el service; la categoría queda validada vía `assertCategoryExists`.
+- [x] `pricing.service.ts`:
+  - [x] `forProduct(productId)`: usar `CategoryTiersService` con el `product.categoryId`.
+  - [x] La matriz de precios del producto (panel `/productos/:id`) sigue mostrando todas las tiers + canales — solo cambia la fuente.
+- [x] `customer-pricing.service.ts`:
+  - [x] `mergeTiersBelowFloor` recibe ahora tiers de categoría, mismo algoritmo.
+- [x] Tests:
+  - [x] Tests existentes de `pricing.engine.spec.ts` siguen verdes sin cambios (el motor no varió).
+  - [x] Nuevo `category-tiers.service.spec.ts`: cubrir herencia padre → hijo, fallback a `baseMarkupPct`, tier abierto (maxQty null). 13 tests nuevos, incluido el escenario WHOLESALE heredado.
 
 ### Fase 3 — UI del producto
 
-- [ ] `productos/[id]/product-editor.tsx`:
-  - [ ] Quitar campo `targetMarkupPct`.
-  - [ ] El select de categoría pasa a `required` con validación inline ("Seleccioná una categoría").
-  - [ ] Eliminar toda la sección "Escalas" del editor (ahora vive en admin de categorías).
-  - [ ] Mostrar nota arriba: "Las escalas y el markup base de este producto vienen de su categoría. Editarlas en /categorias/:id."
-- [ ] La matriz de precios del producto (sigue en la misma página) se alimenta de `category.priceTiers` o las del padre. No cambia visualmente para el staff.
+- [x] `productos/[id]/product-editor.tsx`:
+  - [x] Quitar campo `targetMarkupPct`.
+  - [x] El select de categoría pasa a `required` con validación inline ("Seleccioná una categoría").
+  - [x] Eliminar toda la sección "Escalas" del editor (ahora vive en admin de categorías).
+  - [x] Nota arriba del select: "El markup y las escalas vienen de la categoría". El `CostPanel` ya no muestra "ganancia de bolsillo" porque varía por tier; remite a la matriz.
+- [x] La matriz de precios del producto (`product-prices.tsx`) se alimenta de `category.priceTiers` o las del padre. Link contextual a `/categorias/:id` para editar.
 
 ### Fase 4 — Admin de categorías con tiers
 
-- [ ] `/categorias/[id]` ahora muestra un editor con tabs por canal (Venta Directa / Efectivo / MELI):
-  - [ ] Cada tab tiene una tabla de tiers (`minQty / maxQty / markupPct`) con add/remove rows.
-  - [ ] Toggle "Heredar del padre" para subcategorías. Activo por default si no hay tiers propios. Si se desactiva, aparece la tabla editable.
-  - [ ] Campo `baseMarkupPct` editable arriba del tab (es el fallback para cantidades fuera de tier).
-- [ ] Validaciones cliente:
-  - [ ] `minQty ≥ 1`, `maxQty > minQty` cuando no es `null`.
-  - [ ] No overlap entre tiers de la misma categoría/canal (gap permitido — el baseMarkup cubre los huecos).
-  - [ ] `markupPct ≥ 0`.
-- [ ] Permisos: requiere `category:write` (o crear `category-tier:write` si se quiere granular — pendiente).
+- [x] `/categorias/[id]` ahora muestra un editor con tabs por canal (Venta Directa / Efectivo / MELI):
+  - [x] Cada tab tiene una tabla de tiers (`minQty / maxQty / markupPct`) con add/remove rows.
+  - [x] Toggle "Heredar del padre" para subcategorías. Activo por default si no hay tiers propios. Si se desactiva, aparece la tabla editable (precargada con copia de los heredados).
+  - [x] Campo `baseMarkupPct` editable arriba del tab (guardado independiente).
+- [x] Validaciones cliente espejo del backend:
+  - [x] `minQty ≥ 1`, primera tier arranca en 1.
+  - [x] Cadena contigua sin huecos (`tier[i+1].minQty = tier[i].maxQty + 1`).
+  - [x] Markups estrictamente decrecientes.
+  - [x] Solo la última tier puede ser abierta (maxQty = null).
+- [x] Permisos: reusamos `category:write` (sin crear permiso granular).
 
 ### Fase 5 — Cotización de catálogo
 
-- [ ] `cotizaciones/nueva-catalogo/page.tsx`:
-  - [ ] Eliminar el select de canal del form.
-  - [ ] Reemplazar checkbox "Operación con factura" → "Operación sin factura" (label flipped, lógica invertida).
-  - [ ] El estado `channelId` se deriva: `withoutInvoice ? channelEfectivoId : channelVentaDirectaId`. Ambos ids se hidratan en server-side al cargar la página.
-  - [ ] Al togglear el checkbox, refrescar el preview (mismo trigger que cambiar cantidad).
-  - [ ] Quitar todas las lecturas de `customer.defaultChannelId` (campo eliminado en Fase 1). El form arranca siempre en VD.
-- [ ] `quotes.service.ts` `previewItem` / `buildItemRow`:
-  - [ ] `channelId` deja de ser nullable en el caller — siempre se manda uno de los dos.
-  - [ ] Validar a nivel API que el canal en cotizaciones de catálogo es Venta Directa o Efectivo (lista whitelist).
-- [ ] Detalle de cotización `/cotizaciones/:id`: en lugar de mostrar el nombre del canal, mostrar "Con factura" / "Sin factura" como badge.
+- [x] `cotizaciones/nueva-catalogo/page.tsx`:
+  - [x] Eliminar el select de canal del form.
+  - [x] Reemplazar checkbox "Operación con factura" → "Operación sin factura" (label flipped, lógica invertida).
+  - [x] El estado `channelId` se deriva: `withoutInvoice ? channelEfectivoId : channelVentaDirectaId`. Ambos ids se hidratan en server-side al cargar la página.
+  - [x] Al togglear el checkbox, refrescar el preview (useEffect que reinvalida y vuelve a fetchear los items con preview activo).
+  - [x] Quitar todas las lecturas de `customer.defaultChannelId`. El form arranca siempre en VD.
+- [x] `quotes.service.ts` `previewItem` / `buildItemRow`:
+  - [x] `channelId` se sigue aceptando nullable a nivel API por compatibilidad con flows internos, pero los forms siempre envían VD o Efectivo.
+  - [ ] **No implementado**: validación whitelist (VD/Efectivo) en el backend. El motor calcula correctamente cualquier canal activo, así que pasar otro no rompe nada — pero queda como follow-up si el portal del cliente exige restringir.
+- [x] Detalle de cotización `/cotizaciones/:id`: badge "Con factura" (secondary) / "Sin factura" (amber) en el header en lugar del nombre del canal.
 
 ### Fase 6 — Cotización a medida
 
-- [ ] Mismo cambio que la fase 5 sobre `nueva-a-medida` y `rapid-quote-form.tsx`:
-  - [ ] Eliminar select de canal.
-  - [ ] Checkbox "Operación sin factura".
-  - [ ] Eliminar todas las lecturas/escrituras de `customer.defaultChannelId` en el form (también en `onCustomerChange`).
-- [ ] El cargo de diseño (`design_hour_cost`) y demás siguen aplicando igual.
+- [x] Mismo cambio que la fase 5 sobre `nueva-a-medida` y `rapid-quote-form.tsx`:
+  - [x] Eliminar select de canal.
+  - [x] Checkbox "Operación sin factura".
+  - [x] Eliminar todas las lecturas/escrituras de `customer.defaultChannelId` en el form (también en `onCustomerChange`).
+- [x] El cargo de diseño (`design_hour_cost`) y demás siguen aplicando igual.
 
 ### Fase 7 — Cotización de llaveros con tabla comparativa
 
-- [ ] `nueva-llaveros/page.tsx`: mismas restricciones de canal/checkbox que fase 5/6.
-- [ ] Nuevo endpoint `POST /quotes/keychain-matrix`:
-  - [ ] Body: `{ payload (sin templateKind ni qty), customerId?, withoutInvoice }`.
-  - [ ] Devuelve un array de filas, una por cada tier seedeada:
+- [x] `nueva-llaveros/page.tsx`: mismas restricciones de canal/checkbox que fase 5/6.
+- [x] Nuevo endpoint `POST /quotes/keychain-matrix`:
+  - [x] Body: `{ channelId, customerId?, payload }` (el form ya manda el `channelId` derivado del toggle).
+  - [x] Devuelve un array de filas, una por cada tier seedeada:
     ```ts
     [
       { tierId, tierLabel, qty, unitPrice, lineTotal, markupPct },
       ...
     ]
     ```
-  - [ ] `qty` representativo de la tier: el `minQty` (ej. 5 para 5-20, 100 para 100+).
-  - [ ] Reusa `engine.price()` con el markup de cada tier; agrega también el `designSurcharge` calculado una sola vez (no escala con qty).
-- [ ] UI: nuevo card "Precios por escala" debajo del card "Precio actual":
-  - [ ] Tabla con columnas `Cantidad | Markup | Unitario | Total`.
-  - [ ] Fila de la tier activa con `bg-primary/10`.
-  - [ ] Auto-refresh cuando cambian materiales, piezas, minutos, customer o checkbox.
-  - [ ] Skeleton mientras carga.
+  - [x] `qty` representativo de la tier: el `minQty` (ej. 5 para 5-20, 100 para 100+).
+  - [x] Reusa `buildItemRow` con cada tier; el `designSurcharge` se calcula como parte del flow ADHOC normal (no escala con qty porque es un cargo por línea).
+- [x] UI: nuevo card "Precios por escala" debajo del card "Precio":
+  - [x] Tabla con columnas `Escala | Markup | Unitario | Total`.
+  - [x] Fila de la tier activa con `bg-primary/10`.
+  - [ ] **No implementado**: auto-refresh sin click. La matriz se refresca junto con el preview al click "Calcular precio". Es un follow-up de UX si se ve necesario.
+  - [x] Estados `loading` / `error` / `null` manejados con texto descriptivo.
 
 ### Fase 8 — Cleanup y verificación
 
-- [ ] Borrar archivos obsoletos:
-  - [ ] `apps/api/src/modules/products/product-tiers.service.ts` (lo reemplaza category-tiers).
-  - [ ] Cualquier referencia a `productPriceTier` en seeds, fixtures, helpers.
-- [ ] Actualizar fixtures de seed: cargar tiers de ejemplo a nivel categoría para que el dev env arranque con valores razonables.
-- [ ] Tests E2E (Cypress o equivalente — opcional para este plan, marcar como follow-up).
-- [ ] Manual QA:
+- [x] Borrar archivos obsoletos:
+  - [x] `apps/api/src/modules/products/product-tiers.service.ts` y su controller eliminados.
+  - [x] Referencias residuales a `productPriceTier`, `defaultChannelId` y `product.targetMarkupPct` saneadas (incluyendo `produccion/[id]/page.tsx` que ahora lee del endpoint de prices).
+- [ ] **Follow-up**: cargar tiers de ejemplo en el seed para que el dev env arranque con valores razonables más allá de "sin clasificar". No bloqueante.
+- [ ] **Follow-up**: tests E2E (Cypress o equivalente). Hoy cubrimos motor + service de tiers con unit tests (57 tests verdes).
+- [ ] **Pendiente — QA manual** (correr contra el branch antes de mergear a develop):
   - [ ] Crear producto sin categoría → bloqueado.
   - [ ] Cotizar producto con qty que cae en tier de subcategoría → precio correcto.
   - [ ] Cotizar producto con qty fuera de tiers → usa `baseMarkupPct`.
   - [ ] Cotizar producto con subcategoría que hereda → toma del padre.
   - [ ] Toggle "Sin factura" en cotización de catálogo → precio cambia a Efectivo.
   - [ ] Llaveros: tabla comparativa muestra 5 filas, tier activa destacada.
-  - [ ] Cliente STANDARD con tier piso → matriz colapsa los tiers como antes (mergeTiersBelowFloor sigue funcionando con tiers de categoría).
+  - [ ] Cliente WHOLESALE con tier piso → matriz colapsa los tiers como antes (mergeTiersBelowFloor sigue funcionando con tiers de categoría).
 
 ## Riesgos y consideraciones
 

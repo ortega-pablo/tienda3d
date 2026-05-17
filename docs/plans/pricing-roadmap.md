@@ -50,7 +50,7 @@ eliminarse esa tabla:
 | [`costing-model-logic-c-v3.md`](./costing-model-logic-c-v3.md) | Modelo de costeo (provisiones por insumo, profit sobre fabricación) | ✅ Implementado | — |
 | [`customer-types-and-pricing.md`](./customer-types-and-pricing.md) | 4 tipos de cliente, flags, commitments | ✅ Fases 1-6 done. Auditoría/dashboard parcial. | — |
 | [`customer-portal.md`](./customer-portal.md) | Portal `/portal/*` para clientes WHOLESALE/CONSIGNMENT | ⏸ Fase 7 dividida en 7.A-D, sin empezar | `category-driven-pricing.md` (los precios del portal salen del nuevo flujo) |
-| [`category-driven-pricing.md`](./category-driven-pricing.md) | Escalas por categoría, canal forzado en cotizaciones, llaveros con matriz | 🟡 Plan aprobado, **siguiente a ejecutar** | — |
+| [`category-driven-pricing.md`](./category-driven-pricing.md) | Escalas por categoría, canal forzado en cotizaciones, llaveros con matriz | ✅ Fases 1-8 implementadas en `feature/category-tiers`. Pendiente QA manual + merge a develop. | — |
 | [`edit-mode-and-feedback-system.md`](./edit-mode-and-feedback-system.md) | UX de formularios | ✅ Implementado | — |
 
 ## Matriz de superficies × cambios
@@ -152,17 +152,21 @@ Conviene tener un test unitario explícito para ese path antes de tocar la UI.
    `category-driven-pricing.md`.
 2. ✅ **Pre-flight check**: `defaultChannelId` se elimina del modelo
    (decisión cross-cutting 1, resuelta 2026-05-16).
-3. ⬜ **Fase 1**: schema + migración. Branch separado (`feature/category-tiers`),
-   no merge hasta tener Fase 2 funcional.
-4. ⬜ **Fase 2**: `CategoryTiersService` + tests. **Acá se hace el
-   test del cliente WHOLESALE con tier heredado**. No avanzar a Fase 3 sin
-   ese test verde.
-5. ⬜ **Fase 3 + 4** en paralelo (UI producto + admin categorías). Pueden
-   coexistir porque tocan archivos distintos.
-6. ⬜ **Fase 5 + 6 + 7** en serie (los tres flujos de cotización; comparten
-   el `RapidQuoteForm`).
-7. ⬜ **Fase 8**: cleanup + QA manual + commit final.
-8. ⬜ **Cuando arranque `customer-portal.md` Fase 7**: releer este roadmap +
+3. ✅ **Fase 1**: schema + migración. Branch `feature/category-tiers`,
+   commit `b02906d`.
+4. ✅ **Fase 2**: `CategoryTiersService` + 13 tests nuevos cubriendo
+   herencia padre→hijo, fallback a `baseMarkupPct` y validación del set
+   completo. Escenario WHOLESALE heredado verde. Commit `cd4edb6`.
+5. ✅ **Fase 3 + 4**: UI producto sin markup + admin de categorías con
+   tabs por canal y toggle "Heredar del padre". Commit `121c863`.
+6. ✅ **Fase 5 + 6 + 7**: cotizaciones sin selector de canal, checkbox
+   "Operación sin factura" (VD ↔ Efectivo), matriz comparativa de
+   llaveros con endpoint `POST /quotes/keychain-matrix`. Commit `cc6fabe`.
+7. ✅ **Fase 8**: refs residuales saneadas (incluido `produccion/[id]/page.tsx`
+   que leía `product.targetMarkupPct`). Planes marcados como done.
+8. ⬜ **QA manual** contra el branch antes de mergear a `develop`.
+   Checklist completo en `category-driven-pricing.md` § Fase 8.
+9. ⬜ **Cuando arranque `customer-portal.md` Fase 7**: releer este roadmap +
    decisión 2 antes de tocar precios en `/portal/*`.
 
 ## Cómo mantener este archivo vivo
