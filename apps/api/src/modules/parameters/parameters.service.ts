@@ -12,6 +12,7 @@ export interface ParameterDto {
 const NUMERIC_KEYS = new Set([
   'kwh_cost',
   'labor_hour_cost',
+  'design_hour_cost',
   'contingency_pct',
   'reinvestment_pct',
   'unified_regime_pct',

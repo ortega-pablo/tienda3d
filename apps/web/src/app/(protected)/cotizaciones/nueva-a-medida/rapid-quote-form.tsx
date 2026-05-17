@@ -61,6 +61,7 @@ interface Preview {
   unitPrice: number;
   unitProfit: number;
   lineTotal: number;
+  designSurcharge: number;
 }
 
 export function RapidQuoteForm({
@@ -105,6 +106,7 @@ export function RapidQuoteForm({
   const [materials, setMaterials] = useState<MaterialDraft[]>([]);
   const [assemblyMinutes, setAssemblyMinutes] = useState('0');
   const [managementMinutes, setManagementMinutes] = useState('0');
+  const [designMinutes, setDesignMinutes] = useState('0');
 
   const [preview, setPreview] = useState<Preview | 'loading' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -127,6 +129,7 @@ export function RapidQuoteForm({
         .map((m) => ({ materialId: m.materialId, quantity: Number(m.quantity || '1') })),
       assemblyMinutes: Number(assemblyMinutes || '0'),
       managementMinutes: Number(managementMinutes || '0'),
+      designMinutes: Number(designMinutes || '0'),
     },
   });
 
@@ -485,7 +488,7 @@ export function RapidQuoteForm({
               ))}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Tiempo de armado (min)">
                 <Input
                   type="number"
@@ -500,7 +503,20 @@ export function RapidQuoteForm({
                   onChange={(e) => setManagementMinutes(e.target.value)}
                 />
               </Field>
+              <Field label="Tiempo de diseño (min)">
+                <Input
+                  type="number"
+                  value={designMinutes}
+                  onChange={(e) => setDesignMinutes(e.target.value)}
+                />
+              </Field>
             </div>
+            {Number(designMinutes || '0') > 0 && (
+              <p className="text-xs text-muted-foreground">
+                El cargo de diseño se suma una sola vez a la línea (no escala con la
+                cantidad). Tarifa configurable en Parámetros → "Hora de diseño 3D".
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -537,6 +553,12 @@ export function RapidQuoteForm({
                 </span>
               </div>
               <Row label="Cantidad" value={quantity} />
+              {preview.designSurcharge > 0 && (
+                <Row
+                  label="Cargo único de diseño"
+                  value={formatMoney(preview.designSurcharge)}
+                />
+              )}
               <div className="flex justify-between border-t pt-2">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-mono">{formatMoney(preview.lineTotal)}</span>

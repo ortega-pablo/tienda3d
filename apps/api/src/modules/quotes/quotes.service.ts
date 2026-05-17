@@ -327,6 +327,8 @@ export class QuotesService {
     unitPrice: number;
     unitProfit: number;
     lineTotal: number;
+    /** Cargo de diseño grossed-up para mostrar separado del unitPrice × qty. */
+    designSurcharge: number;
     warnings: string[];
   }> {
     const customerCtx = customerId
@@ -334,11 +336,19 @@ export class QuotesService {
       : null;
     const effectiveChannel = channelId ?? customerCtx?.customer.defaultChannelId ?? null;
     const row = await this.buildItemRow(item, effectiveChannel, customerCtx);
+    const designSurcharge =
+      row.adhocPayload &&
+      typeof row.adhocPayload === 'object' &&
+      'designSurcharge' in row.adhocPayload &&
+      typeof (row.adhocPayload as { designSurcharge?: unknown }).designSurcharge === 'number'
+        ? (row.adhocPayload as { designSurcharge: number }).designSurcharge
+        : 0;
     return {
       unitCost: Number(row.unitCost),
       unitPrice: Number(row.unitPrice),
       unitProfit: Number(row.unitProfit ?? 0),
       lineTotal: Number(row.lineTotal),
+      designSurcharge,
       warnings: [],
     };
   }
@@ -396,13 +406,19 @@ export class QuotesService {
     }
 
     // ADHOC
-    const cost = await this.costing.forAdhoc({
-      description: item.description,
-      pieces: item.payload.pieces,
-      materials: item.payload.materials,
-      assemblyMinutes: item.payload.assemblyMinutes,
-      managementMinutes: item.payload.managementMinutes,
-    });
+    const [cost, designHourCostParam] = await Promise.all([
+      this.costing.forAdhoc({
+        description: item.description,
+        pieces: item.payload.pieces,
+        materials: item.payload.materials,
+        assemblyMinutes: item.payload.assemblyMinutes,
+        managementMinutes: item.payload.managementMinutes,
+      }),
+      this.prisma.globalParam.findUnique({ where: { key: 'design_hour_cost' } }),
+    ]);
+    const designMinutes = item.payload.designMinutes ?? 0;
+    const designHourCost = designHourCostParam ? Number(designHourCostParam.value) : 0;
+    const designRaw = (designMinutes / 60) * designHourCost;
     // Para ADHOC el cliente no tiene categoría que matchear, así que solo
     // aplican los flags globales (skipMarketing/skipChannelCommission/etc.).
     // No hay tier piso ni custom markup por producto.
@@ -423,7 +439,7 @@ export class QuotesService {
           fabricationPrice: cost.fabricationPrice,
           otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
         };
-    const { unitPrice, unitProfit } = await this.computeUnitPrice(
+    const { unitPrice, unitProfit, designSurcharge } = await this.computeUnitPrice(
       {
         fabricationPrice: adjustedCost.fabricationPrice,
         otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
@@ -433,8 +449,21 @@ export class QuotesService {
       null,
       item.quantity,
       profile,
+      designRaw,
     );
-    const lineTotal = unitPrice * item.quantity;
+    // El cargo de diseño es plano por línea (no escala con la cantidad)
+    // pero forma parte del lineTotal para que paye comisión + régimen
+    // y se incluya en el subtotal / descuento de la cotización.
+    const lineTotal = unitPrice * item.quantity + designSurcharge;
+
+    // Persistimos designMinutes + designSurcharge en el payload JSON:
+    // así el PDF muestra el desglose exacto que se firmó, aunque el
+    // global param cambie después.
+    const persistedPayload: AdhocItemPayload = {
+      ...item.payload,
+      designMinutes,
+      designSurcharge,
+    };
 
     return {
       productId: null,
@@ -444,7 +473,7 @@ export class QuotesService {
       unitPrice,
       unitProfit,
       lineTotal,
-      adhocPayload: item.payload as unknown as Prisma.InputJsonValue,
+      adhocPayload: persistedPayload as unknown as Prisma.InputJsonValue,
     };
   }
 
@@ -458,11 +487,13 @@ export class QuotesService {
     productId: string | null,
     quantity: number,
     customerProfile: CustomerPricingProfile | null = null,
-  ): Promise<{ unitPrice: number; unitProfit: number }> {
+    designRawAmount = 0,
+  ): Promise<{ unitPrice: number; unitProfit: number; designSurcharge: number }> {
     if (!channelId) {
       // Sin canal el precio = costo total (caller puede sobreescribir).
       // El profit no se puede calcular sin markup del producto, queda 0.
-      return { unitPrice: cost.totalCost, unitProfit: 0 };
+      // El surcharge tampoco aplica sin canal: se devuelve crudo (sin gross-up).
+      return { unitPrice: cost.totalCost, unitProfit: 0, designSurcharge: designRawAmount };
     }
 
     const channel = await this.prisma.channel.findUnique({ where: { id: channelId } });
@@ -509,7 +540,13 @@ export class QuotesService {
       tierOverrides,
       customerProfile ?? {},
     );
-    return { unitPrice: line.finalPrice, unitProfit: line.profit };
+    const designSurcharge = this.engine.surcharge(
+      designRawAmount,
+      cfg,
+      globals,
+      customerProfile ?? {},
+    );
+    return { unitPrice: line.finalPrice, unitProfit: line.profit, designSurcharge };
   }
 
   private async nextCode(type: QuoteType): Promise<string> {

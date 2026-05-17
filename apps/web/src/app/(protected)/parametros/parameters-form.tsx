@@ -21,6 +21,12 @@ interface ParameterDto {
 const META: Record<string, { label: string; suffix?: string; type?: 'number' | 'text'; help?: string }> = {
   kwh_cost: { label: 'Costo del kWh', suffix: '$/kWh', type: 'number', help: 'Con todos los impuestos.' },
   labor_hour_cost: { label: 'Hora de mano de obra', suffix: '$/h', type: 'number' },
+  design_hour_cost: {
+    label: 'Hora de diseño 3D',
+    suffix: '$/h',
+    type: 'number',
+    help: 'Costo por hora de diseño de modelos 3D. Solo aplica a cotizaciones a medida como cargo plano por línea — no escala con la cantidad.',
+  },
   contingency_pct: { label: 'Contingencia', suffix: '%', type: 'number' },
   reinvestment_pct: { label: 'Reinversión', suffix: '%', type: 'number' },
   unified_regime_pct: {

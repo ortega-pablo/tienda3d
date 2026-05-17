@@ -40,6 +40,7 @@ const adhocPayloadSchema = z.object({
   ),
   assemblyMinutes: z.number().nonnegative(),
   managementMinutes: z.number().nonnegative(),
+  designMinutes: z.number().nonnegative().optional(),
 });
 
 const productItemSchema = z.object({

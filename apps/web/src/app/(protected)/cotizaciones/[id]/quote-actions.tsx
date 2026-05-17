@@ -49,6 +49,10 @@ export interface QuoteDto {
     /** Logic C v3 — ganancia de bolsillo por unidad (snapshot al crear). */
     unitProfit: number;
     lineTotal: number;
+    adhocPayload: {
+      designMinutes?: number;
+      designSurcharge?: number;
+    } | null;
   }>;
 }
 

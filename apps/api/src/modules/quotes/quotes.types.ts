@@ -58,6 +58,18 @@ export interface AdhocItemPayload {
   }>;
   assemblyMinutes: number;
   managementMinutes: number;
+  /**
+   * Tiempo de diseño 3D en minutos. Genera un cargo plano por línea
+   * (`designMinutes/60 × design_hour_cost`), no escala con la cantidad.
+   * El cargo paga comisión de canal y régimen igual que el resto del precio.
+   */
+  designMinutes?: number;
+  /**
+   * Surcharge final en pesos al cliente por el cargo de diseño, ya con
+   * comisión + régimen + IVA aplicados. Snapshot al crear la cotización
+   * para que el PDF muestre lo que se firmó aunque el global param cambie.
+   */
+  designSurcharge?: number;
 }
 
 export interface ProductItemInput {

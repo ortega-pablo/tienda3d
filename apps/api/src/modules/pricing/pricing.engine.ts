@@ -96,6 +96,40 @@ export class PricingEngine {
   }
 
   /**
+   * Surcharge plano de línea (p.ej. cargo único de diseño 3D en una cotización
+   * a medida). Reutiliza la misma lógica de comisión + régimen + IVA que
+   * `price()` para que el surcharge "pague" comisión y régimen igual que el
+   * unitPrice. No lleva markup ni se multiplica por cantidad: monto fijo
+   * por línea, agnóstico de la cantidad cotizada.
+   *
+   *   gross = rawAmount / (1 - commission% - regime%) × finalMultiplier
+   *
+   * Si el denominador no es positivo (comisión + régimen ≥ 100%) o falta la
+   * comisión por canal MARKETPLACE, devuelve 0 — el `price()` previo ya
+   * habrá emitido el warning correspondiente al caller.
+   */
+  surcharge(
+    rawAmount: number,
+    channel: ChannelPricingConfig,
+    globals: PricingGlobals,
+    customer: CustomerPricingProfile = {},
+  ): number {
+    if (rawAmount <= 0) return 0;
+    const commissionResult = this.resolveCommission(
+      channel,
+      { targetMarkupPct: 0 },
+      {},
+      globals,
+      customer,
+    );
+    if (commissionResult.missing) return 0;
+    const tax = this.computeTaxes(channel, globals, customer);
+    const denominator = 1 - commissionResult.value / 100 - tax.burdenPct / 100;
+    if (denominator <= 0) return 0;
+    return (rawAmount / denominator) * tax.finalMultiplier;
+  }
+
+  /**
    * Precedencia (de mayor a menor):
    *   customer.customMarkupPct > tier.markupPct > product.targetMarkupPct
    * El piso de tier (customer.minTierQty) no afecta acá: el caller resuelve

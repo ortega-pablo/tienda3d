@@ -57,30 +57,51 @@ export default async function QuoteDetailPage({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {quote.items.map((i) => (
-                  <tr key={i.id}>
-                    <td className="py-3 pr-4">
-                      <div className="font-medium">{i.description}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {i.productId ? 'Producto del catálogo' : 'Pieza a medida'}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono">{i.quantity}</td>
-                    <td className="py-3 pr-4 text-right font-mono text-muted-foreground">
-                      {formatMoney(i.unitCost)}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono">{formatMoney(i.unitPrice)}</td>
-                    <td
-                      className="py-3 pr-4 text-right font-mono text-emerald-700 dark:text-emerald-300"
-                      title="Ganancia de bolsillo por unidad — snapshot al crear la cotización."
-                    >
-                      {formatMoney(i.unitProfit)}
-                    </td>
-                    <td className="py-3 pr-4 text-right font-mono font-semibold">
-                      {formatMoney(i.lineTotal)}
-                    </td>
-                  </tr>
-                ))}
+                {quote.items.flatMap((i) => {
+                  const designSurcharge =
+                    i.adhocPayload && typeof i.adhocPayload.designSurcharge === 'number'
+                      ? i.adhocPayload.designSurcharge
+                      : 0;
+                  const productLineTotal = i.lineTotal - designSurcharge;
+                  const rows = [
+                    <tr key={i.id}>
+                      <td className="py-3 pr-4">
+                        <div className="font-medium">{i.description}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {i.productId ? 'Producto del catálogo' : 'Pieza a medida'}
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4 text-right font-mono">{i.quantity}</td>
+                      <td className="py-3 pr-4 text-right font-mono text-muted-foreground">
+                        {formatMoney(i.unitCost)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-mono">{formatMoney(i.unitPrice)}</td>
+                      <td
+                        className="py-3 pr-4 text-right font-mono text-emerald-700 dark:text-emerald-300"
+                        title="Ganancia de bolsillo por unidad — snapshot al crear la cotización."
+                      >
+                        {formatMoney(i.unitProfit)}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-mono font-semibold">
+                        {formatMoney(productLineTotal)}
+                      </td>
+                    </tr>,
+                  ];
+                  if (designSurcharge > 0) {
+                    rows.push(
+                      <tr key={`${i.id}-design`} className="text-muted-foreground">
+                        <td className="py-2 pr-4 pl-4 text-sm italic">
+                          Cargo único de diseño
+                        </td>
+                        <td colSpan={4} />
+                        <td className="py-2 pr-4 text-right font-mono">
+                          {formatMoney(designSurcharge)}
+                        </td>
+                      </tr>,
+                    );
+                  }
+                  return rows;
+                })}
               </tbody>
               <tfoot className="border-t">
                 <tr>

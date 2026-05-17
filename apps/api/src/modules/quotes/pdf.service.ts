@@ -114,6 +114,16 @@ export class PdfService {
     doc.fillColor('#0f172a').fontSize(10);
 
     for (const item of quote.items) {
+      // Si el item ADHOC tiene cargo de diseño, lo mostramos como sub-línea
+      // separada para que el cliente vea el desglose. La fila principal pasa
+      // a mostrar (qty × unitPrice), y la sub-fila aporta el diseño hasta
+      // sumar el lineTotal persistido.
+      const designSurcharge =
+        item.adhocPayload && typeof item.adhocPayload.designSurcharge === 'number'
+          ? item.adhocPayload.designSurcharge
+          : 0;
+      const productLineTotal = item.lineTotal - designSurcharge;
+
       const rowY = doc.y;
       doc.text(item.description, startX, rowY, { width: widths[0] });
       doc.text(this.fmtQty(item.quantity), startX + widths[0]!, rowY, {
@@ -125,12 +135,28 @@ export class PdfService {
         align: 'right',
       });
       doc.text(
-        FORMATTER.format(item.lineTotal),
+        FORMATTER.format(productLineTotal),
         startX + widths[0]! + widths[1]! + widths[2]!,
         rowY,
         { width: widths[3], align: 'right' },
       );
       doc.moveDown(0.6);
+
+      if (designSurcharge > 0) {
+        const subY = doc.y;
+        doc
+          .fontSize(9)
+          .fillColor('#475569')
+          .text('  Cargo único de diseño', startX, subY, { width: widths[0] });
+        doc.text(
+          FORMATTER.format(designSurcharge),
+          startX + widths[0]! + widths[1]! + widths[2]!,
+          subY,
+          { width: widths[3], align: 'right' },
+        );
+        doc.fontSize(10).fillColor('#0f172a');
+        doc.moveDown(0.6);
+      }
     }
 
     doc.moveDown(0.3);
