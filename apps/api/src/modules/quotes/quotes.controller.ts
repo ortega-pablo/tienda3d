@@ -98,6 +98,14 @@ const adhocCostSchema = z.object({
   payload: adhocPayloadSchema,
 });
 
+const keychainMatrixSchema = z.object({
+  channelId: z.string().min(1),
+  customerId: z.string().min(1).nullable().optional(),
+  // Payload sin templateKind ni designMinutes/Surcharge: el endpoint los
+  // computa para cada tier de la grilla y devuelve filas comparativas.
+  payload: adhocPayloadSchema,
+});
+
 @UseGuards(PermissionsGuard)
 @Controller('quotes')
 export class QuotesController {
@@ -140,6 +148,20 @@ export class QuotesController {
   @Post('adhoc-cost')
   adhocCost(@Body(ZodValidation(adhocCostSchema)) body: z.infer<typeof adhocCostSchema>) {
     return this.costing.forAdhoc(body.payload);
+  }
+
+  /**
+   * Devuelve el precio unitario y total para cada tier de llaveros, con el
+   * mismo payload (materiales/minutos). Se usa para la tabla comparativa de
+   * `/cotizaciones/nueva-llaveros`: el vendedor ve el incentivo de saltar de
+   * tier sin tener que cambiar la cantidad y recalcular una por una.
+   */
+  @Permissions('quote:create')
+  @Post('keychain-matrix')
+  keychainMatrix(
+    @Body(ZodValidation(keychainMatrixSchema)) body: z.infer<typeof keychainMatrixSchema>,
+  ) {
+    return this.quotes.keychainMatrix(body);
   }
 
   @Permissions('quote:read')

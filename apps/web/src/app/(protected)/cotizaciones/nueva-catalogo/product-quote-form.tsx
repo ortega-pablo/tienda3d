@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -22,11 +22,6 @@ export interface ProductLite {
   categoryId: string | null;
   categoryName: string | null;
 }
-export interface ChannelLite {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
 export interface CustomerOption {
   id: string;
   name: string;
@@ -34,7 +29,6 @@ export interface CustomerOption {
   email: string | null;
   phone: string | null;
   isActive: boolean;
-  defaultChannelId: string | null;
   skipChannelCommission: boolean;
   skipMarketing: boolean;
   skipRegime: boolean;
@@ -62,18 +56,24 @@ const newItem = (productId = ''): ItemDraft => ({
 
 export function ProductQuoteForm({
   products,
-  channels,
   customers,
+  ventaDirectaId,
+  efectivoId,
 }: {
   products: ProductLite[];
-  channels: ChannelLite[];
   customers: CustomerOption[];
+  /** Id del canal "Venta Directa" — default (con factura). */
+  ventaDirectaId: string;
+  /** Id del canal "Efectivo" — usado cuando se tilda "sin factura". */
+  efectivoId: string;
 }) {
   const router = useRouter();
   const [customerId, setCustomerId] = useState<string>('');
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', notes: '' });
-  const [channelId, setChannelId] = useState(channels[0]?.id ?? '');
-  const [withInvoice, setWithInvoice] = useState(false);
+  // Default: sin tildar = con factura = Venta Directa.
+  // Tildado = sin factura = canal Efectivo.
+  const [withoutInvoice, setWithoutInvoice] = useState(false);
+  const channelId = withoutInvoice ? efectivoId : ventaDirectaId;
   const [validUntil, setValidUntil] = useState('');
   const [discount, setDiscount] = useState('0');
   const [notes, setNotes] = useState('');
@@ -83,8 +83,8 @@ export function ProductQuoteForm({
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
 
-  // Cuando se selecciona un cliente: autocomplete + canal default + reset
-  // de previews para forzar recálculo con el profile.
+  // Cuando se selecciona un cliente: autocomplete + reset de previews
+  // para forzar recálculo con el profile.
   const onCustomerChange = (id: string) => {
     setCustomerId(id);
     setPreviews({});
@@ -96,12 +96,35 @@ export function ProductQuoteForm({
         phone: c.phone ?? '',
         notes: '',
       });
-      if (c.defaultChannelId) setChannelId(c.defaultChannelId);
     } else {
       // Limpio (vuelve a walk-in).
       setCustomer({ name: '', email: '', phone: '', notes: '' });
     }
   };
+
+  // Cuando cambia el canal (toggle "sin factura"), invalidar previews
+  // existentes. Los items que ya tenían preview se vuelven a calcular en
+  // un useEffect aparte para no bloquear el toggle.
+  useEffect(() => {
+    setPreviews((prev) => {
+      // Marcamos como 'loading' los que ya tenían resultado para que el UI
+      // muestre el spinner mientras refresca.
+      const next: Record<number, ItemPreview | 'loading' | 'error'> = {};
+      for (const [idx, val] of Object.entries(prev)) {
+        if (val && typeof val === 'object') next[Number(idx)] = 'loading';
+      }
+      return next;
+    });
+    // Re-fetch en paralelo. Disparamos sin await para no bloquear.
+    Object.keys(previews).forEach((k) => {
+      const idx = Number(k);
+      const prev = previews[idx];
+      if (prev && typeof prev === 'object') {
+        void previewItem(idx);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withoutInvoice]);
 
   const setItem = (idx: number, patch: Partial<ItemDraft>) => {
     setItems((arr) => {
@@ -119,7 +142,7 @@ export function ProductQuoteForm({
       const result = await api<ItemPreview>('/quotes/preview-item', {
         method: 'POST',
         body: {
-          channelId: channelId || null,
+          channelId,
           customerId: customerId || null,
           item: {
             type: 'PRODUCT',
@@ -146,8 +169,10 @@ export function ProductQuoteForm({
           customerEmail: customer.email || null,
           customerPhone: customer.phone || null,
           customerNotes: customer.notes || null,
-          channelId: channelId || null,
-          withInvoice,
+          channelId,
+          // El motor sigue usando `withInvoice` para metadata del Quote;
+          // el flag visible es su negación.
+          withInvoice: !withoutInvoice,
           validUntil: validUntil ? new Date(validUntil).toISOString() : null,
           notes: notes || null,
           discount: Number(discount || '0'),
@@ -184,7 +209,7 @@ export function ProductQuoteForm({
       <div className="space-y-4 lg:col-span-2">
         <Card>
           <CardHeader>
-            <CardTitle>Cliente y canal</CardTitle>
+            <CardTitle>Cliente</CardTitle>
             {selectedCustomer && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
@@ -255,20 +280,6 @@ export function ProductQuoteForm({
                 disabled={!!selectedCustomer}
               />
             </Field>
-            <Field label="Canal">
-              <select
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-              >
-                <option value="">— sin canal —</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Email">
               <Input
                 type="email"
@@ -297,12 +308,17 @@ export function ProductQuoteForm({
                 onChange={(e) => setDiscount(e.target.value)}
               />
             </Field>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 rounded-md border bg-muted/20 p-3">
               <Checkbox
-                label="Operación con factura"
-                checked={withInvoice}
-                onChange={(e) => setWithInvoice(e.target.checked)}
+                label="Operación sin factura"
+                checked={withoutInvoice}
+                onChange={(e) => setWithoutInvoice(e.target.checked)}
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {withoutInvoice
+                  ? 'Aplica escalas del canal Efectivo (sin IVA ni régimen).'
+                  : 'Aplica escalas de Venta Directa (con régimen unificado).'}
+              </p>
             </div>
             <div className="sm:col-span-2">
               <Field label="Notas">
@@ -405,7 +421,9 @@ export function ProductQuoteForm({
       <Card className="lg:sticky lg:top-20">
         <CardHeader>
           <CardTitle>Resumen</CardTitle>
-          <CardDescription>Aproximado en base a las previsualizaciones.</CardDescription>
+          <CardDescription>
+            {withoutInvoice ? 'Aplicado al canal Efectivo.' : 'Aplicado a Venta Directa.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <div className="flex justify-between">

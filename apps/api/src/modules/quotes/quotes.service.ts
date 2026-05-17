@@ -359,6 +359,90 @@ export class QuotesService {
     };
   }
 
+  /**
+   * Devuelve precio por unidad y total para cada tier de llaveros, con el
+   * mismo payload (materiales/minutos). Se itera la grilla seedeada en
+   * `keychain_tiers` con un qty representativo por tier (el minQty); el
+   * caller pinta la fila y el cliente decide en qué escala cotizar.
+   *
+   * Compartimos `buildItemRow` para no duplicar costing/comisión/régimen:
+   * cada fila se calcula como si fuese una cotización ADHOC con esa qty,
+   * solo que NO se persiste (descartamos el resultado luego de leer los
+   * campos relevantes).
+   */
+  async keychainMatrix(input: {
+    channelId: string;
+    customerId?: string | null;
+    payload: {
+      pieces: Array<{ name: string; grams: number; printMinutes: number; filamentId: string }>;
+      materials: Array<{ materialId: string; quantity: number }>;
+      assemblyMinutes: number;
+      managementMinutes: number;
+      designMinutes?: number;
+    };
+  }): Promise<{
+    tiers: Array<{
+      tierId: string;
+      tierLabel: string;
+      minQty: number;
+      maxQty: number | null;
+      markupPct: number;
+      unitPrice: number;
+      unitProfit: number;
+      lineTotal: number;
+      designSurcharge: number;
+    }>;
+  }> {
+    const tiers = await this.keychainTiers.list();
+    if (tiers.length === 0) {
+      return { tiers: [] };
+    }
+
+    const customerCtx = input.customerId
+      ? await this.resolveCustomerContext(input.customerId, [])
+      : null;
+
+    const rows = await Promise.all(
+      tiers.map(async (tier) => {
+        // Usamos el minQty como cantidad representativa del tier.
+        const item = {
+          type: 'ADHOC' as const,
+          description: 'Llavero personalizado',
+          quantity: tier.minQty,
+          payload: {
+            ...input.payload,
+            templateKind: 'KEYCHAIN' as const,
+          },
+        };
+        const row = await this.buildItemRow(item, input.channelId, customerCtx);
+        const adhocPayload = row.adhocPayload as
+          | { designSurcharge?: number; appliedMarkupPct?: number }
+          | null;
+        const designSurcharge =
+          adhocPayload && typeof adhocPayload.designSurcharge === 'number'
+            ? adhocPayload.designSurcharge
+            : 0;
+        return {
+          tierId: tier.id,
+          tierLabel:
+            tier.maxQty == null
+              ? `${tier.minQty}+`
+              : tier.minQty === tier.maxQty
+                ? `${tier.minQty}`
+                : `${tier.minQty}-${tier.maxQty}`,
+          minQty: tier.minQty,
+          maxQty: tier.maxQty,
+          markupPct: tier.markupPct,
+          unitPrice: Number(row.unitPrice),
+          unitProfit: Number(row.unitProfit ?? 0),
+          lineTotal: Number(row.lineTotal),
+          designSurcharge,
+        };
+      }),
+    );
+    return { tiers: rows };
+  }
+
   // ----- internals -----
 
   private async buildItemRow(

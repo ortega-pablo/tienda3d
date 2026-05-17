@@ -1,13 +1,20 @@
+import { notFound } from 'next/navigation';
 import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
 import {
   RapidQuoteForm,
-  type ChannelLite,
   type CustomerOption,
   type FilamentLite,
   type KeychainTierLite,
   type MaterialLite,
 } from '../nueva-a-medida/rapid-quote-form';
+
+interface ChannelLite {
+  id: string;
+  slug: string;
+  name: string;
+  isActive: boolean;
+}
 
 export default async function NewKeychainQuotePage() {
   const user = await requirePermission('quote:create');
@@ -24,6 +31,12 @@ export default async function NewKeychainQuotePage() {
   ]);
   const nonFilaments = materials.filter((m) => m.type !== 'FILAMENT' && m.isActive);
 
+  const ventaDirecta = channels.find((c) => c.slug === 'directa' && c.isActive);
+  const efectivo = channels.find((c) => c.slug === 'efectivo' && c.isActive);
+  if (!ventaDirecta || !efectivo) {
+    notFound();
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -37,10 +50,11 @@ export default async function NewKeychainQuotePage() {
       </header>
       <RapidQuoteForm
         mode="keychain"
-        channels={channels.filter((c) => c.isActive)}
         filaments={filaments}
         nonFilaments={nonFilaments}
         customers={customers}
+        ventaDirectaId={ventaDirecta.id}
+        efectivoId={efectivo.id}
         keychainTiers={keychainTiers}
       />
     </div>
