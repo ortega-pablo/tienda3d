@@ -256,16 +256,48 @@ model Category {
   isActive  Boolean    @default(true)
   sortOrder Int        @default(0)
   notes     String?
+  /// Markup fallback de la categoría cuando ninguna `CategoryPriceTier` cubre
+  /// la cantidad cotizada (típicamente qty=1, antes del primer tier). Una
+  /// subcategoría sin tiers propios hereda los tiers del padre, pero el
+  /// baseMarkupPct se resuelve siempre en el nivel del producto: si el
+  /// producto está en la subcategoría, se usa el baseMarkupPct de la
+  /// subcategoría; cae al padre solo si la subcategoría no lo tiene
+  /// (representado con NULL en DB).
+  baseMarkupPct Decimal? @db.Decimal(6, 2)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
   products              Product[]
   customerCommitments   CustomerCategoryCommitment[]
   customerMonthlyVolumes CustomerMonthlyVolume[]
+  priceTiers            CategoryPriceTier[]
 
   @@index([parentId])
   @@index([isActive, sortOrder])
   @@map("categories")
+}
+
+/// Escala de markup por categoría y canal — reemplaza a `ProductPriceTier`.
+/// La misma categoría puede tener tiers distintas por canal (Venta Directa,
+/// Efectivo, MELI). Subcategoría hereda completas del padre cuando no carga
+/// las propias (regla todo-o-nada, no merge por tier).
+model CategoryPriceTier {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  channelId  String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  minQty     Int
+  /// null = tier abierto (sin tope superior).
+  maxQty     Int?
+  markupPct  Decimal  @db.Decimal(6, 2)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoryId, channelId, minQty])
+  @@index([categoryId, channelId])
+  @@map("category_price_tiers")
 }
 
 model Product {
@@ -286,20 +318,18 @@ model Product {
   assemblyMinutes   Decimal @default(0) @db.Decimal(8, 2)
   managementMinutes Decimal @default(0) @db.Decimal(8, 2)
 
-  // Pricing — Logic B (markup over cost). Profit per unit = cost × markup%.
-  // Same absolute profit across channels regardless of commission/regime.
-  targetMarkupPct Decimal @default(60) @db.Decimal(6, 2)
-
   // Operational metadata: which printer this product is manufactured on.
   // Required at the service layer; the cost model still uses the active
   // global Machine (this field is purely informational).
   machineId String?
   machine   Machine? @relation(fields: [machineId], references: [id])
 
-  // Categoría jerárquica (2 niveles). Opcional para no obligar a
-  // categorizar productos existentes en la migración.
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
+  // Categoría jerárquica (2 niveles). El markup del producto se deriva
+  // 100% de su categoría (vía `CategoryPriceTier` + `Category.baseMarkupPct`).
+  // Es obligatoria; productos huérfanos van a la categoría seed
+  // "sin-clasificar" creada por la migración.
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -307,7 +337,6 @@ model Product {
   pieces           ProductPiece[]
   materials        ProductMaterial[]
   channels         ProductChannel[]
-  priceTiers       ProductPriceTier[]
   productionOrders ProductionOrder[]
   quoteItems       QuoteItem[]
   customerProducts CustomerProduct[]
@@ -401,8 +430,7 @@ model Channel {
 
   productChannels ProductChannel[]
   quotes          Quote[]
-  /// Clientes que tienen este canal como default para sus pedidos del portal.
-  defaultForCustomers Customer[] @relation("CustomerDefaultChannel")
+  priceTiers      CategoryPriceTier[]
 
   @@map("channels")
 }
@@ -422,21 +450,6 @@ model ProductChannel {
 
   @@unique([productId, channelId])
   @@map("product_channels")
-}
-
-/// Wholesale scales declared once per product (1-9, 10-49, 50+, etc.).
-/// The same scale applies to every enabled channel — only the markup% changes.
-model ProductPriceTier {
-  id        String   @id @default(cuid())
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  minQty    Int
-  maxQty    Int?
-  markupPct Decimal? @db.Decimal(6, 2)
-  notes     String?
-
-  @@unique([productId, minQty])
-  @@map("product_price_tiers")
 }
 
 // ============================================================
@@ -642,14 +655,10 @@ model Customer {
   skipRegime            Boolean @default(false)
   skipReinvestment      Boolean @default(false)
 
-  /// Canal por defecto cuando el cliente cotiza desde el portal. Recomendado
-  /// en WHOLESALE/CONSIGNMENT (ej. canal "Mayorista transferencia"). Si null,
-  /// el portal pide elegir canal o falla con mensaje claro.
-  defaultChannelId String?
-  defaultChannel   Channel? @relation("CustomerDefaultChannel", fields: [defaultChannelId], references: [id])
-
   /// Cuando true, este cliente tiene cuenta de portal. El User asociado vive
-  /// en User.customerId (1:1).
+  /// en User.customerId (1:1). El canal aplicado a su cotización se deriva
+  /// del checkbox "sin factura" (VD por default, Efectivo si se tilda),
+  /// igual que en el flujo del staff — no se persiste un default por cliente.
   hasPortalAccess Boolean @default(false)
   portalUser      User?   @relation("CustomerPortalUser")
 
@@ -667,7 +676,6 @@ model Customer {
   quotes              Quote[]
 
   @@index([type, isActive])
-  @@index([defaultChannelId])
   @@map("customers")
 }
 

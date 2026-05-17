@@ -323,6 +323,25 @@ async function seedDemoSupplierPrices(materials: {
   await ensureCurrentPrice(materials.sheets.id, 17_844 / 500);
 }
 
+async function seedUnsortedCategory() {
+  // Categoría parking lot para productos sin clasificar. La migración la
+  // crea con id estable `cat_unsorted` para que productos huérfanos puedan
+  // sobrevivir el cambio a `categoryId NOT NULL`. Este upsert garantiza
+  // que también existe en setups limpios (sin migración previa).
+  await prisma.category.upsert({
+    where: { slug: 'sin-clasificar' },
+    update: {},
+    create: {
+      id: 'cat_unsorted',
+      name: 'Sin clasificar',
+      slug: 'sin-clasificar',
+      isActive: true,
+      sortOrder: 9999,
+      baseMarkupPct: 100,
+    },
+  });
+}
+
 async function seedDemoProduct(materials: {
   pla: { id: string };
   sheets: { id: string };
@@ -340,6 +359,9 @@ async function seedDemoProduct(materials: {
         estimatedUnitsMonth: 20,
         assemblyMinutes: 45,
         managementMinutes: 15,
+        // Demo product entra en "sin-clasificar". El admin lo reclasifica
+        // después de cargar las categorías reales.
+        categoryId: 'cat_unsorted',
         pieces: {
           create: [
             { name: 'Tapa delantera', grams: 60, printMinutes: 150, defaultFilamentId: materials.pla.id, sortOrder: 0 },
@@ -402,6 +424,8 @@ async function main() {
   console.log('✔ Global parameters (from Excel)');
   await seedKeychainTiers();
   console.log('✔ Keychain bulk tiers (1-4 / 5-20 / 25-35 / 40-95 / 100+)');
+  await seedUnsortedCategory();
+  console.log('✔ "Sin clasificar" category (parking lot)');
   await seedMachine();
   console.log('✔ Machine (Bambu Lab A1)');
   await seedChannels();
