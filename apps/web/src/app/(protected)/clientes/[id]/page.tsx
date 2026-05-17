@@ -72,11 +72,7 @@ export default async function CustomerDetailPage({
         </div>
       </header>
 
-      <CustomerEditor
-        mode="edit"
-        customer={customer}
-        availableChannels={channels.filter((c) => c.isActive)}
-      />
+      <CustomerEditor mode="edit" customer={customer} />
 
       {customer.type === 'WHOLESALE' && (
         <>

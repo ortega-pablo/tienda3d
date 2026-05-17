@@ -9,7 +9,6 @@ export interface CustomerLite {
   taxId: string | null;
   isActive: boolean;
   hasPortalAccess: boolean;
-  defaultChannelId: string | null;
   skipChannelCommission: boolean;
   skipMarketing: boolean;
   skipRegime: boolean;

@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronDown,
   ChevronRight,
   EyeOff,
   FolderPlus,
+  Layers,
   Pencil,
   Plus,
   Trash2,
@@ -35,6 +37,8 @@ export interface CategoryNode {
   isActive: boolean;
   sortOrder: number;
   notes: string | null;
+  /** Markup fallback. null = hereda del padre. */
+  baseMarkupPct: number | null;
   productCount: number;
   children?: CategoryNode[];
 }
@@ -241,9 +245,18 @@ function CategoryRow({
           · {cat.productCount} producto(s)
           {!isChild && hasChildren ? ` · ${cat.children?.length ?? 0} subcategoría(s)` : ''}
         </span>
+        <span className="ml-2 inline-flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[11px] font-mono">
+          base {cat.baseMarkupPct != null ? `${cat.baseMarkupPct}%` : '— heredado'}
+        </span>
       </div>
 
       <div className="hidden gap-1 group-hover:flex">
+        <Button asChild variant="ghost" size="sm" title="Editar escalas por canal">
+          <Link href={`/categorias/${cat.id}`}>
+            <Layers className="h-4 w-4" />
+            <span className="hidden sm:inline">Escalas</span>
+          </Link>
+        </Button>
         {onAddChild && (
           <Button variant="ghost" size="sm" onClick={onAddChild} title="Agregar subcategoría">
             <FolderPlus className="h-4 w-4" />

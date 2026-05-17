@@ -203,14 +203,24 @@ export default async function AccountingPage() {
         <Block heading="Resolución del markup">
           <ol className="ml-4 list-decimal space-y-1">
             <li>
-              Si la cantidad cae dentro de una <Code>ProductPriceTier</Code>, se usa el{' '}
-              <Code>markupPct</Code> de la escala.
+              <Code>customer.customMarkupPct</Code> (clientes SPECIAL) — pisa todo si está cargado.
             </li>
             <li>
-              Si no, se usa el <Code>targetMarkupPct</Code> del producto (campo{' '}
-              <Code>products.targetMarkupPct</Code>).
+              Si la cantidad cae dentro de una <Code>CategoryPriceTier</Code> de la categoría del
+              producto (o de su padre por herencia), se usa el <Code>markupPct</Code> de esa escala.
+            </li>
+            <li>
+              Si no, se usa el <Code>baseMarkupPct</Code> de la categoría (con fallback a la
+              categoría padre cuando la subcategoría no lo define).
             </li>
           </ol>
+          <p className="mt-2 text-[11px]">
+            Las escalas se editan en{' '}
+            <a className="underline" href="/categorias">
+              /categorias/:id
+            </a>{' '}
+            (tabs por canal). El producto solo lleva costo y categoría — el markup se deriva.
+          </p>
         </Block>
 
         <Block heading="Resolución de la comisión por tipo de canal">

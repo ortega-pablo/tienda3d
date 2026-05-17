@@ -82,11 +82,11 @@ export interface ProductDto {
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
   managementMinutes: number;
-  targetMarkupPct: number;
   machineId: string | null;
   machineName: string | null;
-  categoryId: string | null;
-  categoryName: string | null;
+  /** Categoría obligatoria — el markup viene 100% de ella. */
+  categoryId: string;
+  categoryName: string;
   categoryParentId: string | null;
   pieces: Array<{
     id: string;
@@ -170,7 +170,6 @@ interface FormState {
   estimatedUnitsMonth: string;
   assemblyMinutes: string;
   managementMinutes: string;
-  targetMarkupPct: string;
   machineId: string;
   categoryId: string;
   pieces: PieceState[];
@@ -214,9 +213,8 @@ function buildInitialState(
       estimatedUnitsMonth: product.estimatedUnitsMonth.toString(),
       assemblyMinutes: product.assemblyMinutes.toString(),
       managementMinutes: product.managementMinutes.toString(),
-      targetMarkupPct: product.targetMarkupPct.toString(),
       machineId: product.machineId ?? '',
-      categoryId: product.categoryId ?? '',
+      categoryId: product.categoryId,
       pieces: product.pieces.map((piece) => ({
         id: piece.id,
         name: piece.name,
@@ -239,7 +237,6 @@ function buildInitialState(
     estimatedUnitsMonth: '1',
     assemblyMinutes: '0',
     managementMinutes: '0',
-    targetMarkupPct: '60',
     machineId: '',
     categoryId: '',
     // Form arranca vacío: el usuario decide si agregar piezas, insumos o ambos.
@@ -336,9 +333,8 @@ export function ProductEditor({
     estimatedUnitsMonth: Number(form.estimatedUnitsMonth),
     assemblyMinutes: Number(form.assemblyMinutes),
     managementMinutes: Number(form.managementMinutes),
-    targetMarkupPct: Number(form.targetMarkupPct || '0'),
     machineId: form.machineId || null,
-    categoryId: form.categoryId || null,
+    categoryId: form.categoryId,
     pieces: form.pieces.map((p, idx) => ({
       name: p.name,
       grams: Number(p.grams),
@@ -382,7 +378,8 @@ export function ProductEditor({
   const isFormValid = useMemo<boolean>(() => {
     if (!form.name.trim()) return false;
     if (!form.machineId) return false;
-    if (!form.targetMarkupPct || Number(form.targetMarkupPct) < 0) return false;
+    // Categoría obligatoria: el markup viene 100% de la categoría/subcategoría.
+    if (!form.categoryId) return false;
 
     // Validar piezas (todos sus campos obligatorios cuando la pieza existe).
     for (const p of form.pieces) {
@@ -525,23 +522,6 @@ export function ProductEditor({
               />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Markup objetivo (% sobre costo)" required>
-                <div className="space-y-1">
-                  <Input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={form.targetMarkupPct}
-                    onChange={(e) => setForm({ ...form, targetMarkupPct: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Define la ganancia absoluta por unidad: <strong>profit = costo × markup%</strong>.
-                    Igual en todos los canales — el precio se ajusta para que vos ganes lo mismo.
-                  </p>
-                </div>
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
               <Field label="Máquina (impresora)" required>
                 <select
                   value={form.machineId}
@@ -563,13 +543,13 @@ export function ProductEditor({
               </Field>
             </div>
             <div className="sm:col-span-2">
-              <Field label="Categoría">
+              <Field label="Categoría" required>
                 <select
                   value={form.categoryId}
                   onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <option value="">Sin categoría</option>
+                  <option value="">Seleccioná una categoría…</option>
                   {categories.map((parent) => {
                     const childOptions = (parent.children ?? [])
                       .filter((c) => c.isActive || c.id === form.categoryId)
@@ -596,8 +576,9 @@ export function ProductEditor({
                   })}
                 </select>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Usada para filtrar el catálogo de los clientes mayoristas asociados a esa
-                  categoría. <a className="underline" href="/categorias">Gestionar categorías</a>.
+                  El <strong>markup y las escalas vienen de la categoría</strong> (con herencia
+                  subcategoría → padre). Configuralas en{' '}
+                  <a className="underline" href="/categorias">Gestionar categorías</a>.
                 </p>
               </Field>
             </div>
@@ -873,7 +854,7 @@ export function ProductEditor({
         </fieldset>
       </div>
 
-      <CostPanel cost={cost} mode={mode} markupPct={Number(form.targetMarkupPct) || 0} />
+      <CostPanel cost={cost} mode={mode} />
     </div>
   );
 }
@@ -898,11 +879,9 @@ function Field({
 function CostPanel({
   cost,
   mode,
-  markupPct,
 }: {
   cost: CostingResult | null;
   mode: 'create' | 'edit';
-  markupPct: number;
 }) {
   if (mode === 'create') {
     return (
@@ -925,12 +904,13 @@ function CostPanel({
     );
   }
 
-  // Logic C v3: profit = fabricationPrice × markup% (la "ganancia de bolsillo").
-  // Fallback al alias legacy si el backend aún no devuelve fabricationPrice.
+  // Logic C v3: el markup es por tier (per canal + qty), así que la ganancia
+  // de bolsillo varía. Acá solo mostramos el costo; los precios y profits
+  // detallados se ven en la matriz de precios debajo, alimentada por las
+  // escalas de la categoría del producto.
   const fabrication = cost.fabricationPrice ?? cost.costWithProvisions;
   const otherWithReab = cost.materials.totalWithReplenishment ?? cost.materials.total;
   const totalCost = cost.totalCost ?? cost.costWithProvisions;
-  const pocketProfit = fabrication * (markupPct / 100);
   const filamentReab = cost.filament.replenishment ?? 0;
   const filamentWithReab = cost.filament.totalWithReplenishment ?? cost.filament.total;
   const materialsReab = cost.materials.replenishment ?? 0;
@@ -1001,21 +981,11 @@ function CostPanel({
           <Row label="Costo total" value={totalCost} bold />
         </dl>
 
-        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                Ganancia de bolsillo
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                {markupPct}% sobre fabricación · igual en todos los canales
-              </div>
-            </div>
-            <div className="font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-300">
-              {formatMoney(pocketProfit)}
-            </div>
-          </div>
-        </div>
+        <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+          La ganancia y el precio final dependen del tier y canal. Mirá la
+          matriz de precios debajo — viene de las escalas configuradas en la
+          categoría del producto.
+        </p>
 
         {cost.warnings.length > 0 && (
           <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs">

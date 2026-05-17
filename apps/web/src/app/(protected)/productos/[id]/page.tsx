@@ -10,7 +10,7 @@ import {
   type MaterialLite,
   type ProductDto,
 } from './product-editor';
-import { ProductPrices, type ProductPricesResponse, type TierDto } from './product-prices';
+import { ProductPrices, type ProductPricesResponse } from './product-prices';
 
 export default async function ProductDetailPage({
   params,
@@ -28,12 +28,11 @@ export default async function ProductDetailPage({
     throw err;
   }
 
-  const [materials, cost, prices, channels, tiers, machines, categories] = await Promise.all([
+  const [materials, cost, prices, channels, machines, categories] = await Promise.all([
     api<MaterialLite[]>('/materials'),
     api<CostingResult>(`/products/${id}/cost`).catch(() => null),
     api<ProductPricesResponse>(`/products/${id}/prices`).catch(() => null),
     api<ChannelLite[]>('/channels'),
-    api<TierDto[]>(`/products/${id}/tiers`).catch(() => [] as TierDto[]),
     api<MachineLite[]>('/machines'),
     api<CategoryLite[]>('/categories'),
   ]);
@@ -58,7 +57,7 @@ export default async function ProductDetailPage({
         initialCost={cost}
       />
 
-      <ProductPrices productId={id} initialPrices={prices} initialTiers={tiers} />
+      <ProductPrices prices={prices} categoryId={product.categoryId} />
     </div>
   );
 }
