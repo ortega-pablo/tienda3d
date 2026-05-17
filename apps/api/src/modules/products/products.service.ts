@@ -98,7 +98,6 @@ export interface ProductChannelInput {
 }
 export interface ProductInput {
   name: string;
-  sku?: string | null;
   description?: string | null;
   imageUrl?: string | null;
   isActive?: boolean;
@@ -164,11 +163,6 @@ export class ProductsService {
   }
 
   async create(input: ProductInput): Promise<ProductDto> {
-    if (input.sku) {
-      const exists = await this.prisma.product.findUnique({ where: { sku: input.sku } });
-      if (exists) throw new ConflictException('SKU ya registrado');
-    }
-
     if (!input.machineId) {
       throw new BadRequestException(
         'Asigná la máquina (impresora) en la que se fabrica este producto.',
@@ -185,10 +179,14 @@ export class ProductsService {
     const channels = await this.resolveChannels(input.channels);
     await this.validateChannels(channels);
 
+    // SKU auto-generado. La secuencia Postgres es atómica: dos creaciones
+    // simultáneas reciben números distintos sin colisión.
+    const sku = await this.generateNextSku();
+
     const product = await this.prisma.product.create({
       data: {
         name: input.name,
-        sku: input.sku ?? null,
+        sku,
         description: input.description ?? null,
         imageUrl: input.imageUrl ?? null,
         isActive: input.isActive ?? true,
@@ -230,10 +228,8 @@ export class ProductsService {
   async update(id: string, input: ProductInput): Promise<ProductDto> {
     const exists = await this.prisma.product.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Producto inexistente');
-    if (input.sku && input.sku !== exists.sku) {
-      const skuConflict = await this.prisma.product.findUnique({ where: { sku: input.sku } });
-      if (skuConflict) throw new ConflictException('SKU ya registrado');
-    }
+    // El SKU es inmutable: se asigna al crear y nunca cambia (incluso si el
+    // usuario lo mandara en el payload, lo ignoramos).
 
     if (!input.machineId) {
       throw new BadRequestException(
@@ -260,7 +256,7 @@ export class ProductsService {
         where: { id },
         data: {
           name: input.name,
-          sku: input.sku ?? null,
+          // sku no se incluye: es inmutable, vive desde la creación.
           description: input.description ?? null,
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive ?? true,
@@ -374,6 +370,22 @@ export class ProductsService {
         );
       }
     }
+  }
+
+  /**
+   * Genera el próximo SKU disponible usando la secuencia Postgres
+   * `product_sku_seq`. La secuencia es atómica: dos creaciones concurrentes
+   * reciben números distintos sin race condition.
+   *
+   * Formato: PTK-PROD-NNNNNN (PTK-PROD-000001, PTK-PROD-000002, ...).
+   * Las variantes futuras agregan -V01, -V02, ... al final.
+   */
+  private async generateNextSku(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<Array<{ next: bigint }>>`
+      SELECT nextval('product_sku_seq') AS next
+    `;
+    const n = rows[0]?.next ?? BigInt(1);
+    return `PTK-PROD-${n.toString().padStart(6, '0')}`;
   }
 
   private async assertMachineExists(machineId: string): Promise<void> {

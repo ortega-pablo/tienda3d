@@ -164,7 +164,6 @@ const EMPTY_PIECE: PieceState = {
 
 interface FormState {
   name: string;
-  sku: string;
   description: string;
   isActive: boolean;
   marketingMonthly: string;
@@ -209,7 +208,6 @@ function buildInitialState(
   if (product) {
     return {
       name: product.name,
-      sku: product.sku ?? '',
       description: product.description ?? '',
       isActive: product.isActive,
       marketingMonthly: product.marketingMonthly.toString(),
@@ -235,7 +233,6 @@ function buildInitialState(
   }
   return {
     name: '',
-    sku: '',
     description: '',
     isActive: true,
     marketingMonthly: '0',
@@ -333,7 +330,6 @@ export function ProductEditor({
 
   const buildPayload = () => ({
     name: form.name,
-    sku: form.sku || null,
     description: form.description || null,
     isActive: form.isActive,
     marketingMonthly: Number(form.marketingMonthly),
@@ -486,7 +482,15 @@ export function ProductEditor({
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </Field>
             <Field label="SKU">
-              <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+              <Input
+                value={mode === 'edit' && product?.sku ? product.sku : 'Se asigna al guardar (PTK-PROD-NNNNNN)'}
+                disabled
+                readOnly
+                className="font-mono"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Auto-generado por el sistema. Inmutable después de la creación.
+              </p>
             </Field>
             <Field label="Marketing mensual ($)">
               <Input

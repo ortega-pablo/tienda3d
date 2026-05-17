@@ -43,7 +43,8 @@ const channelLineSchema = z.object({
 const inputSchema = z
   .object({
     name: z.string().min(1).max(160),
-    sku: z.string().max(60).nullable().optional(),
+    // sku no se acepta del input: se auto-genera al crear (PTK-PROD-NNNNNN)
+    // y es inmutable después.
     description: z.string().max(2000).nullable().optional(),
     imageUrl: z.string().url().nullable().optional(),
     isActive: z.boolean().optional(),
