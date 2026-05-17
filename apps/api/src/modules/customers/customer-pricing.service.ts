@@ -7,6 +7,45 @@ import { PricingService, type ProductPricesResponse } from '../pricing/pricing.s
 import type { ProductPricingInputs } from '../pricing/pricing.types';
 import { CustomersService } from './customers.service';
 
+type PriceTier = {
+  id: string;
+  productId: string;
+  minQty: number;
+  maxQty: number | null;
+  markupPct: unknown;
+  notes: string | null;
+};
+
+/**
+ * Fusiona las tiers que quedan por debajo del piso del cliente con la tier
+ * que CONTIENE el piso, en una sola tier "extendida".
+ *
+ * Ejemplo: tiers [1-4, 5-9, 10-24, 25+] con piso=5 → [1-9, 10-24, 25+].
+ * La nueva tier conserva el `markupPct` y `maxQty` de la tier piso, y toma
+ * el `minQty` de la primera tier original (típicamente 1). Las tiers por
+ * encima del piso se mantienen sin cambios.
+ *
+ * Si el piso es null o no cae dentro de ninguna tier, devuelve las tiers
+ * originales sin tocar.
+ */
+function mergeTiersBelowFloor<T extends PriceTier>(
+  tiers: T[],
+  floor: number | null | undefined,
+): T[] {
+  if (floor == null) return tiers;
+  const first = tiers[0];
+  if (!first) return tiers;
+
+  const floorIdx = tiers.findIndex(
+    (t) => t.minQty <= floor && (t.maxQty == null || t.maxQty >= floor),
+  );
+  if (floorIdx <= 0) return tiers;
+
+  const floorTier = tiers[floorIdx]!;
+  const merged = { ...floorTier, minQty: first.minQty } as T;
+  return [merged, ...tiers.slice(floorIdx + 1)];
+}
+
 @Injectable()
 export class CustomerPricingService {
   constructor(
@@ -73,14 +112,13 @@ export class CustomerPricingService {
           marketplaceCommissionPct: pc.commissionPct ? dec(pc.commissionPct) : null,
         };
 
-        // Tier piso: si el cliente tiene minTierQty, omitimos las tiers que
-        // terminan antes del piso (cantidad real < piso → el cliente no
-        // accede a esas escalas). La tier que CONTIENE el piso es la primera
-        // visible. Si no hay piso, se muestran todas.
-        const visibleTiers =
-          profile.minTierQty != null
-            ? tiers.filter((t) => t.maxQty == null || t.maxQty >= profile.minTierQty!)
-            : tiers;
+        // Tier piso: si el cliente tiene minTierQty, fusionamos las tiers que
+        // van desde la primera hasta la que CONTIENE el piso en una sola
+        // tier "extendida" cuyo rango arranca en el minQty original (típico
+        // 1) y termina en el maxQty de la tier piso, con el markup de la
+        // tier piso. Así el cliente ve, por ejemplo, "1-9" en lugar de
+        // "1-4 + 5-9" cuando su piso es 5.
+        const visibleTiers = mergeTiersBelowFloor(tiers, profile.minTierQty);
         const base =
           visibleTiers.length === 0
             ? this.engine.price(costInputs, cfg, productInputs, globals, {}, profile)
