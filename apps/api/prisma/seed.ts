@@ -365,6 +365,32 @@ async function seedDemoProduct(materials: {
   }
 }
 
+async function seedKeychainTiers() {
+  // Estructura inmutable (5 filas). Solo el markupPct se edita después
+  // desde /parametros/llaveros. Los ids son fijos para que el upsert sea
+  // idempotente entre re-seeds y la migración inicial.
+  const rows: Array<{
+    id: string;
+    minQty: number;
+    maxQty: number | null;
+    markupPct: number;
+    sortOrder: number;
+  }> = [
+    { id: 'kt_1_4', minQty: 1, maxQty: 4, markupPct: 100, sortOrder: 1 },
+    { id: 'kt_5_20', minQty: 5, maxQty: 20, markupPct: 80, sortOrder: 2 },
+    { id: 'kt_25_35', minQty: 25, maxQty: 35, markupPct: 60, sortOrder: 3 },
+    { id: 'kt_40_95', minQty: 40, maxQty: 95, markupPct: 50, sortOrder: 4 },
+    { id: 'kt_100_up', minQty: 100, maxQty: null, markupPct: 35, sortOrder: 5 },
+  ];
+  for (const row of rows) {
+    await prisma.keychainTier.upsert({
+      where: { minQty: row.minQty },
+      update: {},
+      create: row,
+    });
+  }
+}
+
 async function main() {
   console.log('▶ Seeding database…');
   await seedPermissions();
@@ -374,6 +400,8 @@ async function main() {
   await seedAdminUser(roles.admin.id);
   await seedGlobalParams();
   console.log('✔ Global parameters (from Excel)');
+  await seedKeychainTiers();
+  console.log('✔ Keychain bulk tiers (1-4 / 5-20 / 25-35 / 40-95 / 100+)');
   await seedMachine();
   console.log('✔ Machine (Bambu Lab A1)');
   await seedChannels();

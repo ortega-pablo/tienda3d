@@ -41,6 +41,13 @@ const adhocPayloadSchema = z.object({
   assemblyMinutes: z.number().nonnegative(),
   managementMinutes: z.number().nonnegative(),
   designMinutes: z.number().nonnegative().optional(),
+  /**
+   * Si vale 'KEYCHAIN' el flujo aplica la escala fija de llaveros: valida
+   * que la cantidad respete la grilla (1..4 o múltiplo de 5) y resuelve el
+   * markup desde la tier que cubre la cantidad. Si está ausente, el flujo
+   * ADHOC corre como siempre (sin tier override).
+   */
+  templateKind: z.literal('KEYCHAIN').optional(),
 });
 
 const productItemSchema = z.object({

@@ -8,6 +8,7 @@ import {
   Factory,
   FileText,
   FolderTree,
+  KeyRound,
   Layers,
   LayoutDashboard,
   Package,
@@ -58,6 +59,12 @@ export const NAVIGATION: NavGroup[] = [
         label: 'Cotización a medida',
         href: '/cotizaciones/nueva-a-medida',
         icon: Zap,
+        permissions: ['quote:create'],
+      },
+      {
+        label: 'Cotización de llaveros',
+        href: '/cotizaciones/nueva-llaveros',
+        icon: KeyRound,
         permissions: ['quote:create'],
       },
       {
@@ -122,6 +129,12 @@ export const NAVIGATION: NavGroup[] = [
         label: 'Parámetros',
         href: '/parametros',
         icon: Cog,
+        permissions: ['parameter:read'],
+      },
+      {
+        label: 'Markups de llaveros',
+        href: '/parametros/llaveros',
+        icon: KeyRound,
         permissions: ['parameter:read'],
       },
       {

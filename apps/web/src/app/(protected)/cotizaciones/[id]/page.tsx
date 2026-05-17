@@ -68,7 +68,11 @@ export default async function QuoteDetailPage({
                       <td className="py-3 pr-4">
                         <div className="font-medium">{i.description}</div>
                         <div className="text-xs text-muted-foreground">
-                          {i.productId ? 'Producto del catálogo' : 'Pieza a medida'}
+                          {i.productId
+                            ? 'Producto del catálogo'
+                            : i.adhocPayload?.templateKind === 'KEYCHAIN'
+                              ? `Llavero — tier ${i.adhocPayload.tierLabel ?? ''} (markup ${i.adhocPayload.appliedMarkupPct}%)`
+                              : 'Pieza a medida'}
                         </div>
                       </td>
                       <td className="py-3 pr-4 text-right font-mono">{i.quantity}</td>

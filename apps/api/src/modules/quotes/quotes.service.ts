@@ -13,6 +13,7 @@ import {
   CustomersService,
   type CustomerWithRelations,
 } from '../customers/customers.service';
+import { KeychainTiersService } from '../keychain-tiers/keychain-tiers.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
 import type { CustomerPricingProfile } from '../pricing/pricing.types';
@@ -44,6 +45,7 @@ export class QuotesService {
     private readonly tiers: ProductTiersService,
     private readonly audit: AuditService,
     private readonly customers: CustomersService,
+    private readonly keychainTiers: KeychainTiersService,
   ) {}
 
   async list(filters: { type?: QuoteType } = {}): Promise<QuoteSummaryDto[]> {
@@ -406,7 +408,13 @@ export class QuotesService {
     }
 
     // ADHOC
-    const [cost, designHourCostParam] = await Promise.all([
+    const isKeychain = item.payload.templateKind === 'KEYCHAIN';
+    if (isKeychain) {
+      // Valida que la cantidad respete la grilla fija (1..4 o múltiplo de 5).
+      this.keychainTiers.assertValidQty(item.quantity);
+    }
+
+    const [cost, designHourCostParam, keychainTier] = await Promise.all([
       this.costing.forAdhoc({
         description: item.description,
         pieces: item.payload.pieces,
@@ -415,7 +423,13 @@ export class QuotesService {
         managementMinutes: item.payload.managementMinutes,
       }),
       this.prisma.globalParam.findUnique({ where: { key: 'design_hour_cost' } }),
+      isKeychain ? this.keychainTiers.findApplicable(item.quantity) : Promise.resolve(null),
     ]);
+    if (isKeychain && !keychainTier) {
+      throw new BadRequestException(
+        `Sin tier de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros/llaveros.`,
+      );
+    }
     const designMinutes = item.payload.designMinutes ?? 0;
     const designHourCost = designHourCostParam ? Number(designHourCostParam.value) : 0;
     const designRaw = (designMinutes / 60) * designHourCost;
@@ -450,6 +464,7 @@ export class QuotesService {
       item.quantity,
       profile,
       designRaw,
+      keychainTier ? keychainTier.markupPct : null,
     );
     // El cargo de diseño es plano por línea (no escala con la cantidad)
     // pero forma parte del lineTotal para que paye comisión + régimen
@@ -458,11 +473,19 @@ export class QuotesService {
 
     // Persistimos designMinutes + designSurcharge en el payload JSON:
     // así el PDF muestra el desglose exacto que se firmó, aunque el
-    // global param cambie después.
+    // global param cambie después. Si es keychain, también snapshoteamos
+    // el markup aplicado y el label de la tier ("5-20", "100+").
     const persistedPayload: AdhocItemPayload = {
       ...item.payload,
       designMinutes,
       designSurcharge,
+      ...(keychainTier
+        ? {
+            templateKind: 'KEYCHAIN' as const,
+            appliedMarkupPct: keychainTier.markupPct,
+            tierLabel: KeychainTiersService.tierLabel(keychainTier),
+          }
+        : {}),
     };
 
     return {
@@ -488,6 +511,8 @@ export class QuotesService {
     quantity: number,
     customerProfile: CustomerPricingProfile | null = null,
     designRawAmount = 0,
+    /** Override explícito de markup (p.ej. tier de llaveros). Pisa el target. */
+    markupOverridePct: number | null = null,
   ): Promise<{ unitPrice: number; unitProfit: number; designSurcharge: number }> {
     if (!channelId) {
       // Sin canal el precio = costo total (caller puede sobreescribir).
@@ -528,7 +553,14 @@ export class QuotesService {
       marketplaceCommissionPct:
         productChannel && productChannel.commissionPct ? Number(productChannel.commissionPct) : null,
     };
-    const tierOverrides = tier ? { markupPct: tier.markupPct ?? undefined } : {};
+    // Precedencia: markupOverridePct (caller, p.ej. tier de llaveros)
+    //   > tier resuelta del producto > target del producto.
+    const tierOverrides =
+      markupOverridePct != null
+        ? { markupPct: markupOverridePct }
+        : tier
+          ? { markupPct: tier.markupPct ?? undefined }
+          : {};
     const line = this.engine.price(
       {
         fabricationPrice: cost.fabricationPrice,

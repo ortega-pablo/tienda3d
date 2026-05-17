@@ -52,6 +52,9 @@ export interface QuoteDto {
     adhocPayload: {
       designMinutes?: number;
       designSurcharge?: number;
+      templateKind?: 'KEYCHAIN';
+      appliedMarkupPct?: number;
+      tierLabel?: string;
     } | null;
   }>;
 }

@@ -70,6 +70,17 @@ export interface AdhocItemPayload {
    * para que el PDF muestre lo que se firmó aunque el global param cambie.
    */
   designSurcharge?: number;
+  /**
+   * Marca que esta cotización a medida usa la grilla fija de llaveros.
+   * Si está presente, la cantidad debe respetar `1..4` o múltiplo de 5,
+   * y el markup viene de la tier que cubre la cantidad cotizada (no del
+   * markup default del producto, que en ADHOC es 0).
+   */
+  templateKind?: 'KEYCHAIN';
+  /** Snapshot del markup aplicado por la tier (informativo / auditoría). */
+  appliedMarkupPct?: number;
+  /** Label legible del tier ("5-20", "100+") para el PDF y el detalle. */
+  tierLabel?: string;
 }
 
 export interface ProductItemInput {

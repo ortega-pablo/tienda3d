@@ -64,16 +64,37 @@ interface Preview {
   designSurcharge: number;
 }
 
+export interface KeychainTierLite {
+  id: string;
+  minQty: number;
+  maxQty: number | null;
+  markupPct: number;
+}
+
+/**
+ * Form compartido entre "cotización a medida" libre y "cotización de
+ * llaveros en cantidad". El modo se controla con `mode`:
+ *
+ *   - 'adhoc'    : cantidad libre (input numérico), sin tier override.
+ *   - 'keychain' : cantidad en grilla fija (1..4 o múltiplo de 5),
+ *                  con badge de tier aplicada y `templateKind: 'KEYCHAIN'`
+ *                  en el payload para que el backend valide + aplique el
+ *                  markup de la tier seedeada en `keychain_tiers`.
+ */
 export function RapidQuoteForm({
   channels,
   filaments,
   nonFilaments,
   customers,
+  mode = 'adhoc',
+  keychainTiers = [],
 }: {
   channels: ChannelLite[];
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
   customers: CustomerOption[];
+  mode?: 'adhoc' | 'keychain';
+  keychainTiers?: KeychainTierLite[];
 }) {
   const router = useRouter();
   const [customerId, setCustomerId] = useState('');
@@ -98,8 +119,19 @@ export function RapidQuoteForm({
   const [discount, setDiscount] = useState('0');
   const [notes, setNotes] = useState('');
 
-  const [description, setDescription] = useState('Pieza a medida');
+  const isKeychain = mode === 'keychain';
+  const [description, setDescription] = useState(
+    isKeychain ? 'Llavero personalizado' : 'Pieza a medida',
+  );
   const [quantity, setQuantity] = useState('1');
+
+  // Tier activa según la cantidad — solo para modo keychain. Si no cae
+  // dentro de la grilla, devuelve null y deshabilitamos el submit.
+  const activeKeychainTier = isKeychain
+    ? (keychainTiers.find(
+        (t) => Number(quantity) >= t.minQty && (t.maxQty == null || Number(quantity) <= t.maxQty),
+      ) ?? null)
+    : null;
   const [pieces, setPieces] = useState<PieceDraft[]>([
     { name: 'Pieza', grams: '', printMinutes: '', filamentId: filaments[0]?.id ?? '' },
   ]);
@@ -113,7 +145,7 @@ export function RapidQuoteForm({
 
   const buildItem = () => ({
     type: 'ADHOC' as const,
-    description: description || 'Pieza a medida',
+    description: description || (isKeychain ? 'Llavero personalizado' : 'Pieza a medida'),
     quantity: Number(quantity || '1'),
     payload: {
       pieces: pieces
@@ -130,6 +162,7 @@ export function RapidQuoteForm({
       assemblyMinutes: Number(assemblyMinutes || '0'),
       managementMinutes: Number(managementMinutes || '0'),
       designMinutes: Number(designMinutes || '0'),
+      ...(isKeychain ? { templateKind: 'KEYCHAIN' as const } : {}),
     },
   });
 
@@ -197,9 +230,16 @@ export function RapidQuoteForm({
   const lineTotal = preview && typeof preview === 'object' ? preview.lineTotal : 0;
   const total = Math.max(lineTotal - Number(discount || '0'), 0);
 
+  const qtyNumber = Number(quantity || '0');
+  const isQtyValid = isKeychain
+    ? Number.isInteger(qtyNumber) &&
+      qtyNumber >= 1 &&
+      (qtyNumber < 5 || qtyNumber % 5 === 0) &&
+      activeKeychainTier != null
+    : qtyNumber > 0;
   const isFormValid =
     customer.name.trim().length > 0 &&
-    Number(quantity || '0') > 0 &&
+    isQtyValid &&
     description.trim().length > 0 &&
     pieces.some((p) => p.filamentId && Number(p.grams || '0') > 0);
 
@@ -344,15 +384,41 @@ export function RapidQuoteForm({
               </div>
               <div className="sm:col-span-3">
                 <Field label="Cantidad" required>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                  />
+                  {isKeychain ? (
+                    <KeychainQtySelect
+                      value={quantity}
+                      onChange={setQuantity}
+                      tiers={keychainTiers}
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      min="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                    />
+                  )}
                 </Field>
               </div>
             </div>
+            {isKeychain && activeKeychainTier && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md bg-secondary px-3 py-2 text-xs">
+                <span className="font-medium">
+                  Tier aplicado:{' '}
+                  {activeKeychainTier.maxQty == null
+                    ? `${activeKeychainTier.minQty}+`
+                    : `${activeKeychainTier.minQty}-${activeKeychainTier.maxQty}`}
+                </span>
+                <span className="text-muted-foreground">
+                  Markup {activeKeychainTier.markupPct}% sobre fabricación
+                </span>
+              </div>
+            )}
+            {isKeychain && !activeKeychainTier && qtyNumber > 0 && (
+              <p className="text-xs text-destructive">
+                La cantidad {qtyNumber} no cae en ninguna tier. Usá 1-4 o un múltiplo de 5.
+              </p>
+            )}
 
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -601,6 +667,84 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-mono">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * Selector de cantidad para cotización de llaveros. Muestra:
+ *   - todas las cantidades válidas de las tiers acotadas (1-4, 5-95 en
+ *     pasos de 5)
+ *   - cada múltiplo de 5 desde el `minQty` del tier abierto hasta 200
+ *     (suficiente para cotizaciones comunes)
+ *   - una opción "Otra cantidad" que abre un input numérico libre con
+ *     `step=5` para pedidos más grandes
+ *
+ * La cantidad final se devuelve como string vía `onChange` para que
+ * encaje con el state existente del form.
+ */
+function KeychainQtySelect({
+  value,
+  onChange,
+  tiers,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  tiers: KeychainTierLite[];
+}) {
+  const openTier = tiers.find((t) => t.maxQty == null);
+  const openStart = openTier?.minQty ?? 100;
+
+  // Lista predefinida: 1..4, luego múltiplos de 5 desde 5 hasta openStart-5,
+  // luego múltiplos de 5 desde openStart hasta 200 (cota razonable para el
+  // dropdown; valores mayores se cargan vía "Otra cantidad").
+  const presets: number[] = [];
+  for (let n = 1; n <= 4; n++) presets.push(n);
+  for (let n = 5; n < openStart; n += 5) presets.push(n);
+  for (let n = openStart; n <= 200; n += 5) presets.push(n);
+
+  const numValue = Number(value);
+  const isCustom = !presets.includes(numValue) && numValue > 0;
+  const [customMode, setCustomMode] = useState(isCustom);
+  const [customQty, setCustomQty] = useState(isCustom ? value : '');
+
+  const onSelectChange = (raw: string) => {
+    if (raw === '__custom__') {
+      setCustomMode(true);
+      // No tocamos `value` todavía; se actualiza cuando el usuario tipea.
+      return;
+    }
+    setCustomMode(false);
+    onChange(raw);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <select
+        value={customMode ? '__custom__' : value}
+        onChange={(e) => onSelectChange(e.target.value)}
+        className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+      >
+        {presets.map((n) => (
+          <option key={n} value={String(n)}>
+            {n}
+          </option>
+        ))}
+        <option value="__custom__">Otra cantidad (múltiplo de 5)…</option>
+      </select>
+      {customMode && (
+        <Input
+          type="number"
+          min={openStart}
+          step={5}
+          placeholder={`≥ ${openStart}, múltiplo de 5`}
+          value={customQty}
+          onChange={(e) => {
+            setCustomQty(e.target.value);
+            onChange(e.target.value);
+          }}
+        />
+      )}
     </div>
   );
 }

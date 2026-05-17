@@ -12,6 +12,7 @@ import { ChannelsModule } from './modules/channels/channels.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { KeychainTiersModule } from './modules/keychain-tiers/keychain-tiers.module';
 import { MachinesModule } from './modules/machines/machines.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { ParametersModule } from './modules/parameters/parameters.module';
@@ -60,6 +61,7 @@ import { UsersModule } from './modules/users/users.module';
     ProductsModule,
     CustomersModule,
     QuotesModule,
+    KeychainTiersModule,
     ProductionsModule,
     ReportsModule,
     IntegrationsModule,

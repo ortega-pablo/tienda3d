@@ -747,3 +747,34 @@ model CustomerMonthlyVolume {
   @@index([monthStart])
   @@map("customer_monthly_volumes")
 }
+
+// ============================================================
+// Keychain bulk pricing tiers
+// ============================================================
+
+/// Escala fija (5 tiers) para cotizaciones de llaveros personalizados en
+/// cantidad. La estructura es inmutable (5 filas seedeadas):
+///
+///   1-4   /  5-20  /  25-35  /  40-95  /  100+
+///
+/// Solo el `markupPct` de cada fila es editable por admin desde
+/// `/parametros/llaveros`. La cantidad válida en una cotización es:
+///   - 1..4 (cualquier entero) o
+///   - múltiplo de 5 desde 5 en adelante (sin tope superior)
+///
+/// El motor de pricing las consume vía el flujo ADHOC con un marker
+/// `templateKind: 'KEYCHAIN'` en el `adhocPayload` y aplica el markup
+/// como `tierOverrides.markupPct`.
+model KeychainTier {
+  id        String   @id @default(cuid())
+  minQty    Int      @unique
+  /// null para el tier abierto (100+).
+  maxQty    Int?
+  markupPct Decimal  @db.Decimal(6, 2)
+  sortOrder Int      @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("keychain_tiers")
+}
