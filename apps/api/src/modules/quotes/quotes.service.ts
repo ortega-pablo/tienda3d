@@ -17,7 +17,7 @@ import { KeychainTiersService } from '../keychain-tiers/keychain-tiers.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
 import type { CustomerPricingProfile } from '../pricing/pricing.types';
-import { ProductTiersService } from '../products/product-tiers.service';
+import { CategoryTiersService } from '../categories/category-tiers.service';
 import type {
   AdhocItemPayload,
   QuoteCreateInput,
@@ -42,7 +42,7 @@ export class QuotesService {
     private readonly costing: CostingService,
     private readonly pricing: PricingService,
     private readonly engine: PricingEngine,
-    private readonly tiers: ProductTiersService,
+    private readonly categoryTiers: CategoryTiersService,
     private readonly audit: AuditService,
     private readonly customers: CustomersService,
     private readonly keychainTiers: KeychainTiersService,
@@ -100,7 +100,10 @@ export class QuotesService {
       ? await this.resolveCustomerContext(input.customerId, input.items)
       : null;
 
-    const channelId = input.channelId ?? customerCtx?.customer.defaultChannelId ?? null;
+    // Fase 5/6 reemplazarán este fallback por el del checkbox "sin factura":
+    // por ahora el caller (form web) sigue mandando channelId. Si no manda,
+    // queda null y el motor usa cost = price (caso "sin canal").
+    const channelId = input.channelId ?? null;
 
     const code = await this.nextCode(quoteType);
     const itemsData = await Promise.all(
@@ -336,7 +339,8 @@ export class QuotesService {
     const customerCtx = customerId
       ? await this.resolveCustomerContext(customerId, [item])
       : null;
-    const effectiveChannel = channelId ?? customerCtx?.customer.defaultChannelId ?? null;
+    // El cliente ya no lleva canal default — el form siempre manda channelId.
+    const effectiveChannel = channelId ?? null;
     const row = await this.buildItemRow(item, effectiveChannel, customerCtx);
     const designSurcharge =
       row.adhocPayload &&
@@ -531,35 +535,46 @@ export class QuotesService {
         ? Math.max(quantity, customerProfile.minTierQty)
         : quantity;
 
-    const [tier, productChannel, globals, product] = await Promise.all([
-      productId ? this.tiers.findApplicable(productId, effectiveQty) : Promise.resolve(null),
+    // Para resolver tiers del producto: leemos su categoryId y le pedimos a
+    // CategoryTiersService la tier que cubre la qty (con herencia padre).
+    const product = productId
+      ? await this.prisma.product.findUnique({
+          where: { id: productId },
+          select: { categoryId: true },
+        })
+      : null;
+
+    const [tier, productChannel, globals, baseMarkup] = await Promise.all([
+      product
+        ? this.categoryTiers.findApplicable(product.categoryId, channelId, effectiveQty)
+        : Promise.resolve(null),
       productId
         ? this.prisma.productChannel.findUnique({
             where: { productId_channelId: { productId, channelId } },
           })
         : Promise.resolve(null),
       this.pricing.loadGlobals(),
-      productId
-        ? this.prisma.product.findUnique({
-            where: { id: productId },
-            select: { targetMarkupPct: true },
-          })
-        : Promise.resolve(null),
+      product
+        ? this.pricing.resolveBaseMarkup(product.categoryId).catch(() => 0)
+        : Promise.resolve(0),
     ]);
 
     const cfg = this.pricing.toConfig(channel);
     const productInputs = {
-      targetMarkupPct: product ? Number(product.targetMarkupPct) : 0,
+      // Sin tier que cubra la qty, el motor usa este markup base (de la
+      // categoría, con fallback al padre). customMarkupPct del cliente lo
+      // pisa internamente.
+      targetMarkupPct: baseMarkup,
       marketplaceCommissionPct:
         productChannel && productChannel.commissionPct ? Number(productChannel.commissionPct) : null,
     };
     // Precedencia: markupOverridePct (caller, p.ej. tier de llaveros)
-    //   > tier resuelta del producto > target del producto.
+    //   > tier resuelta de la categoría del producto > baseMarkup del target.
     const tierOverrides =
       markupOverridePct != null
         ? { markupPct: markupOverridePct }
         : tier
-          ? { markupPct: tier.markupPct ?? undefined }
+          ? { markupPct: tier.markupPct }
           : {};
     const line = this.engine.price(
       {

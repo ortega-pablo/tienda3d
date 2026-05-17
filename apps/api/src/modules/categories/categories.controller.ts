@@ -7,14 +7,18 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
+import type { AccessPayload } from '../auth/auth.service';
 import { CategoriesService } from './categories.service';
+import { CategoryTiersService } from './category-tiers.service';
 
 const inputSchema = z.object({
   name: z.string().min(1).max(120),
@@ -24,6 +28,7 @@ const inputSchema = z.object({
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().min(0).optional(),
   notes: z.string().max(2000).nullable().optional(),
+  baseMarkupPct: z.number().min(0).max(10000).nullable().optional(),
 });
 
 const updateSchema = inputSchema.partial();
@@ -34,10 +39,29 @@ const listQuerySchema = z.object({
   flat: z.coerce.boolean().optional(),
 });
 
+const tiersQuerySchema = z.object({
+  channelId: z.string().min(1),
+});
+
+const tierItemSchema = z.object({
+  minQty: z.number().int().min(1),
+  maxQty: z.number().int().min(1).nullable(),
+  markupPct: z.number().min(0).max(10000),
+  notes: z.string().max(1000).nullable().optional(),
+});
+
+const replaceTiersSchema = z.object({
+  channelId: z.string().min(1),
+  tiers: z.array(tierItemSchema),
+});
+
 @UseGuards(PermissionsGuard)
 @Controller('categories')
 export class CategoriesController {
-  constructor(private readonly categories: CategoriesService) {}
+  constructor(
+    private readonly categories: CategoriesService,
+    private readonly tiers: CategoryTiersService,
+  ) {}
 
   @Permissions('category:read')
   @Get()
@@ -72,5 +96,35 @@ export class CategoriesController {
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {
     await this.categories.remove(id);
+  }
+
+  // ----- Tiers de la categoría por canal -----
+
+  /**
+   * Tiers efectivos para `(categoryId, channelId)`, marcando si son propios
+   * o heredados del padre. Si la categoría no tiene tiers propios ni hereda,
+   * `tiers` viene vacío y el caller se apoya en `baseMarkupPct`.
+   */
+  @Permissions('category:read')
+  @Get(':id/tiers')
+  listTiers(
+    @Param('id') id: string,
+    @Query(ZodValidation(tiersQuerySchema)) query: z.infer<typeof tiersQuerySchema>,
+  ) {
+    return this.tiers.list(id, query.channelId);
+  }
+
+  /**
+   * Reemplaza atómicamente el set de tiers de `(categoryId, channelId)`.
+   * Body `tiers: []` borra las propias (vuelve a heredar del padre).
+   */
+  @Permissions('category:write')
+  @Put(':id/tiers')
+  replaceTiers(
+    @Param('id') id: string,
+    @Body(ZodValidation(replaceTiersSchema)) body: z.infer<typeof replaceTiersSchema>,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.tiers.replaceForCategory(id, body.channelId, body.tiers, user.sub);
   }
 }

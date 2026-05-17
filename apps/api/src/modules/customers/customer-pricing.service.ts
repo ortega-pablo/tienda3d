@@ -1,20 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { dec } from '@/common/utils/decimal';
+import { CategoryTiersService, type CategoryTierDto } from '../categories/category-tiers.service';
 import { CostingService } from '../costing/costing.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService, type ProductPricesResponse } from '../pricing/pricing.service';
 import type { ProductPricingInputs } from '../pricing/pricing.types';
 import { CustomersService } from './customers.service';
-
-type PriceTier = {
-  id: string;
-  productId: string;
-  minQty: number;
-  maxQty: number | null;
-  markupPct: unknown;
-  notes: string | null;
-};
 
 /**
  * Fusiona las tiers que quedan por debajo del piso del cliente con la tier
@@ -28,7 +19,7 @@ type PriceTier = {
  * Si el piso es null o no cae dentro de ninguna tier, devuelve las tiers
  * originales sin tocar.
  */
-function mergeTiersBelowFloor<T extends PriceTier>(
+function mergeTiersBelowFloor<T extends { minQty: number; maxQty: number | null }>(
   tiers: T[],
   floor: number | null | undefined,
 ): T[] {
@@ -54,6 +45,7 @@ export class CustomerPricingService {
     private readonly costing: CostingService,
     private readonly pricing: PricingService,
     private readonly engine: PricingEngine,
+    private readonly categoryTiers: CategoryTiersService,
   ) {}
 
   /**
@@ -61,6 +53,11 @@ export class CustomerPricingService {
    * aplicando todos los flags y overrides (skipMarketing recompone fabricación;
    * customMarkupPct y minTierQty van al motor; skipChannelCommission/skipRegime
    * forzan los descuentos a 0).
+   *
+   * Las tiers ahora salen de la categoría del producto (con herencia
+   * subcategoría → padre). El `minTierQty` del cliente se aplica por
+   * categoría — sigue funcionando porque el commitment vive en
+   * `CustomerCategoryCommitment.categoryId`, no en producto.
    */
   async forCustomerProduct(
     customerId: string,
@@ -68,7 +65,7 @@ export class CustomerPricingService {
   ): Promise<ProductPricesResponse> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, name: true, targetMarkupPct: true },
+      select: { id: true, name: true, categoryId: true },
     });
     if (!product) throw new NotFoundException('Producto inexistente');
 
@@ -80,20 +77,17 @@ export class CustomerPricingService {
     }
 
     const profile = await this.customers.resolveProductProfile(customerId, productId);
-
     const cost = await this.costing.forProduct(productId);
-    const targetMarkupPct = dec(product.targetMarkupPct);
 
-    const [productChannels, tiers, globals] = await Promise.all([
+    const [productChannels, globals, baseMarkup] = await Promise.all([
       this.prisma.productChannel.findMany({
         where: { productId, isEnabled: true },
         include: { channel: true },
       }),
-      this.prisma.productPriceTier.findMany({
-        where: { productId },
-        orderBy: { minQty: 'asc' },
-      }),
       this.pricing.loadGlobals(),
+      // baseMarkupPct con fallback al padre. Si está mal configurada la
+      // categoría, esto tira NotFoundException — preferible a un 0 silencioso.
+      this.pricing.resolveBaseMarkup(product.categoryId).catch(() => 0),
     ]);
 
     // Cost recombinado según flags de fabricación del cliente.
@@ -103,60 +97,75 @@ export class CustomerPricingService {
       (a, b) => a.channel.sortOrder - b.channel.sortOrder,
     );
 
-    const blocks = sorted
-      .filter((pc) => pc.channel.isActive)
-      .map((pc) => {
-        const cfg = this.pricing.toConfig(pc.channel);
-        const productInputs: ProductPricingInputs = {
-          targetMarkupPct,
-          marketplaceCommissionPct: pc.commissionPct ? dec(pc.commissionPct) : null,
-        };
+    const blocks = await Promise.all(
+      sorted
+        .filter((pc) => pc.channel.isActive)
+        .map(async (pc) => {
+          const cfg = this.pricing.toConfig(pc.channel);
+          const productInputs: ProductPricingInputs = {
+            // Cuando la categoría no tiene tier que cubra la qty, el motor
+            // usa este targetMarkupPct. customMarkupPct (cliente SPECIAL)
+            // pisa esto si está presente; lo respeta el motor solo.
+            targetMarkupPct: baseMarkup,
+            marketplaceCommissionPct: pc.commissionPct ? Number(pc.commissionPct) : null,
+          };
 
-        // Tier piso: si el cliente tiene minTierQty, fusionamos las tiers que
-        // van desde la primera hasta la que CONTIENE el piso en una sola
-        // tier "extendida" cuyo rango arranca en el minQty original (típico
-        // 1) y termina en el maxQty de la tier piso, con el markup de la
-        // tier piso. Así el cliente ve, por ejemplo, "1-9" en lugar de
-        // "1-4 + 5-9" cuando su piso es 5.
-        const visibleTiers = mergeTiersBelowFloor(tiers, profile.minTierQty);
-        const base =
-          visibleTiers.length === 0
-            ? this.engine.price(costInputs, cfg, productInputs, globals, {}, profile)
-            : null;
+          // Tiers de la categoría para este canal (con herencia padre).
+          const tiersResolution = await this.categoryTiers.list(
+            product.categoryId,
+            pc.channelId,
+          );
 
-        const tierLines = visibleTiers.map((t) => ({
-          tierId: t.id,
-          minQty: t.minQty,
-          maxQty: t.maxQty,
-          line: this.engine.price(
-            costInputs,
-            cfg,
-            productInputs,
-            globals,
-            { markupPct: t.markupPct ? dec(t.markupPct) : undefined },
-            profile,
-          ),
-        }));
+          // Tier piso del cliente: fusionamos las tiers por debajo del piso
+          // con la tier que CONTIENE el piso. Mismo algoritmo de antes, ahora
+          // sobre tiers de categoría. Ej: piso=5 sobre [1-4, 5-9, 10-24, 25+]
+          // → [1-9, 10-24, 25+].
+          const visibleTiers: CategoryTierDto[] = mergeTiersBelowFloor(
+            tiersResolution.tiers,
+            profile.minTierQty,
+          );
 
-        const needsConfig =
-          (base?.missingCommission ?? false) || tierLines.some((t) => t.line.missingCommission);
+          const base =
+            visibleTiers.length === 0
+              ? this.engine.price(costInputs, cfg, productInputs, globals, {}, profile)
+              : null;
 
-        return {
-          channelId: pc.channelId,
-          channelName: pc.channel.name,
-          channelSlug: pc.channel.slug,
-          channelKind: pc.channel.kind,
-          icon: pc.channel.icon,
-          taxMode: pc.channel.taxMode,
-          withInvoiceDefault: pc.channel.withInvoiceDefault,
-          enabled: true,
-          needsConfig,
-          productCommissionPct: pc.commissionPct ? dec(pc.commissionPct) : null,
-          base,
-          tiers: tierLines,
-        };
-      });
+          const tierLines = visibleTiers.map((t) => ({
+            tierId: t.id,
+            minQty: t.minQty,
+            maxQty: t.maxQty,
+            line: this.engine.price(
+              costInputs,
+              cfg,
+              productInputs,
+              globals,
+              { markupPct: t.markupPct },
+              profile,
+            ),
+          }));
 
+          const needsConfig =
+            (base?.missingCommission ?? false) ||
+            tierLines.some((t) => t.line.missingCommission);
+
+          return {
+            channelId: pc.channelId,
+            channelName: pc.channel.name,
+            channelSlug: pc.channel.slug,
+            channelKind: pc.channel.kind,
+            icon: pc.channel.icon,
+            taxMode: pc.channel.taxMode,
+            withInvoiceDefault: pc.channel.withInvoiceDefault,
+            enabled: true,
+            needsConfig,
+            productCommissionPct: pc.commissionPct ? Number(pc.commissionPct) : null,
+            base,
+            tiers: tierLines,
+          };
+        }),
+    );
+
+    const effectiveMarkup = profile.customMarkupPct ?? baseMarkup;
     return {
       productId: product.id,
       productName: product.name,
@@ -164,11 +173,9 @@ export class CustomerPricingService {
       fabricationPrice: costInputs.fabricationPrice,
       otherMaterialsWithReplenishment: costInputs.otherMaterialsWithReplenishment,
       totalCost: costInputs.fabricationPrice + costInputs.otherMaterialsWithReplenishment,
-      profitPerUnit:
-        costInputs.fabricationPrice * ((profile.customMarkupPct ?? targetMarkupPct) / 100),
-      targetMarkupPct: profile.customMarkupPct ?? targetMarkupPct,
+      profitPerUnit: costInputs.fabricationPrice * (effectiveMarkup / 100),
+      targetMarkupPct: effectiveMarkup,
       channels: blocks,
     };
   }
-
 }

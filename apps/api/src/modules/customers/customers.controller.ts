@@ -40,7 +40,6 @@ const customerInputSchema = z.object({
   skipMarketing: z.boolean().optional(),
   skipRegime: z.boolean().optional(),
   skipReinvestment: z.boolean().optional(),
-  defaultChannelId: z.string().nullable().optional(),
   hasPortalAccess: z.boolean().optional(),
 });
 

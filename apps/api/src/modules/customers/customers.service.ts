@@ -18,7 +18,6 @@ export interface CustomerLite {
   taxId: string | null;
   isActive: boolean;
   hasPortalAccess: boolean;
-  defaultChannelId: string | null;
   skipChannelCommission: boolean;
   skipMarketing: boolean;
   skipRegime: boolean;
@@ -280,7 +279,6 @@ export class CustomersService {
     taxId: string | null;
     isActive: boolean;
     hasPortalAccess: boolean;
-    defaultChannelId: string | null;
     skipChannelCommission: boolean;
     skipMarketing: boolean;
     skipRegime: boolean;
@@ -295,7 +293,6 @@ export class CustomersService {
       taxId: c.taxId,
       isActive: c.isActive,
       hasPortalAccess: c.hasPortalAccess,
-      defaultChannelId: c.defaultChannelId,
       skipChannelCommission: c.skipChannelCommission,
       skipMarketing: c.skipMarketing,
       skipRegime: c.skipRegime,
@@ -323,7 +320,6 @@ export interface CustomerInput {
   skipMarketing?: boolean;
   skipRegime?: boolean;
   skipReinvestment?: boolean;
-  defaultChannelId?: string | null;
   hasPortalAccess?: boolean;
 }
 
@@ -349,10 +345,6 @@ export class CustomersWriteService {
       const exists = await this.prisma.customer.findUnique({ where: { email: input.email } });
       if (exists) throw new ConflictException('Ya existe un cliente con ese email');
     }
-    if (input.defaultChannelId) {
-      const ch = await this.prisma.channel.findUnique({ where: { id: input.defaultChannelId } });
-      if (!ch) throw new BadRequestException('Canal por defecto inexistente');
-    }
 
     // Defaults sugeridos por preset (el front los puede pisar manualmente).
     const presetFlags = computePresetFlags(input.type ?? CustomerType.WHOLESALE);
@@ -370,7 +362,6 @@ export class CustomersWriteService {
         skipMarketing: input.skipMarketing ?? presetFlags.skipMarketing,
         skipRegime: input.skipRegime ?? presetFlags.skipRegime,
         skipReinvestment: input.skipReinvestment ?? presetFlags.skipReinvestment,
-        defaultChannelId: input.defaultChannelId ?? null,
         hasPortalAccess: input.hasPortalAccess ?? false,
       },
     });
@@ -387,11 +378,6 @@ export class CustomersWriteService {
       });
       if (conflict) throw new ConflictException('Ya existe un cliente con ese email');
     }
-    if (input.defaultChannelId && input.defaultChannelId !== existing.defaultChannelId) {
-      const ch = await this.prisma.channel.findUnique({ where: { id: input.defaultChannelId } });
-      if (!ch) throw new BadRequestException('Canal por defecto inexistente');
-    }
-
     await this.prisma.customer.update({
       where: { id },
       data: {
@@ -409,9 +395,6 @@ export class CustomersWriteService {
         ...(input.skipRegime !== undefined ? { skipRegime: input.skipRegime } : {}),
         ...(input.skipReinvestment !== undefined
           ? { skipReinvestment: input.skipReinvestment }
-          : {}),
-        ...(input.defaultChannelId !== undefined
-          ? { defaultChannelId: input.defaultChannelId }
           : {}),
         ...(input.hasPortalAccess !== undefined ? { hasPortalAccess: input.hasPortalAccess } : {}),
       },
