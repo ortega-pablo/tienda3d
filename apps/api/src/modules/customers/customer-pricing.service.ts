@@ -73,37 +73,32 @@ export class CustomerPricingService {
           marketplaceCommissionPct: pc.commissionPct ? dec(pc.commissionPct) : null,
         };
 
-        // Tier piso: aplicar la tier que cubre minTierQty si está definido.
-        const flooredTiers = tiers.length === 0 ? [] : tiers;
+        // Tier piso: si el cliente tiene minTierQty, omitimos las tiers que
+        // terminan antes del piso (cantidad real < piso → el cliente no
+        // accede a esas escalas). La tier que CONTIENE el piso es la primera
+        // visible. Si no hay piso, se muestran todas.
+        const visibleTiers =
+          profile.minTierQty != null
+            ? tiers.filter((t) => t.maxQty == null || t.maxQty >= profile.minTierQty!)
+            : tiers;
         const base =
-          flooredTiers.length === 0
+          visibleTiers.length === 0
             ? this.engine.price(costInputs, cfg, productInputs, globals, {}, profile)
             : null;
 
-        const tierLines = flooredTiers.map((t) => {
-          const tierMarkup = t.markupPct ? dec(t.markupPct) : undefined;
-          // Si hay minTierQty del cliente y la tier cubre menos que ese piso,
-          // descartamos esta tier — el cliente "salta" al primer tier que
-          // cubre el piso. Para no romper la respuesta, igualamos el markup
-          // de la tier piso para todas las tiers anteriores.
-          const effectiveMarkup =
-            profile.minTierQty != null && t.maxQty != null && t.maxQty < profile.minTierQty
-              ? this.findFloorTierMarkup(tiers, profile.minTierQty, targetMarkupPct)
-              : tierMarkup;
-          return {
-            tierId: t.id,
-            minQty: t.minQty,
-            maxQty: t.maxQty,
-            line: this.engine.price(
-              costInputs,
-              cfg,
-              productInputs,
-              globals,
-              { markupPct: effectiveMarkup },
-              profile,
-            ),
-          };
-        });
+        const tierLines = visibleTiers.map((t) => ({
+          tierId: t.id,
+          minQty: t.minQty,
+          maxQty: t.maxQty,
+          line: this.engine.price(
+            costInputs,
+            cfg,
+            productInputs,
+            globals,
+            { markupPct: t.markupPct ? dec(t.markupPct) : undefined },
+            profile,
+          ),
+        }));
 
         const needsConfig =
           (base?.missingCommission ?? false) || tierLines.some((t) => t.line.missingCommission);
@@ -138,18 +133,4 @@ export class CustomerPricingService {
     };
   }
 
-  /**
-   * Devuelve el markup de la tier que cubre `minQty` (o el target del producto
-   * si ninguna tier llega). Usado cuando el cliente tiene `minTierQty` y se
-   * pisan las tiers menores con el de la tier piso.
-   */
-  private findFloorTierMarkup(
-    tiers: Array<{ minQty: number; maxQty: number | null; markupPct: import('@prisma/client').Prisma.Decimal | null }>,
-    minQty: number,
-    fallback: number,
-  ): number {
-    const match = tiers.find((t) => t.minQty <= minQty && (t.maxQty == null || t.maxQty >= minQty));
-    if (!match) return fallback;
-    return match.markupPct ? dec(match.markupPct) : fallback;
-  }
 }
