@@ -32,7 +32,16 @@ export default async function QuoteDetailPage({
           </div>
           <p className="text-muted-foreground">
             {quote.customerName}
-            {quote.channelName && ` · ${quote.channelName}`}
+            <span
+              className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                quote.withInvoice
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              }`}
+              title={quote.channelName ? `Canal: ${quote.channelName}` : undefined}
+            >
+              {quote.withInvoice ? 'Con factura' : 'Sin factura'}
+            </span>
           </p>
         </div>
         <QuoteActions quote={quote} />

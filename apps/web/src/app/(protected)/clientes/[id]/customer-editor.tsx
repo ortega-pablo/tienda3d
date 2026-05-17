@@ -24,7 +24,6 @@ import { useHasPermission } from '@/components/user-provider';
 import {
   TYPE_DESCRIPTION,
   TYPE_LABEL,
-  type ChannelLite,
   type CustomerType,
   type CustomerWithRelations,
 } from '../types';
@@ -37,7 +36,6 @@ interface FormState {
   taxId: string;
   notes: string;
   isActive: boolean;
-  defaultChannelId: string;
   hasPortalAccess: boolean;
   skipChannelCommission: boolean;
   skipMarketing: boolean;
@@ -57,7 +55,6 @@ function fromCustomer(c: CustomerWithRelations | null): FormState {
       taxId: c.taxId ?? '',
       notes: '',
       isActive: c.isActive,
-      defaultChannelId: c.defaultChannelId ?? '',
       hasPortalAccess: c.hasPortalAccess,
       skipChannelCommission: c.skipChannelCommission,
       skipMarketing: c.skipMarketing,
@@ -73,7 +70,6 @@ function fromCustomer(c: CustomerWithRelations | null): FormState {
     taxId: '',
     notes: '',
     isActive: true,
-    defaultChannelId: '',
     hasPortalAccess: false,
     skipChannelCommission: false,
     skipMarketing: false,
@@ -106,11 +102,9 @@ function presetDefaults(type: CustomerType) {
 export function CustomerEditor({
   mode,
   customer,
-  availableChannels,
 }: {
   mode: 'create' | 'edit';
   customer?: CustomerWithRelations;
-  availableChannels: ChannelLite[];
 }) {
   const can = useHasPermission();
   const canWrite = can('customer:write');
@@ -141,7 +135,6 @@ export function CustomerEditor({
           taxId: form.taxId.trim() || null,
           notes: form.notes.trim() || null,
           isActive: form.isActive,
-          defaultChannelId: form.defaultChannelId || null,
           hasPortalAccess: form.hasPortalAccess,
           skipChannelCommission: form.skipChannelCommission,
           skipMarketing: form.skipMarketing,
@@ -259,23 +252,6 @@ export function CustomerEditor({
                 onChange={(e) => setForm({ ...form, taxId: e.target.value })}
                 placeholder="20-12345678-9"
               />
-            </Field>
-            <Field label="Canal default (portal)">
-              <select
-                value={form.defaultChannelId}
-                onChange={(e) => setForm({ ...form, defaultChannelId: e.target.value })}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-60"
-              >
-                <option value="">Sin definir</option>
-                {availableChannels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Canal usado cuando el cliente cotiza desde el portal.
-              </p>
             </Field>
           </div>
 

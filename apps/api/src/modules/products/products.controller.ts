@@ -52,9 +52,9 @@ const inputSchema = z
     estimatedUnitsMonth: z.number().positive(),
     assemblyMinutes: z.number().nonnegative(),
     managementMinutes: z.number().nonnegative(),
-    targetMarkupPct: z.number().min(0).max(1000),
     machineId: z.string().min(1).nullable(),
-    categoryId: z.string().nullable().optional(),
+    // El markup viene 100% de la categoría: el campo es obligatorio.
+    categoryId: z.string().min(1, 'Seleccioná una categoría para el producto'),
     pieces: z.array(pieceSchema).min(0),
     materials: z.array(materialLineSchema).min(0),
     channels: z.array(channelLineSchema).optional(),

@@ -14,11 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 
-export interface ChannelLite {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
 export interface FilamentLite {
   id: string;
   name: string;
@@ -30,7 +25,6 @@ export interface CustomerOption {
   email: string | null;
   phone: string | null;
   isActive: boolean;
-  defaultChannelId: string | null;
   skipChannelCommission: boolean;
   skipMarketing: boolean;
   skipRegime: boolean;
@@ -71,6 +65,18 @@ export interface KeychainTierLite {
   markupPct: number;
 }
 
+interface KeychainMatrixRow {
+  tierId: string;
+  tierLabel: string;
+  minQty: number;
+  maxQty: number | null;
+  markupPct: number;
+  unitPrice: number;
+  unitProfit: number;
+  lineTotal: number;
+  designSurcharge: number;
+}
+
 /**
  * Form compartido entre "cotización a medida" libre y "cotización de
  * llaveros en cantidad". El modo se controla con `mode`:
@@ -80,26 +86,35 @@ export interface KeychainTierLite {
  *                  con badge de tier aplicada y `templateKind: 'KEYCHAIN'`
  *                  en el payload para que el backend valide + aplique el
  *                  markup de la tier seedeada en `keychain_tiers`.
+ *
+ * El canal no es seleccionable: por default cotiza contra Venta Directa
+ * (`ventaDirectaId`), y cuando el usuario tilda "Operación sin factura"
+ * el canal pasa a Efectivo (`efectivoId`). Los ids se hidratan del
+ * server-side al cargar la página.
  */
 export function RapidQuoteForm({
-  channels,
   filaments,
   nonFilaments,
   customers,
+  ventaDirectaId,
+  efectivoId,
   mode = 'adhoc',
   keychainTiers = [],
 }: {
-  channels: ChannelLite[];
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
   customers: CustomerOption[];
+  ventaDirectaId: string;
+  efectivoId: string;
   mode?: 'adhoc' | 'keychain';
   keychainTiers?: KeychainTierLite[];
 }) {
   const router = useRouter();
   const [customerId, setCustomerId] = useState('');
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '', notes: '' });
-  const [channelId, setChannelId] = useState(channels[0]?.id ?? '');
+  // Sin tildar = con factura = Venta Directa. Tildado = sin factura = Efectivo.
+  const [withoutInvoice, setWithoutInvoice] = useState(false);
+  const channelId = withoutInvoice ? efectivoId : ventaDirectaId;
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
 
@@ -109,12 +124,10 @@ export function RapidQuoteForm({
     const c = customers.find((x) => x.id === id);
     if (c) {
       setCustomer({ name: c.name, email: c.email ?? '', phone: c.phone ?? '', notes: '' });
-      if (c.defaultChannelId) setChannelId(c.defaultChannelId);
     } else {
       setCustomer({ name: '', email: '', phone: '', notes: '' });
     }
   };
-  const [withInvoice, setWithInvoice] = useState(false);
   const [validUntil, setValidUntil] = useState('');
   const [discount, setDiscount] = useState('0');
   const [notes, setNotes] = useState('');
@@ -141,6 +154,7 @@ export function RapidQuoteForm({
   const [designMinutes, setDesignMinutes] = useState('0');
 
   const [preview, setPreview] = useState<Preview | 'loading' | 'error' | null>(null);
+  const [matrix, setMatrix] = useState<KeychainMatrixRow[] | 'loading' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
 
   const buildItem = () => ({
@@ -168,18 +182,39 @@ export function RapidQuoteForm({
 
   const calc = async () => {
     setPreview('loading');
+    if (isKeychain) setMatrix('loading');
     try {
+      const item = buildItem();
       const result = await api<Preview>('/quotes/preview-item', {
         method: 'POST',
         body: {
-          channelId: channelId || null,
+          channelId,
           customerId: customerId || null,
-          item: buildItem(),
+          item,
         },
       });
       setPreview(result);
+      // En modo keychain, además del precio para la cantidad elegida
+      // traemos la matriz comparativa de todos los tiers — para que el
+      // vendedor vea el incentivo de saltar de escala.
+      if (isKeychain) {
+        try {
+          const m = await api<{ tiers: KeychainMatrixRow[] }>('/quotes/keychain-matrix', {
+            method: 'POST',
+            body: {
+              channelId,
+              customerId: customerId || null,
+              payload: item.payload,
+            },
+          });
+          setMatrix(m.tiers);
+        } catch {
+          setMatrix('error');
+        }
+      }
     } catch (err) {
       setPreview('error');
+      if (isKeychain) setMatrix('error');
       handleApiError(err, { fallback: 'Error al calcular' });
     }
   };
@@ -195,8 +230,8 @@ export function RapidQuoteForm({
           customerEmail: customer.email || null,
           customerPhone: customer.phone || null,
           customerNotes: customer.notes || null,
-          channelId: channelId || null,
-          withInvoice,
+          channelId,
+          withInvoice: !withoutInvoice,
           validUntil: validUntil ? new Date(validUntil).toISOString() : null,
           notes: notes || null,
           discount: Number(discount || '0'),
@@ -248,7 +283,7 @@ export function RapidQuoteForm({
       <div className="space-y-4 lg:col-span-2">
         <Card>
           <CardHeader>
-            <CardTitle>Cliente y canal</CardTitle>
+            <CardTitle>Cliente</CardTitle>
             {selectedCustomer && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="inline-flex rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
@@ -304,20 +339,6 @@ export function RapidQuoteForm({
                 disabled={!!selectedCustomer}
               />
             </Field>
-            <Field label="Canal">
-              <select
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-              >
-                <option value="">— sin canal —</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Email">
               <Input
                 type="email"
@@ -346,12 +367,20 @@ export function RapidQuoteForm({
                 onChange={(e) => setDiscount(e.target.value)}
               />
             </Field>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 rounded-md border bg-muted/20 p-3">
               <Checkbox
-                label="Operación con factura"
-                checked={withInvoice}
-                onChange={(e) => setWithInvoice(e.target.checked)}
+                label="Operación sin factura"
+                checked={withoutInvoice}
+                onChange={(e) => {
+                  setWithoutInvoice(e.target.checked);
+                  setPreview(null); // invalida preview previa
+                }}
               />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {withoutInvoice
+                  ? 'Aplica el canal Efectivo (sin IVA ni régimen).'
+                  : 'Aplica el canal Venta Directa (con régimen unificado).'}
+              </p>
             </div>
             <div className="sm:col-span-2">
               <Field label="Notas">
@@ -597,10 +626,13 @@ export function RapidQuoteForm({
         </div>
       </div>
 
-      <Card className="lg:sticky lg:top-20">
+      <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+      <Card>
         <CardHeader>
           <CardTitle>Precio</CardTitle>
-          <CardDescription>Aplicado al canal seleccionado.</CardDescription>
+          <CardDescription>
+            {withoutInvoice ? 'Aplicado al canal Efectivo.' : 'Aplicado a Venta Directa.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {preview === null && (
@@ -641,6 +673,60 @@ export function RapidQuoteForm({
           )}
         </CardContent>
       </Card>
+
+      {isKeychain && matrix != null && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Precios por escala</CardTitle>
+            <CardDescription>
+              Cómo varía el precio según la cantidad. La escala activa queda destacada.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {matrix === 'loading' && (
+              <p className="text-sm text-muted-foreground">Calculando…</p>
+            )}
+            {matrix === 'error' && (
+              <p className="text-sm text-destructive">No se pudo cargar la matriz.</p>
+            )}
+            {Array.isArray(matrix) && (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left uppercase tracking-wider text-muted-foreground">
+                    <th className="py-1.5 pr-2 font-medium">Escala</th>
+                    <th className="py-1.5 pr-2 font-medium text-right">Markup</th>
+                    <th className="py-1.5 pr-2 font-medium text-right">Unitario</th>
+                    <th className="py-1.5 pr-0 font-medium text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {matrix.map((row) => {
+                    const isActive = activeKeychainTier?.id === row.tierId;
+                    return (
+                      <tr
+                        key={row.tierId}
+                        className={isActive ? 'bg-primary/10 font-medium' : ''}
+                      >
+                        <td className="py-1.5 pr-2 font-mono">{row.tierLabel}</td>
+                        <td className="py-1.5 pr-2 text-right font-mono">
+                          {row.markupPct}%
+                        </td>
+                        <td className="py-1.5 pr-2 text-right font-mono">
+                          {formatMoney(row.unitPrice)}
+                        </td>
+                        <td className="py-1.5 pr-0 text-right font-mono font-semibold">
+                          {formatMoney(row.lineTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      </div>
     </div>
   );
 }

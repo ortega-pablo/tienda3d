@@ -11,8 +11,11 @@ interface CostShape {
   fabricationPrice?: number;
 }
 
-interface ProductLite {
+interface PricesShape {
+  /** baseMarkupPct efectivo de la categoría del producto. */
   targetMarkupPct: number;
+  /** Profit por unidad usando ese markup base — el endpoint ya lo calcula. */
+  profitPerUnit: number;
 }
 
 export default async function ProductionDetailPage({
@@ -31,18 +34,18 @@ export default async function ProductionDetailPage({
     throw err;
   }
 
-  // Estimated profit: fabricationPrice × markup × quantity (basado en el costo
-  // y markup *actuales* del producto — no en un snapshot histórico).
-  const [cost, product] = await Promise.all([
+  // Estimated profit: viene del endpoint de prices, que ya resuelve el
+  // baseMarkupPct de la categoría (con fallback al padre) y devuelve
+  // `profitPerUnit = fabricationPrice × baseMarkup%`. Snapshot histórico
+  // del momento de la cotización vive en `QuoteItem.unitProfit`; acá
+  // mostramos un estimado live para la planificación.
+  const [cost, prices] = await Promise.all([
     api<CostShape>(`/products/${order.productId}/cost`).catch(() => null),
-    api<ProductLite>(`/products/${order.productId}`).catch(() => null),
+    api<PricesShape>(`/products/${order.productId}/prices`).catch(() => null),
   ]);
   const fabricationPrice = cost?.fabricationPrice ?? null;
-  const markupPct = product?.targetMarkupPct ?? null;
-  const profitPerUnit =
-    fabricationPrice != null && markupPct != null
-      ? fabricationPrice * (markupPct / 100)
-      : null;
+  const markupPct = prices?.targetMarkupPct ?? null;
+  const profitPerUnit = prices?.profitPerUnit ?? null;
   const profitTotal = profitPerUnit != null ? profitPerUnit * order.quantity : null;
 
   return (

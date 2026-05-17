@@ -79,27 +79,26 @@ export class CustomerCatalogService {
       if (ok) eligible.push(p);
     }
 
-    // Resolvemos el nombre del canal default (puede venir null si el cliente
-    // todavía no tiene defaultChannelId asignado).
-    let channelName: string | null = null;
-    if (customer.defaultChannelId) {
-      const ch = await this.prisma.channel.findUnique({
-        where: { id: customer.defaultChannelId },
-        select: { name: true, isActive: true },
-      });
-      if (ch?.isActive) channelName = ch.name;
-    }
+    // El catálogo se arma siempre contra Venta Directa (canal default del
+    // flujo simplificado, decisión 2026-05-16). Si el cliente quiere ver
+    // precios "sin factura" (Efectivo), se cambia desde el filtro del
+    // catálogo en runtime (no es relevante para el PDF).
+    const ventaDirecta = await this.prisma.channel.findFirst({
+      where: { slug: 'directa', isActive: true },
+      select: { id: true, name: true },
+    });
+    const channelName: string | null = ventaDirecta?.name ?? null;
 
-    // Para cada producto, calculamos sus precios y filtramos al canal
-    // default (si está y existe en los canales del producto). Si no, usamos
-    // el primer canal con precio (típicamente Venta Directa).
+    // Para cada producto, calculamos sus precios y filtramos al canal Venta
+    // Directa. Si el producto no lo tiene habilitado, caemos al primer canal
+    // con precio razonable (típicamente Efectivo).
     const products: CatalogProduct[] = [];
     for (const p of eligible) {
       try {
         const prices = await this.customerPricing.forCustomerProduct(customerId, p.id);
         const candidate =
           prices.channels.find(
-            (c) => customer.defaultChannelId && c.channelId === customer.defaultChannelId,
+            (c) => ventaDirecta && c.channelId === ventaDirecta.id,
           ) ??
           prices.channels.find((c) => !c.needsConfig && (c.base != null || c.tiers.length > 0)) ??
           null;

@@ -18,6 +18,8 @@ interface FormState {
   sortOrder: string;
   isActive: boolean;
   notes: string;
+  /** Vacío = NULL en backend (hereda del padre). */
+  baseMarkupPct: string;
 }
 
 function initial(category: CategoryNode | null): FormState {
@@ -29,6 +31,7 @@ function initial(category: CategoryNode | null): FormState {
       sortOrder: category.sortOrder.toString(),
       isActive: category.isActive,
       notes: category.notes ?? '',
+      baseMarkupPct: category.baseMarkupPct != null ? category.baseMarkupPct.toString() : '',
     };
   }
   return {
@@ -38,6 +41,7 @@ function initial(category: CategoryNode | null): FormState {
     sortOrder: '0',
     isActive: true,
     notes: '',
+    baseMarkupPct: '',
   };
 }
 
@@ -74,6 +78,9 @@ export function CategoryDialog({
         sortOrder: Number(form.sortOrder) || 0,
         isActive: form.isActive,
         notes: form.notes.trim() || null,
+        // baseMarkupPct vacío = null (hereda del padre).
+        baseMarkupPct:
+          form.baseMarkupPct.trim() === '' ? null : Number(form.baseMarkupPct),
       };
       // Slug se manda solo si el usuario lo editó manualmente (sino el
       // backend lo deriva del nombre con slugify).
@@ -146,6 +153,23 @@ export function CategoryDialog({
               <Input
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
+            </Field>
+            <Field
+              label="Markup base %"
+              hint={
+                parent
+                  ? 'Vacío = hereda del padre. Aplica cuando ningún tier cubre la cantidad.'
+                  : 'Markup default cuando ningún tier cubre la cantidad.'
+              }
+            >
+              <Input
+                type="number"
+                step="any"
+                min={0}
+                value={form.baseMarkupPct}
+                onChange={(e) => setForm({ ...form, baseMarkupPct: e.target.value })}
+                placeholder={parent ? 'hereda del padre' : '100'}
               />
             </Field>
             <div className="flex items-end">

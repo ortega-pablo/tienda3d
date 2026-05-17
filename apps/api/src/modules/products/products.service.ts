@@ -44,14 +44,15 @@ export interface ProductDto {
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
   managementMinutes: number;
-  /** Markup over cost — drives the absolute profit per unit (Logic B). */
-  targetMarkupPct: number;
   /** Operational metadata: which printer manufactures this product. */
   machineId: string | null;
   machineName: string | null;
-  /** Categoría del producto (jerarquía de 2 niveles). Nullable. */
-  categoryId: string | null;
-  categoryName: string | null;
+  /**
+   * Categoría del producto. Obligatoria — los productos sin categoría real
+   * caen al seed `cat_unsorted` ("Sin clasificar") creado por la migración.
+   */
+  categoryId: string;
+  categoryName: string;
   /** Si la categoría es subcategoría, el id de su padre. */
   categoryParentId: string | null;
   pieces: ProductPieceDto[];
@@ -73,8 +74,8 @@ export interface ProductSummaryDto {
   totalPrintMinutes: number;
   machineId: string | null;
   machineName: string | null;
-  categoryId: string | null;
-  categoryName: string | null;
+  categoryId: string;
+  categoryName: string;
 }
 
 interface PieceInput {
@@ -105,9 +106,9 @@ export interface ProductInput {
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
   managementMinutes: number;
-  targetMarkupPct: number;
   machineId: string | null;
-  categoryId?: string | null;
+  /** Categoría obligatoria — el markup viene 100% de la categoría/subcategoría. */
+  categoryId: string;
   pieces: PieceInput[];
   materials: MaterialLineInput[];
   channels?: ProductChannelInput[];
@@ -140,7 +141,7 @@ export class ProductsService {
       machineId: p.machineId,
       machineName: p.machine?.name ?? null,
       categoryId: p.categoryId,
-      categoryName: p.category?.name ?? null,
+      categoryName: p.category.name,
     }));
   }
 
@@ -169,7 +170,7 @@ export class ProductsService {
       );
     }
     await this.assertMachineExists(input.machineId);
-    if (input.categoryId) await this.assertCategoryExists(input.categoryId);
+    await this.assertCategoryExists(input.categoryId);
     if (input.pieces.length === 0 && input.materials.length === 0) {
       throw new BadRequestException(
         'El producto debe tener al menos una pieza impresa o un insumo',
@@ -194,9 +195,8 @@ export class ProductsService {
         estimatedUnitsMonth: input.estimatedUnitsMonth,
         assemblyMinutes: input.assemblyMinutes,
         managementMinutes: input.managementMinutes,
-        targetMarkupPct: input.targetMarkupPct,
         machineId: input.machineId,
-        categoryId: input.categoryId ?? null,
+        categoryId: input.categoryId,
         pieces: {
           create: input.pieces.map((piece, idx) => ({
             name: piece.name,
@@ -239,7 +239,7 @@ export class ProductsService {
     if (input.machineId !== exists.machineId) {
       await this.assertMachineExists(input.machineId);
     }
-    if (input.categoryId && input.categoryId !== exists.categoryId) {
+    if (input.categoryId !== exists.categoryId) {
       await this.assertCategoryExists(input.categoryId);
     }
     if (input.pieces.length === 0 && input.materials.length === 0) {
@@ -264,9 +264,8 @@ export class ProductsService {
           estimatedUnitsMonth: input.estimatedUnitsMonth,
           assemblyMinutes: input.assemblyMinutes,
           managementMinutes: input.managementMinutes,
-          targetMarkupPct: input.targetMarkupPct,
           machineId: input.machineId,
-          categoryId: input.categoryId ?? null,
+          categoryId: input.categoryId,
         },
       });
       await tx.productPiece.deleteMany({ where: { productId: id } });
@@ -420,12 +419,11 @@ export class ProductsService {
       estimatedUnitsMonth: dec(p.estimatedUnitsMonth),
       assemblyMinutes: dec(p.assemblyMinutes),
       managementMinutes: dec(p.managementMinutes),
-      targetMarkupPct: dec(p.targetMarkupPct),
       machineId: p.machineId,
       machineName: p.machine?.name ?? null,
       categoryId: p.categoryId,
-      categoryName: p.category?.name ?? null,
-      categoryParentId: p.category?.parentId ?? null,
+      categoryName: p.category.name,
+      categoryParentId: p.category.parentId,
       pieces: p.pieces.map((piece) => ({
         id: piece.id,
         name: piece.name,

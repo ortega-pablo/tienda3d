@@ -1,11 +1,8 @@
-import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
 import { CustomerEditor } from '../[id]/customer-editor';
-import type { ChannelLite } from '../types';
 
 export default async function NewCustomerPage() {
   await requirePermission('customer:write');
-  const channels = await api<ChannelLite[]>('/channels');
 
   return (
     <div className="space-y-6">
@@ -16,7 +13,7 @@ export default async function NewCustomerPage() {
           configuran después de crear el cliente.
         </p>
       </header>
-      <CustomerEditor mode="create" availableChannels={channels.filter((c) => c.isActive)} />
+      <CustomerEditor mode="create" />
     </div>
   );
 }

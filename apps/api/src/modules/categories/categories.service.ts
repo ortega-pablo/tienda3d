@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { decOrNull } from '@/common/utils/decimal';
 
 export interface CategoryDto {
   id: string;
@@ -16,6 +17,11 @@ export interface CategoryDto {
   isActive: boolean;
   sortOrder: number;
   notes: string | null;
+  /**
+   * Markup fallback (en %) cuando ninguna `CategoryPriceTier` cubre la
+   * cantidad cotizada. Si es null, una subcategoría hereda del padre.
+   */
+  baseMarkupPct: number | null;
   productCount: number;
   /** Subcategorías (solo para nodos padre). */
   children?: CategoryDto[];
@@ -29,6 +35,7 @@ export interface CategoryInput {
   isActive?: boolean;
   sortOrder?: number;
   notes?: string | null;
+  baseMarkupPct?: number | null;
 }
 
 @Injectable()
@@ -118,6 +125,7 @@ export class CategoriesService {
         isActive: input.isActive ?? true,
         sortOrder: input.sortOrder ?? 0,
         notes: input.notes ?? null,
+        baseMarkupPct: input.baseMarkupPct ?? null,
       },
       include: { _count: { select: { products: true } } },
     });
@@ -157,6 +165,9 @@ export class CategoriesService {
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          ...(input.baseMarkupPct !== undefined
+            ? { baseMarkupPct: input.baseMarkupPct }
+            : {}),
         },
         include: { _count: { select: { products: true } } },
       })
@@ -201,6 +212,7 @@ export class CategoriesService {
       isActive: c.isActive,
       sortOrder: c.sortOrder,
       notes: c.notes,
+      baseMarkupPct: decOrNull(c.baseMarkupPct),
       productCount: c._count.products,
     };
   }
