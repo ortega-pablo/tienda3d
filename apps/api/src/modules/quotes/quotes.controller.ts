@@ -91,6 +91,8 @@ const statusSchema = z.object({
 
 const listQuerySchema = z.object({
   type: z.nativeEnum(QuoteType).optional(),
+  /** Filtra cotizaciones cuyos items tienen `templateKind: 'KEYCHAIN'` en el payload. */
+  templateKind: z.literal('KEYCHAIN').optional(),
 });
 
 const adhocCostSchema = z.object({

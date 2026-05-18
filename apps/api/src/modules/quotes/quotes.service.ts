@@ -48,12 +48,32 @@ export class QuotesService {
     private readonly keychainTiers: KeychainTiersService,
   ) {}
 
-  async list(filters: { type?: QuoteType } = {}): Promise<QuoteSummaryDto[]> {
+  async list(
+    filters: { type?: QuoteType; templateKind?: 'KEYCHAIN' } = {},
+  ): Promise<QuoteSummaryDto[]> {
+    // Filtro por templateKind: como vive dentro del JSON `adhocPayload`,
+    // usamos Prisma JSON path. Si pidieron keychain, forzamos type=ADHOC
+    // y buscamos items con `templateKind: 'KEYCHAIN'` en el payload.
+    const where: Prisma.QuoteWhereInput = {};
+    if (filters.type) where.type = filters.type;
+    if (filters.templateKind === 'KEYCHAIN') {
+      where.type = QuoteType.ADHOC;
+      where.items = {
+        some: {
+          adhocPayload: {
+            path: ['templateKind'],
+            equals: 'KEYCHAIN',
+          },
+        },
+      };
+    }
+
     const quotes = await this.prisma.quote.findMany({
-      where: filters.type ? { type: filters.type } : undefined,
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
-        items: { select: { id: true } },
+        // Necesitamos `adhocPayload` para derivar `templateKind` en el DTO.
+        items: { select: { id: true, adhocPayload: true } },
         channel: { select: { name: true } },
       },
     });
@@ -67,6 +87,15 @@ export class QuotesService {
       total: dec(q.total),
       itemCount: q.items.length,
       createdAt: q.createdAt,
+      templateKind: q.items.some(
+        (i) =>
+          i.adhocPayload &&
+          typeof i.adhocPayload === 'object' &&
+          !Array.isArray(i.adhocPayload) &&
+          (i.adhocPayload as { templateKind?: unknown }).templateKind === 'KEYCHAIN',
+      )
+        ? 'KEYCHAIN'
+        : null,
     }));
   }
 
@@ -829,6 +858,9 @@ export class QuotesService {
       createdById: q.createdById,
       createdAt: q.createdAt,
       itemCount: items.length,
+      templateKind: items.some((i) => i.adhocPayload?.templateKind === 'KEYCHAIN')
+        ? 'KEYCHAIN'
+        : null,
       items,
     };
   }
