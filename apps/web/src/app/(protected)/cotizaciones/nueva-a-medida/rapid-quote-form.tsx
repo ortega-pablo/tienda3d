@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
@@ -65,6 +65,16 @@ export interface KeychainTierLite {
   markupPct: number;
 }
 
+export interface KeychainDefaultsLite {
+  pieceName: string;
+  pieceGrams: number;
+  piecePrintMinutes: number;
+  pieceFilamentId: string | null;
+  assemblyMinutes: number;
+  managementMinutes: number;
+  materials: Array<{ materialId: string; quantity: number; sortOrder: number }>;
+}
+
 interface KeychainMatrixRow {
   tierId: string;
   tierLabel: string;
@@ -101,6 +111,7 @@ export function RapidQuoteForm({
   mode = 'adhoc',
   keychainTiers = [],
   batchSize = 1,
+  keychainDefaults,
 }: {
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
@@ -116,6 +127,13 @@ export function RapidQuoteForm({
    * legacy (per-unidad).
    */
   batchSize?: number;
+  /**
+   * Valores default que el vendedor ve precargados al abrir el form en
+   * modo keychain (pieza, insumos, tiempos). Editable en
+   * `/parametros/llaveros`. Si está ausente o el modo es 'adhoc', el
+   * form arranca con el placeholder genérico ("Pieza" vacía).
+   */
+  keychainDefaults?: KeychainDefaultsLite;
 }) {
   const router = useRouter();
   const [customerId, setCustomerId] = useState('');
@@ -159,12 +177,53 @@ export function RapidQuoteForm({
         (t) => Number(quantity) >= t.minQty && (t.maxQty == null || Number(quantity) <= t.maxQty),
       ) ?? null)
     : null;
-  const [pieces, setPieces] = useState<PieceDraft[]>([
-    { name: 'Pieza', grams: '', printMinutes: '', filamentId: filaments[0]?.id ?? '' },
-  ]);
-  const [materials, setMaterials] = useState<MaterialDraft[]>([]);
-  const [assemblyMinutes, setAssemblyMinutes] = useState('0');
-  const [managementMinutes, setManagementMinutes] = useState('0');
+  // Pre-carga en modo keychain: tomamos los defaults configurados en
+  // `/parametros/llaveros` (pieza, insumos, tiempos). En modo ADHOC libre
+  // arrancamos con el placeholder vacío de siempre. El vendedor puede
+  // editar/quitar/agregar lo que quiera.
+  const initialPieces: PieceDraft[] = useMemo(() => {
+    if (isKeychain && keychainDefaults) {
+      return [
+        {
+          name: keychainDefaults.pieceName || 'Llavero',
+          grams: keychainDefaults.pieceGrams > 0 ? String(keychainDefaults.pieceGrams) : '',
+          printMinutes:
+            keychainDefaults.piecePrintMinutes > 0
+              ? String(keychainDefaults.piecePrintMinutes)
+              : '',
+          filamentId:
+            keychainDefaults.pieceFilamentId ?? filaments[0]?.id ?? '',
+        },
+      ];
+    }
+    return [
+      { name: 'Pieza', grams: '', printMinutes: '', filamentId: filaments[0]?.id ?? '' },
+    ];
+    // Solo corre una vez al montar — el form es controlado a partir de ahí.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const initialMaterials: MaterialDraft[] = useMemo(() => {
+    if (isKeychain && keychainDefaults) {
+      return keychainDefaults.materials.map((m) => ({
+        materialId: m.materialId,
+        quantity: String(m.quantity),
+      }));
+    }
+    return [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [pieces, setPieces] = useState<PieceDraft[]>(initialPieces);
+  const [materials, setMaterials] = useState<MaterialDraft[]>(initialMaterials);
+  const [assemblyMinutes, setAssemblyMinutes] = useState(
+    isKeychain && keychainDefaults
+      ? String(keychainDefaults.assemblyMinutes)
+      : '0',
+  );
+  const [managementMinutes, setManagementMinutes] = useState(
+    isKeychain && keychainDefaults
+      ? String(keychainDefaults.managementMinutes)
+      : '0',
+  );
   const [designMinutes, setDesignMinutes] = useState('0');
 
   const [preview, setPreview] = useState<Preview | 'loading' | 'error' | null>(null);

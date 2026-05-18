@@ -205,6 +205,8 @@ model Material {
   productMaterials ProductMaterial[]
   defaultForPieces ProductPiece[]     @relation("PieceDefaultFilament")
   stockMovements   StockMovement[]
+  keychainDefaultFilament KeychainDefaults[]        @relation("KeychainDefaultFilament")
+  keychainDefaultMaterials KeychainDefaultMaterial[]
 
   @@index([type])
   @@index([isActive])
@@ -785,4 +787,57 @@ model KeychainTier {
   updatedAt DateTime @updatedAt
 
   @@map("keychain_tiers")
+}
+
+/// Valores default que se precargan al abrir el form de cotización de
+/// llaveros (`/cotizaciones/nueva-llaveros`). Tabla singleton — siempre
+/// existe una sola fila con id estable `keychain_defaults_singleton`.
+/// El vendedor puede editar, agregar o quitar piezas/materiales/tiempos
+/// en cada cotización individual; estos valores son solo el punto de
+/// partida.
+///
+/// Los valores siguen la convención de batch del flujo keychain: se
+/// cargan como totales para producir `keychain_batch_size` llaveros (no
+/// per-unidad). El backend divide internamente al costear.
+model KeychainDefaults {
+  id                String   @id @default(cuid())
+
+  // Pieza default (siempre 1 pieza al precargar — se puede sumar más).
+  pieceName         String   @default("Llavero")
+  pieceGrams        Decimal  @default(0) @db.Decimal(10, 3)
+  piecePrintMinutes Decimal  @default(0) @db.Decimal(10, 2)
+  /// Filamento default. Si es null, el form arranca con el primero del
+  /// catálogo (mismo fallback que el form ADHOC).
+  pieceFilamentId   String?
+  pieceFilament     Material? @relation("KeychainDefaultFilament", fields: [pieceFilamentId], references: [id], onDelete: SetNull)
+
+  // Tiempos default (totales para el batch).
+  assemblyMinutes   Decimal  @default(0) @db.Decimal(10, 2)
+  managementMinutes Decimal  @default(0) @db.Decimal(10, 2)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  materials         KeychainDefaultMaterial[]
+
+  @@map("keychain_defaults")
+}
+
+/// Insumos default que se precargan en cada cotización de llaveros. La
+/// cantidad sigue la convención de batch (totales para producir
+/// `keychain_batch_size` llaveros).
+model KeychainDefaultMaterial {
+  id           String           @id @default(cuid())
+  defaultsId   String
+  defaults     KeychainDefaults @relation(fields: [defaultsId], references: [id], onDelete: Cascade)
+  materialId   String
+  material     Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity     Decimal          @db.Decimal(10, 3)
+  sortOrder    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([defaultsId, materialId])
+  @@index([defaultsId])
+  @@map("keychain_default_materials")
 }

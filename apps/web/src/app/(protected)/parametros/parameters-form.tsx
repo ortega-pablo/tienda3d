@@ -27,12 +27,7 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
     type: 'number',
     help: 'Costo por hora de diseño de modelos 3D. Solo aplica a cotizaciones a medida como cargo plano por línea — no escala con la cantidad.',
   },
-  keychain_batch_size: {
-    label: 'Tamaño del batch de llaveros',
-    suffix: 'unidades',
-    type: 'number',
-    help: 'Cuántos llaveros entran en una bandeja de impresión. Los inputs (gramos, minutos, consumos) de la cotización de llaveros se interpretan como totales para este tamaño de batch; el sistema divide internamente para calcular el costo por unidad.',
-  },
+  // keychain_batch_size se edita desde /parametros/llaveros (no aquí).
   adhoc_default_markup_pct: {
     label: 'Markup default de cotización a medida',
     suffix: '%',
@@ -68,12 +63,23 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
   currency: { label: 'Moneda', type: 'text', help: 'Código ISO 4217.' },
 };
 
+/**
+ * Params que se editan desde una pantalla dedicada y no deben aparecer
+ * mezclados con los globales en `/parametros`. Solo se filtran de la
+ * grilla; el backend los sigue persistiendo en `global_params`.
+ */
+const HIDDEN_KEYS = new Set(['keychain_batch_size']);
+
 export function ParametersForm({ initial }: { initial: ParameterDto[] }) {
   const can = useHasPermission();
   const canWrite = can('parameter:write');
   const router = useRouter();
 
-  const initialValues = Object.fromEntries(initial.map((p) => [p.key, p.value]));
+  // Filtramos las keys ocultas del state local: el form solo edita y
+  // envía las que se muestran. Las ocultas conservan su valor en DB
+  // (las edita otra pantalla, p.ej. `/parametros/llaveros`).
+  const visibleParams = initial.filter((p) => !HIDDEN_KEYS.has(p.key));
+  const initialValues = Object.fromEntries(visibleParams.map((p) => [p.key, p.value]));
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const editMode = useEditMode();
 
@@ -92,7 +98,7 @@ export function ParametersForm({ initial }: { initial: ParameterDto[] }) {
 
   const disabled = !editMode.editing;
 
-  const isFormValid = initial.every((p) => {
+  const isFormValid = visibleParams.every((p) => {
     const meta = META[p.key];
     const raw = values[p.key];
     if (raw == null || raw.trim() === '') return false;
@@ -133,7 +139,9 @@ export function ParametersForm({ initial }: { initial: ParameterDto[] }) {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {initial.map((p) => {
+        {initial
+          .filter((p) => !HIDDEN_KEYS.has(p.key))
+          .map((p) => {
           const meta = META[p.key] ?? { label: p.key };
           return (
             <div key={p.key} className="space-y-1.5">

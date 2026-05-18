@@ -5,6 +5,7 @@ import {
   RapidQuoteForm,
   type CustomerOption,
   type FilamentLite,
+  type KeychainDefaultsLite,
   type KeychainTierLite,
   type MaterialLite,
 } from '../nueva-a-medida/rapid-quote-form';
@@ -27,7 +28,7 @@ export default async function NewKeychainQuotePage() {
   const user = await requirePermission('quote:create');
   const canReadCustomers = user.permissions.includes('customer:read');
 
-  const [channels, filaments, materials, customers, keychainTiers, params] =
+  const [channels, filaments, materials, customers, keychainTiers, params, keychainDefaults] =
     await Promise.all([
       api<ChannelLite[]>('/channels'),
       api<FilamentLite[]>('/materials?type=FILAMENT&activeOnly=true'),
@@ -37,6 +38,7 @@ export default async function NewKeychainQuotePage() {
         : Promise.resolve([] as CustomerOption[]),
       api<KeychainTierLite[]>('/keychain-tiers'),
       api<ParamDto[]>('/parameters'),
+      api<KeychainDefaultsLite>('/keychain-defaults'),
     ]);
   const nonFilaments = materials.filter((m) => m.type !== 'FILAMENT' && m.isActive);
 
@@ -85,6 +87,7 @@ export default async function NewKeychainQuotePage() {
         efectivoId={efectivo.id}
         keychainTiers={keychainTiers}
         batchSize={batchSize}
+        keychainDefaults={keychainDefaults}
       />
     </div>
   );
