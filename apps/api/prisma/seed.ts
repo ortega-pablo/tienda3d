@@ -132,6 +132,7 @@ async function seedGlobalParams() {
     ['kwh_cost', '303.98', 'Costo del kWh con todos los impuestos (ARS)'],
     ['labor_hour_cost', '5000', 'Valor hora de mano de obra (ARS)'],
     ['design_hour_cost', '0', 'Valor hora de diseño 3D (ARS) — surcharge plano por línea ADHOC'],
+    ['keychain_batch_size', '5', 'Tamaño del batch de llaveros — los inputs de la cotización son totales para esta cantidad'],
     ['contingency_pct', '5', 'Contingencia aplicada al costo de producción (%)'],
     ['reinvestment_pct', '10', 'Reinversión aplicada al costo de producción (%)'],
     ['unified_regime_pct', '4', 'Régimen unificado Mendoza (%) — modelo simple'],

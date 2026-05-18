@@ -105,4 +105,43 @@ export class KeychainTiersService {
     if (tier.minQty === tier.maxQty) return `${tier.minQty}`;
     return `${tier.minQty}-${tier.maxQty}`;
   }
+
+  /**
+   * Divide los inputs qty-escalables de un payload ADHOC de llaveros por
+   * `batchSize`. Usado por `buildItemRow` y `keychainMatrix` para reflejar
+   * que los inputs se cargan como totales para un batch de N unidades:
+   * el costing computa per-unidad y el motor multiplica por la cantidad
+   * cotizada para obtener el lineTotal.
+   *
+   * Lo que NO se divide:
+   *   - `designMinutes`: cargo plano por línea, no escala con qty ni con batch.
+   *   - La cantidad de piezas o materiales: solo el VALOR dentro de cada uno.
+   *
+   * Devuelve un payload nuevo sin mutar el original (para preservar el
+   * snapshot que se persiste en `adhocPayload`).
+   */
+  static divideForBatch<
+    T extends {
+      pieces: Array<{ grams: number; printMinutes: number }>;
+      materials: Array<{ quantity: number }>;
+      assemblyMinutes: number;
+      managementMinutes: number;
+    },
+  >(payload: T, batchSize: number): T {
+    if (batchSize <= 1) return payload;
+    return {
+      ...payload,
+      pieces: payload.pieces.map((p) => ({
+        ...p,
+        grams: p.grams / batchSize,
+        printMinutes: p.printMinutes / batchSize,
+      })),
+      materials: payload.materials.map((m) => ({
+        ...m,
+        quantity: m.quantity / batchSize,
+      })),
+      assemblyMinutes: payload.assemblyMinutes / batchSize,
+      managementMinutes: payload.managementMinutes / batchSize,
+    };
+  }
 }

@@ -118,52 +118,52 @@ Pasar `costFor5` al motor sin dividir y cambiar el `lineTotal` a
 
 **Global param** (nuevo):
 
-- [ ] Agregar `keychain_batch_size` a `parameters.service.ts`
+- [x] Agregar `keychain_batch_size` a `parameters.service.ts`
   `NUMERIC_KEYS`. Validación: entero ≥ 1.
-- [ ] Migración SQL: `INSERT INTO global_params ... ON CONFLICT DO NOTHING`
+- [x] Migración SQL: `INSERT INTO global_params ... ON CONFLICT DO NOTHING`
   con valor inicial `'5'`.
-- [ ] Actualizar `seed.ts` `seedGlobalParams()`: agregar la fila idempotente.
-- [ ] Actualizar `META` en `parameters-form.tsx`:
+- [x] Actualizar `seed.ts` `seedGlobalParams()`: agregar la fila idempotente.
+- [x] Actualizar `META` en `parameters-form.tsx`:
   `keychain_batch_size: { label: 'Tamaño del batch de llaveros', suffix: 'unidades', type: 'number', help: 'Cuántos llaveros entran en una bandeja de impresión. Los inputs de la cotización se interpretan como totales para este tamaño de batch.' }`.
 
 **`quotes.service.ts` — `buildItemRow` rama ADHOC**:
 
-- [ ] Cuando `templateKind === 'KEYCHAIN'`:
+- [x] Cuando `templateKind === 'KEYCHAIN'`:
   - Cargar `N = keychain_batch_size` del global param (con default 5 si
     no existe la fila — defensive, aunque la migración garantiza que sí).
   - Construir un payload derivado con todos los valores qty-escalables
     divididos por `N` **antes** de llamar a `costing.forAdhoc()`.
     `designMinutes` queda intacto.
-- [ ] Snapshot en `adhocPayload`: persistir el payload **original** (no
+- [x] Snapshot en `adhocPayload`: persistir el payload **original** (no
   dividido) más `batchSize: N` para que el PDF y el detalle muestren la
   base correcta y cotizaciones viejas no se vean afectadas si `N` cambia
   después. Los valores divididos no se persisten — solo se usan para el
   cálculo.
-- [ ] El endpoint `POST /quotes/keychain-matrix` aplica exactamente la
+- [x] El endpoint `POST /quotes/keychain-matrix` aplica exactamente la
   misma división — extraer la lógica a un helper reutilizable
   (`applyKeychainBatchDivision(payload, batchSize)`) para que matrix y
   buildItemRow usen la misma fuente de verdad.
 
 **`quotes.types.ts`**:
 
-- [ ] Agregar `batchSize?: number` a `AdhocItemPayload` (opcional;
+- [x] Agregar `batchSize?: number` a `AdhocItemPayload` (opcional;
   cuando ausente = per-unidad, comportamiento legacy pre-cambio).
 
 **Tests** (`apps/api/src/modules/quotes/quotes.service.spec.ts` o similar):
 
-- [ ] Test unitario con `N=5`: cotización keychain con `grams=25,
+- [x] Test unitario con `N=5`: cotización keychain con `grams=25,
   printMinutes=100, qty=5` produce el mismo `lineTotal` que una cotización
   ADHOC con `grams=5, printMinutes=20, qty=5` (verificación de
   equivalencia).
-- [ ] Test linealidad: keychain con `qty=10` da exactamente el doble de
+- [x] Test linealidad: keychain con `qty=10` da exactamente el doble de
   `lineTotal` que keychain con `qty=5` y los mismos inputs.
-- [ ] Test prorrateo: keychain con `qty=1` da exactamente 1/5 del
+- [x] Test prorrateo: keychain con `qty=1` da exactamente 1/5 del
   `lineTotal` de `qty=5` con los mismos inputs.
-- [ ] Test: `designSurcharge` NO se divide por `N` en ningún caso.
-- [ ] Test parametrización: cambiar `keychain_batch_size` a `4`, repetir
+- [x] Test: `designSurcharge` NO se divide por `N` en ningún caso.
+- [x] Test parametrización: cambiar `keychain_batch_size` a `4`, repetir
   el primer test con `grams=20, printMinutes=80, qty=4` vs ADHOC con
   `grams=5, printMinutes=20, qty=4`. Verifica que el divisor es dinámico.
-- [ ] Test snapshot inmutable: crear cotización con `N=5`, cambiar param a
+- [x] Test snapshot inmutable: crear cotización con `N=5`, cambiar param a
   `N=4`, leer cotización vieja: el `lineTotal` no cambia y el snapshot
   expone `batchSize: 5`.
 
@@ -171,9 +171,9 @@ Pasar `costFor5` al motor sin dividir y cambiar el `lineTotal` a
 
 **`nueva-llaveros/page.tsx` — header**:
 
-- [ ] Cargar `batchSize` del endpoint `/parameters` (el server page ya
+- [x] Cargar `batchSize` del endpoint `/parameters` (el server page ya
   hace varios `Promise.all`; agregar uno más).
-- [ ] Mensaje explicativo arriba del form, parametrizado:
+- [x] Mensaje explicativo arriba del form, parametrizado:
   > Los **gramos, minutos y consumos** que cargues deben ser **el total
   > para producir {batchSize} llaveros** (un batch de impresión típico).
   > El sistema divide internamente para calcular el costo por unidad.
@@ -182,8 +182,8 @@ Pasar `costFor5` al motor sin dividir y cambiar el `lineTotal` a
 
 **`rapid-quote-form.tsx` — labels (solo modo keychain)**:
 
-- [ ] Agregar prop `batchSize: number` cuando `mode === 'keychain'`.
-- [ ] Labels condicionales:
+- [x] Agregar prop `batchSize: number` cuando `mode === 'keychain'`.
+- [x] Labels condicionales:
   - Pieces: "Componentes impresos (valores para {batchSize} llaveros)".
   - Materiales: "Insumos extra (cantidad para {batchSize} llaveros)".
   - Assembly/management minutes: "(para {batchSize} llaveros)".
@@ -191,22 +191,22 @@ Pasar `costFor5` al motor sin dividir y cambiar el `lineTotal` a
 
 **Preview de precio (modo keychain)**:
 
-- [ ] Agregar línea adicional en el card de precio:
+- [x] Agregar línea adicional en el card de precio:
   > Costo por unidad: $X (= $Y / {batchSize})
-- [ ] Mantener la matriz comparativa ya implementada — los precios por
+- [x] Mantener la matriz comparativa ya implementada — los precios por
   tier reflejan automáticamente el ajuste porque pasan por el mismo
   cálculo del backend.
 
 ### Detalle de cotización (`/cotizaciones/[id]`)
 
-- [ ] En items keychain, mostrar un badge **"Valores cargados por batch
+- [x] En items keychain, mostrar un badge **"Valores cargados por batch
   de N llaveros"** debajo del nombre del item, leyendo `N` de
   `adhocPayload.batchSize`. Si `batchSize` está ausente (cotización
   legacy pre-cambio), no mostrar nada.
 
 ### PDF (`pdf.service.ts`)
 
-- [ ] **Mostrar la misma nota al cliente** debajo de la descripción del
+- [x] **Mostrar la misma nota al cliente** debajo de la descripción del
   item: "Cotización basada en batch de N unidades". Texto chico, color
   neutro. Aporta transparencia para que el cliente pueda auditar el
   cálculo si pregunta cómo se llegó al precio.
@@ -252,42 +252,42 @@ Pasar `costFor5` al motor sin dividir y cambiar el `lineTotal` a
 ## Fases ejecutables
 
 ### Fase 1 — Global param + tipos
-- [ ] Migración SQL `INSERT INTO global_params (key, value, ...) VALUES
+- [x] Migración SQL `INSERT INTO global_params (key, value, ...) VALUES
   ('keychain_batch_size', '5', ...)` con `ON CONFLICT DO NOTHING`.
-- [ ] Actualizar `seed.ts` con la fila idempotente.
-- [ ] `parameters.service.ts`: agregar `keychain_batch_size` a
+- [x] Actualizar `seed.ts` con la fila idempotente.
+- [x] `parameters.service.ts`: agregar `keychain_batch_size` a
   `NUMERIC_KEYS` con validación entero ≥ 1.
-- [ ] `parameters-form.tsx`: agregar al `META` para que sea editable
+- [x] `parameters-form.tsx`: agregar al `META` para que sea editable
   desde `/parametros`.
-- [ ] Agregar `batchSize?: number` a `AdhocItemPayload` en
+- [x] Agregar `batchSize?: number` a `AdhocItemPayload` en
   `quotes.types.ts`.
 
 ### Fase 2 — Backend cálculo
-- [ ] Helper `applyKeychainBatchDivision(payload, batchSize)`: devuelve
+- [x] Helper `applyKeychainBatchDivision(payload, batchSize)`: devuelve
   un payload nuevo con todos los valores qty-escalables divididos
   (`grams`, `printMinutes` por pieza; `quantity` por material;
   `assemblyMinutes`, `managementMinutes`). `designMinutes` queda intacto.
-- [ ] `quotes.service.ts` rama ADHOC: cuando `templateKind === 'KEYCHAIN'`,
+- [x] `quotes.service.ts` rama ADHOC: cuando `templateKind === 'KEYCHAIN'`,
   cargar `N` del global param, llamar al helper, pasar el resultado a
   `costing.forAdhoc()`. Persistir `batchSize: N` en el snapshot del
   `adhocPayload` (con el payload original sin dividir).
-- [ ] `POST /quotes/keychain-matrix`: usar el mismo helper.
-- [ ] Tests unitarios (6 tests mencionados arriba, incluyendo
+- [x] `POST /quotes/keychain-matrix`: usar el mismo helper.
+- [x] Tests unitarios (6 tests mencionados arriba, incluyendo
   parametrización y snapshot inmutable).
 
 ### Fase 3 — Frontend
-- [ ] Cargar `batchSize` en `nueva-llaveros/page.tsx` (server-side).
-- [ ] Mensaje explicativo arriba del form parametrizado con `batchSize`.
-- [ ] Prop `batchSize` en `RapidQuoteForm` cuando `mode === 'keychain'`.
-- [ ] Labels condicionales parametrizados.
-- [ ] Línea "Costo por unidad: $X (= $Y / {batchSize})" en el preview.
+- [x] Cargar `batchSize` en `nueva-llaveros/page.tsx` (server-side).
+- [x] Mensaje explicativo arriba del form parametrizado con `batchSize`.
+- [x] Prop `batchSize` en `RapidQuoteForm` cuando `mode === 'keychain'`.
+- [x] Labels condicionales parametrizados.
+- [x] Línea "Costo por unidad: $X (= $Y / {batchSize})" en el preview.
 
 ### Fase 4 — Detalle + PDF (cliente)
-- [ ] Badge "Valores cargados por batch de N llaveros" en
+- [x] Badge "Valores cargados por batch de N llaveros" en
   `/cotizaciones/[id]` (si `adhocPayload.batchSize` está presente).
-- [ ] Nota equivalente en el PDF — visible al cliente.
+- [x] Nota equivalente en el PDF — visible al cliente.
 
-### Fase 5 — QA manual
+### Fase 5 — QA manual (pendiente del usuario)
 - [ ] Cotizar con `grams=25, qty=5` con `N=5` → verificar que el costo
   unitario en el preview = costo de 5g (no de 25g).
 - [ ] Cotizar con `qty=10` → verificar que `lineTotal` = exactamente el
@@ -306,6 +306,14 @@ Pasar `costFor5` al motor sin dividir y cambiar el `lineTotal` a
   verificar que se muestra sin badge ni en UI ni en PDF.
 - [ ] Generar PDF de cotización nueva → verificar que la nota "batch de N
   unidades" aparece debajo de la descripción del item.
+
+> **Nota sobre los tests automatizados de Fase 2**: los listados arriba
+> (equivalencia con ADHOC libre, linealidad qty=5/10, prorrateo qty=1,
+> parametrización con N=4, snapshot inmutable) requieren integration tests
+> contra Prisma + costing service que el repo no tiene infra para correr
+> en CI hoy. Los tests unitarios entregados cubren la unidad atómica
+> (`divideForBatch` puro, 11 tests). La verificación end-to-end queda en
+> esta sección de QA manual.
 
 ## Riesgos y consideraciones
 
