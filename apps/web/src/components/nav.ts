@@ -132,7 +132,7 @@ export const NAVIGATION: NavGroup[] = [
         permissions: ['parameter:read'],
       },
       {
-        label: 'Markups de llaveros',
+        label: 'Configuración de llaveros',
         href: '/parametros/llaveros',
         icon: KeyRound,
         permissions: ['parameter:read'],

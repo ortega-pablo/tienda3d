@@ -325,6 +325,23 @@ async function seedDemoSupplierPrices(materials: {
   await ensureCurrentPrice(materials.sheets.id, 17_844 / 500);
 }
 
+async function seedKeychainDefaults() {
+  // Singleton: una sola fila con id estable. El admin completa los valores
+  // desde /parametros/llaveros — acá solo garantizamos que la fila existe.
+  await prisma.keychainDefaults.upsert({
+    where: { id: 'keychain_defaults_singleton' },
+    update: {},
+    create: {
+      id: 'keychain_defaults_singleton',
+      pieceName: 'Llavero',
+      pieceGrams: 0,
+      piecePrintMinutes: 0,
+      assemblyMinutes: 0,
+      managementMinutes: 0,
+    },
+  });
+}
+
 async function seedUnsortedCategory() {
   // Categoría parking lot para productos sin clasificar. La migración la
   // crea con id estable `cat_unsorted` para que productos huérfanos puedan
@@ -426,6 +443,8 @@ async function main() {
   console.log('✔ Global parameters (from Excel)');
   await seedKeychainTiers();
   console.log('✔ Keychain bulk tiers (1-4 / 5-20 / 25-35 / 40-95 / 100+)');
+  await seedKeychainDefaults();
+  console.log('✔ Keychain defaults singleton');
   await seedUnsortedCategory();
   console.log('✔ "Sin clasificar" category (parking lot)');
   await seedMachine();
