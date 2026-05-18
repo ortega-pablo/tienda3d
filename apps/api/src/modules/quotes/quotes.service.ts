@@ -663,7 +663,11 @@ export class QuotesService {
         })
       : null;
 
-    const [tier, productChannel, globals, baseMarkup] = await Promise.all([
+    // Para ADHOC libre (sin producto ni override) cargamos el markup default
+    // de cotización a medida del global param. Sin esto el motor usaría 0%
+    // y se vendería al costo.
+    const needsAdhocDefault = !product && markupOverridePct == null;
+    const [tier, productChannel, globals, baseMarkup, adhocDefaultParam] = await Promise.all([
       product
         ? this.categoryTiers.findApplicable(product.categoryId, channelId, effectiveQty)
         : Promise.resolve(null),
@@ -676,14 +680,26 @@ export class QuotesService {
       product
         ? this.pricing.resolveBaseMarkup(product.categoryId).catch(() => 0)
         : Promise.resolve(0),
+      needsAdhocDefault
+        ? this.prisma.globalParam.findUnique({ where: { key: 'adhoc_default_markup_pct' } })
+        : Promise.resolve(null),
     ]);
+
+    const adhocDefaultMarkup = needsAdhocDefault
+      ? adhocDefaultParam
+        ? Math.max(0, Number(adhocDefaultParam.value))
+        : 60
+      : 0;
 
     const cfg = this.pricing.toConfig(channel);
     const productInputs = {
-      // Sin tier que cubra la qty, el motor usa este markup base (de la
-      // categoría, con fallback al padre). customMarkupPct del cliente lo
-      // pisa internamente.
-      targetMarkupPct: baseMarkup,
+      // Resolución del markup que ve el motor:
+      //   - Con producto: baseMarkup de la categoría (con fallback al padre).
+      //     Si hay tier que cubra qty, lo pisa vía tierOverrides abajo.
+      //   - Sin producto, sin override de keychain: adhocDefaultMarkup del
+      //     global param (default 60%).
+      //   - customMarkupPct del cliente pisa todo internamente en el motor.
+      targetMarkupPct: product ? baseMarkup : adhocDefaultMarkup,
       marketplaceCommissionPct:
         productChannel && productChannel.commissionPct ? Number(productChannel.commissionPct) : null,
     };

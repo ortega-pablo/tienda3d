@@ -22,6 +22,8 @@ const NUMERIC_KEYS = new Set([
   'kwh_markup_pct',
   // Keychain quote: cuántos llaveros entran en una bandeja típica.
   'keychain_batch_size',
+  // Markup default para cotizaciones a medida (ADHOC libre).
+  'adhoc_default_markup_pct',
 ]);
 
 /** Params que deben ser enteros positivos (≥ 1). */
@@ -35,6 +37,9 @@ const PCT_KEYS = new Set([
   'direct_sale_commission_pct',
   'labor_markup_pct',
   'kwh_markup_pct',
+  // adhoc_default_markup_pct admite > 100% (markups de 200%, 300%
+  // son comunes en piezas chicas personalizadas), así que NO se
+  // agrega a este set — se valida ≥ 0 vía NUMERIC_KEYS.
 ]);
 
 @Injectable()
