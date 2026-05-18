@@ -55,6 +55,7 @@ export interface QuoteDto {
       templateKind?: 'KEYCHAIN';
       appliedMarkupPct?: number;
       tierLabel?: string;
+      batchSize?: number;
     } | null;
   }>;
 }

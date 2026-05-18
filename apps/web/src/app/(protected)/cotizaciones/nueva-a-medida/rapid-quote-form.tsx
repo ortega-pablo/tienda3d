@@ -100,6 +100,7 @@ export function RapidQuoteForm({
   efectivoId,
   mode = 'adhoc',
   keychainTiers = [],
+  batchSize = 1,
 }: {
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
@@ -108,6 +109,13 @@ export function RapidQuoteForm({
   efectivoId: string;
   mode?: 'adhoc' | 'keychain';
   keychainTiers?: KeychainTierLite[];
+  /**
+   * Tamaño del batch para modo keychain. Si > 1, los labels/help-text
+   * indican que los inputs se cargan como totales para `batchSize`
+   * llaveros (el backend divide al costear). Default 1 = comportamiento
+   * legacy (per-unidad).
+   */
+  batchSize?: number;
 }) {
   const router = useRouter();
   const [customerId, setCustomerId] = useState('');
@@ -133,6 +141,12 @@ export function RapidQuoteForm({
   const [notes, setNotes] = useState('');
 
   const isKeychain = mode === 'keychain';
+  // Cuando estamos en modo keychain y el admin configuró batch > 1, los
+  // inputs (gramos, minutos, consumos) se cargan como totales para
+  // `batchSize` unidades. Lo usamos en los labels y en la línea de
+  // "costo por unidad" del preview.
+  const usesBatchInputs = isKeychain && batchSize > 1;
+  const batchSuffix = usesBatchInputs ? ` (para ${batchSize} llaveros)` : '';
   const [description, setDescription] = useState(
     isKeychain ? 'Llavero personalizado' : 'Pieza a medida',
   );
@@ -451,7 +465,7 @@ export function RapidQuoteForm({
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium">Componentes impresos</p>
+                <p className="text-sm font-medium">Componentes impresos{batchSuffix}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -524,7 +538,7 @@ export function RapidQuoteForm({
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium">Insumos extra</p>
+                <p className="text-sm font-medium">Insumos extra{batchSuffix}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -584,14 +598,14 @@ export function RapidQuoteForm({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="Tiempo de armado (min)">
+              <Field label={`Tiempo de armado (min)${batchSuffix}`}>
                 <Input
                   type="number"
                   value={assemblyMinutes}
                   onChange={(e) => setAssemblyMinutes(e.target.value)}
                 />
               </Field>
-              <Field label="Tiempo de gestión (min)">
+              <Field label={`Tiempo de gestión (min)${batchSuffix}`}>
                 <Input
                   type="number"
                   value={managementMinutes}
@@ -643,6 +657,13 @@ export function RapidQuoteForm({
           {preview && typeof preview === 'object' && (
             <>
               <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
+              {usesBatchInputs && (
+                <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                  Calculado dividiendo por {batchSize} los valores que cargaste
+                  (batch de {batchSize} llaveros · costo total de batch ≈{' '}
+                  {formatMoney(preview.unitCost * batchSize)}).
+                </p>
+              )}
               <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
               <div className="flex justify-between rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1">
                 <span className="text-emerald-700 dark:text-emerald-300">Ganancia / unidad</span>

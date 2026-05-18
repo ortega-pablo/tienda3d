@@ -83,6 +83,13 @@ export default async function QuoteDetailPage({
                               ? `Llavero — tier ${i.adhocPayload.tierLabel ?? ''} (markup ${i.adhocPayload.appliedMarkupPct}%)`
                               : 'Pieza a medida'}
                         </div>
+                        {i.adhocPayload?.templateKind === 'KEYCHAIN' &&
+                          typeof i.adhocPayload.batchSize === 'number' &&
+                          i.adhocPayload.batchSize > 1 && (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                              Valores cargados por batch de {i.adhocPayload.batchSize} llaveros
+                            </div>
+                          )}
                       </td>
                       <td className="py-3 pr-4 text-right font-mono">{i.quantity}</td>
                       <td className="py-3 pr-4 text-right font-mono text-muted-foreground">

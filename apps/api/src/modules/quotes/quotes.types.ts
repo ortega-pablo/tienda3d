@@ -77,6 +77,17 @@ export interface AdhocItemPayload {
    * markup default del producto, que en ADHOC es 0).
    */
   templateKind?: 'KEYCHAIN';
+  /**
+   * Tamaño del batch usado al crear la cotización (snapshot del global
+   * param `keychain_batch_size`). Cuando está presente, los inputs (gramos,
+   * minutos, consumos, assembly/management minutes) se interpretan como
+   * totales para `batchSize` unidades — el backend los divide antes de
+   * costear. `designMinutes` queda fuera de esta división.
+   *
+   * Ausente = cotización legacy pre-cambio, los inputs son per-unidad
+   * (comportamiento original).
+   */
+  batchSize?: number;
   /** Snapshot del markup aplicado por la tier (informativo / auditoría). */
   appliedMarkupPct?: number;
   /** Label legible del tier ("5-20", "100+") para el PDF y el detalle. */

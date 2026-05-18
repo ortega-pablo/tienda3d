@@ -27,6 +27,12 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
     type: 'number',
     help: 'Costo por hora de diseño de modelos 3D. Solo aplica a cotizaciones a medida como cargo plano por línea — no escala con la cantidad.',
   },
+  keychain_batch_size: {
+    label: 'Tamaño del batch de llaveros',
+    suffix: 'unidades',
+    type: 'number',
+    help: 'Cuántos llaveros entran en una bandeja de impresión. Los inputs (gramos, minutos, consumos) de la cotización de llaveros se interpretan como totales para este tamaño de batch; el sistema divide internamente para calcular el costo por unidad.',
+  },
   contingency_pct: { label: 'Contingencia', suffix: '%', type: 'number' },
   reinvestment_pct: { label: 'Reinversión', suffix: '%', type: 'number' },
   unified_regime_pct: {

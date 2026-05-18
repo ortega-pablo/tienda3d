@@ -123,6 +123,13 @@ export class PdfService {
           ? item.adhocPayload.designSurcharge
           : 0;
       const productLineTotal = item.lineTotal - designSurcharge;
+      const batchSize =
+        item.adhocPayload &&
+        item.adhocPayload.templateKind === 'KEYCHAIN' &&
+        typeof item.adhocPayload.batchSize === 'number' &&
+        item.adhocPayload.batchSize > 1
+          ? item.adhocPayload.batchSize
+          : null;
 
       const rowY = doc.y;
       doc.text(item.description, startX, rowY, { width: widths[0] });
@@ -141,6 +148,21 @@ export class PdfService {
         { width: widths[3], align: 'right' },
       );
       doc.moveDown(0.6);
+
+      if (batchSize != null) {
+        const subY = doc.y;
+        doc
+          .fontSize(8)
+          .fillColor('#64748b')
+          .text(
+            `  Cotización basada en un batch de ${batchSize} unidades`,
+            startX,
+            subY,
+            { width: widths[0]! + widths[1]! + widths[2]! + widths[3]! },
+          );
+        doc.fontSize(10).fillColor('#0f172a');
+        doc.moveDown(0.5);
+      }
 
       if (designSurcharge > 0) {
         const subY = doc.y;

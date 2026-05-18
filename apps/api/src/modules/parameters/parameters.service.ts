@@ -20,7 +20,12 @@ const NUMERIC_KEYS = new Set([
   // Logic C v3 — extra markup over labor and electricity costs.
   'labor_markup_pct',
   'kwh_markup_pct',
+  // Keychain quote: cuántos llaveros entran en una bandeja típica.
+  'keychain_batch_size',
 ]);
+
+/** Params que deben ser enteros positivos (≥ 1). */
+const INTEGER_KEYS = new Set(['keychain_batch_size']);
 
 /** Percentage params with a hard 0..100 ceiling (block typos like "1500"). */
 const PCT_KEYS = new Set([
@@ -61,6 +66,9 @@ export class ParametersService {
         }
         if (PCT_KEYS.has(key) && n > 100) {
           throw new BadRequestException(`${key} no puede superar 100%`);
+        }
+        if (INTEGER_KEYS.has(key) && (!Number.isInteger(n) || n < 1)) {
+          throw new BadRequestException(`${key} debe ser un entero ≥ 1`);
         }
       }
       if (key === 'currency' && !/^[A-Z]{3}$/.test(value)) {

@@ -502,15 +502,16 @@ export class QuotesService {
       this.keychainTiers.assertValidQty(item.quantity);
     }
 
-    const [cost, designHourCostParam, keychainTier] = await Promise.all([
-      this.costing.forAdhoc({
-        description: item.description,
-        pieces: item.payload.pieces,
-        materials: item.payload.materials,
-        assemblyMinutes: item.payload.assemblyMinutes,
-        managementMinutes: item.payload.managementMinutes,
-      }),
+    // Cargamos los params globales relevantes en paralelo. Para keychain,
+    // los inputs (gramos, minutos, consumos) representan un BATCH de N
+    // llaveros — el batch size es configurable via `keychain_batch_size`.
+    // Hay que dividir antes de costear para que el lineTotal escale como
+    // espera el negocio (qty=5 → unitPrice × 5; qty=1 → unitPrice × 1, etc.).
+    const [designHourCostParam, batchSizeParam, keychainTier] = await Promise.all([
       this.prisma.globalParam.findUnique({ where: { key: 'design_hour_cost' } }),
+      isKeychain
+        ? this.prisma.globalParam.findUnique({ where: { key: 'keychain_batch_size' } })
+        : Promise.resolve(null),
       isKeychain ? this.keychainTiers.findApplicable(item.quantity) : Promise.resolve(null),
     ]);
     if (isKeychain && !keychainTier) {
@@ -518,6 +519,35 @@ export class QuotesService {
         `Sin tier de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros/llaveros.`,
       );
     }
+    const batchSize = isKeychain
+      ? batchSizeParam
+        ? Math.max(1, Math.floor(Number(batchSizeParam.value)))
+        : 5
+      : 1;
+    const costingInputs = isKeychain
+      ? KeychainTiersService.divideForBatch(
+          {
+            pieces: item.payload.pieces,
+            materials: item.payload.materials,
+            assemblyMinutes: item.payload.assemblyMinutes,
+            managementMinutes: item.payload.managementMinutes,
+          },
+          batchSize,
+        )
+      : {
+          pieces: item.payload.pieces,
+          materials: item.payload.materials,
+          assemblyMinutes: item.payload.assemblyMinutes,
+          managementMinutes: item.payload.managementMinutes,
+        };
+
+    const cost = await this.costing.forAdhoc({
+      description: item.description,
+      pieces: costingInputs.pieces,
+      materials: costingInputs.materials,
+      assemblyMinutes: costingInputs.assemblyMinutes,
+      managementMinutes: costingInputs.managementMinutes,
+    });
     const designMinutes = item.payload.designMinutes ?? 0;
     const designHourCost = designHourCostParam ? Number(designHourCostParam.value) : 0;
     const designRaw = (designMinutes / 60) * designHourCost;
@@ -562,7 +592,11 @@ export class QuotesService {
     // Persistimos designMinutes + designSurcharge en el payload JSON:
     // así el PDF muestra el desglose exacto que se firmó, aunque el
     // global param cambie después. Si es keychain, también snapshoteamos
-    // el markup aplicado y el label de la tier ("5-20", "100+").
+    // el markup aplicado, el label de la tier ("5-20", "100+") y el
+    // batchSize usado al cotizar (para que cambios futuros del global
+    // param no alteren la lectura histórica del PDF).
+    // El payload original se guarda SIN DIVIDIR — los valores divididos
+    // existen solo en `costingInputs`, no se persisten.
     const persistedPayload: AdhocItemPayload = {
       ...item.payload,
       designMinutes,
@@ -572,6 +606,7 @@ export class QuotesService {
             templateKind: 'KEYCHAIN' as const,
             appliedMarkupPct: keychainTier.markupPct,
             tierLabel: KeychainTiersService.tierLabel(keychainTier),
+            batchSize,
           }
         : {}),
     };
