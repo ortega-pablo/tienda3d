@@ -700,7 +700,7 @@ export function RapidQuoteForm({
           <CardHeader>
             <CardTitle>Precios por escala</CardTitle>
             <CardDescription>
-              Cómo varía el precio según la cantidad. La escala activa queda destacada.
+              Precio unitario y precio por placa ({batchSize} llaveros).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -715,14 +715,20 @@ export function RapidQuoteForm({
                 <thead>
                   <tr className="border-b text-left uppercase tracking-wider text-muted-foreground">
                     <th className="py-1.5 pr-2 font-medium">Escala</th>
-                    <th className="py-1.5 pr-2 font-medium text-right">Markup</th>
-                    <th className="py-1.5 pr-2 font-medium text-right">Unitario</th>
-                    <th className="py-1.5 pr-0 font-medium text-right">Total</th>
+                    <th className="py-1.5 pr-2 font-medium text-right">Precio unitario</th>
+                    <th className="py-1.5 pr-0 font-medium text-right">
+                      Placa × {batchSize}u
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {matrix.map((row) => {
                     const isActive = activeKeychainTier?.id === row.tierId;
+                    // El primer tier vende por unidad (qty < batchSize), no
+                    // por placas. Para los demás mostramos el precio de una
+                    // placa completa de N unidades al markup de esa escala.
+                    const placaPrice =
+                      row.minQty < batchSize ? null : row.unitPrice * batchSize;
                     return (
                       <tr
                         key={row.tierId}
@@ -730,13 +736,10 @@ export function RapidQuoteForm({
                       >
                         <td className="py-1.5 pr-2 font-mono">{row.tierLabel}</td>
                         <td className="py-1.5 pr-2 text-right font-mono">
-                          {row.markupPct}%
-                        </td>
-                        <td className="py-1.5 pr-2 text-right font-mono">
                           {formatMoney(row.unitPrice)}
                         </td>
                         <td className="py-1.5 pr-0 text-right font-mono font-semibold">
-                          {formatMoney(row.lineTotal)}
+                          {placaPrice == null ? '—' : formatMoney(placaPrice)}
                         </td>
                       </tr>
                     );
