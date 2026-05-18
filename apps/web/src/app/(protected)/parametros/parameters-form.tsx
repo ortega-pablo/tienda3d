@@ -33,6 +33,12 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
     type: 'number',
     help: 'Cuántos llaveros entran en una bandeja de impresión. Los inputs (gramos, minutos, consumos) de la cotización de llaveros se interpretan como totales para este tamaño de batch; el sistema divide internamente para calcular el costo por unidad.',
   },
+  adhoc_default_markup_pct: {
+    label: 'Markup default de cotización a medida',
+    suffix: '%',
+    type: 'number',
+    help: 'Markup que el motor aplica en cotizaciones a medida (ADHOC libre, sin producto del catálogo ni tier de llaveros). Si el cliente es SPECIAL con customMarkupPct, ese pisa este valor.',
+  },
   contingency_pct: { label: 'Contingencia', suffix: '%', type: 'number' },
   reinvestment_pct: { label: 'Reinversión', suffix: '%', type: 'number' },
   unified_regime_pct: {
