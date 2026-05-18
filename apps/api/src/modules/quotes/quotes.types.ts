@@ -23,6 +23,12 @@ export interface QuoteSummaryDto {
   total: number;
   itemCount: number;
   createdAt: Date;
+  /**
+   * Si la cotización es ADHOC y alguno de sus items tiene
+   * `templateKind: 'KEYCHAIN'` en su payload, lo marcamos acá para el
+   * panel y filtros. null para PRODUCT y ADHOC libre.
+   */
+  templateKind: 'KEYCHAIN' | null;
 }
 
 export interface QuoteDto extends QuoteSummaryDto {

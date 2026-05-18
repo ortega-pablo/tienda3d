@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, Package, Plus, Zap } from 'lucide-react';
+import { Download, KeyRound, Package, Plus, Zap } from 'lucide-react';
 import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
 import { formatMoney } from '@/lib/format';
@@ -17,12 +17,14 @@ interface QuoteSummary {
   total: number;
   itemCount: number;
   createdAt: string;
+  templateKind: 'KEYCHAIN' | null;
 }
 
 const TABS = [
   { key: 'all', label: 'Todas', icon: null },
   { key: 'PRODUCT', label: 'Productos', icon: Package },
   { key: 'ADHOC', label: 'A medida', icon: Zap },
+  { key: 'KEYCHAIN', label: 'Llaveros', icon: KeyRound },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -33,13 +35,15 @@ export default async function QuotesPage({
 }) {
   const user = await requirePermission('quote:read');
   const { tab } = await searchParams;
-  const activeTab: TabKey = (TABS.find((t) => t.key === tab)?.key ?? 'all');
+  const activeTab: TabKey = TABS.find((t) => t.key === tab)?.key ?? 'all';
   const path =
     activeTab === 'PRODUCT'
       ? '/quotes?type=PRODUCT'
       : activeTab === 'ADHOC'
         ? '/quotes?type=ADHOC'
-        : '/quotes';
+        : activeTab === 'KEYCHAIN'
+          ? '/quotes?templateKind=KEYCHAIN'
+          : '/quotes';
   const [quotes, allQuotes] = await Promise.all([
     api<QuoteSummary[]>(path),
     activeTab === 'all' ? Promise.resolve(null) : api<QuoteSummary[]>('/quotes'),
@@ -49,9 +53,10 @@ export default async function QuotesPage({
       acc.all++;
       if (q.type === 'PRODUCT') acc.PRODUCT++;
       else acc.ADHOC++;
+      if (q.templateKind === 'KEYCHAIN') acc.KEYCHAIN++;
       return acc;
     },
-    { all: 0, PRODUCT: 0, ADHOC: 0 } as Record<TabKey, number>,
+    { all: 0, PRODUCT: 0, ADHOC: 0, KEYCHAIN: 0 } as Record<TabKey, number>,
   );
 
   const canCreate = user.permissions.includes('quote:create');
@@ -63,7 +68,8 @@ export default async function QuotesPage({
         <div>
           <h1 className="text-3xl font-bold">Cotizaciones</h1>
           <p className="text-muted-foreground">
-            Cotizá productos del catálogo o piezas a medida y exportá a PDF.
+            Cotizá productos del catálogo, piezas a medida o llaveros en cantidad. Todo se
+            exporta a PDF.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -77,6 +83,12 @@ export default async function QuotesPage({
           )}
           {canCreate && (
             <>
+              <Button asChild variant="outline">
+                <Link href="/cotizaciones/nueva-llaveros">
+                  <KeyRound className="h-4 w-4" />
+                  Cotización de llaveros
+                </Link>
+              </Button>
               <Button asChild variant="outline">
                 <Link href="/cotizaciones/nueva-a-medida">
                   <Zap className="h-4 w-4" />
@@ -140,42 +152,53 @@ export default async function QuotesPage({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {quotes.map((q) => (
-                <tr key={q.id}>
-                  <td className="py-3 pr-4 font-mono">{q.code}</td>
-                  <td className="py-3 pr-4">{q.customerName}</td>
-                  <td className="py-3 pr-4">
-                    <span
-                      className={
-                        q.type === 'PRODUCT'
-                          ? 'inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary'
-                          : 'inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent'
-                      }
-                    >
-                      {q.type === 'PRODUCT' ? (
-                        <Package className="h-3 w-3" />
-                      ) : (
-                        <Zap className="h-3 w-3" />
-                      )}
-                      {q.type === 'PRODUCT' ? 'Producto' : 'Rápida'}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 text-muted-foreground">{q.channelName ?? '—'}</td>
-                  <td className="py-3 pr-4">{q.itemCount}</td>
-                  <td className="py-3 pr-4 font-mono">{formatMoney(q.total)}</td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={q.status} />
-                  </td>
-                  <td className="py-3 pr-4 text-xs text-muted-foreground">
-                    {new Date(q.createdAt).toLocaleDateString('es-AR')}
-                  </td>
-                  <td className="py-3 text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/cotizaciones/${q.id}`}>Abrir</Link>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {quotes.map((q) => {
+                const isKeychain = q.templateKind === 'KEYCHAIN';
+                return (
+                  <tr key={q.id}>
+                    <td className="py-3 pr-4 font-mono">{q.code}</td>
+                    <td className="py-3 pr-4">{q.customerName}</td>
+                    <td className="py-3 pr-4">
+                      <span
+                        className={
+                          q.type === 'PRODUCT'
+                            ? 'inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary'
+                            : isKeychain
+                              ? 'inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary'
+                              : 'inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent'
+                        }
+                      >
+                        {q.type === 'PRODUCT' ? (
+                          <Package className="h-3 w-3" />
+                        ) : isKeychain ? (
+                          <KeyRound className="h-3 w-3" />
+                        ) : (
+                          <Zap className="h-3 w-3" />
+                        )}
+                        {q.type === 'PRODUCT'
+                          ? 'Producto'
+                          : isKeychain
+                            ? 'Llavero'
+                            : 'A medida'}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-muted-foreground">{q.channelName ?? '—'}</td>
+                    <td className="py-3 pr-4">{q.itemCount}</td>
+                    <td className="py-3 pr-4 font-mono">{formatMoney(q.total)}</td>
+                    <td className="py-3 pr-4">
+                      <StatusBadge status={q.status} />
+                    </td>
+                    <td className="py-3 pr-4 text-xs text-muted-foreground">
+                      {new Date(q.createdAt).toLocaleDateString('es-AR')}
+                    </td>
+                    <td className="py-3 text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/cotizaciones/${q.id}`}>Abrir</Link>
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
               {quotes.length === 0 && (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
