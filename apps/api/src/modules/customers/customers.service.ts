@@ -255,11 +255,14 @@ export class CustomersService {
 
     switch (customer.type) {
       case CustomerType.STANDARD:
-      case CustomerType.CONSIGNMENT:
         return true;
       case CustomerType.SPECIAL:
         return customer.productOverrides.some((o) => o.productId === productId);
-      case CustomerType.WHOLESALE: {
+      case CustomerType.WHOLESALE:
+      case CustomerType.CONSIGNMENT: {
+        // Tanto mayoristas como consignación filtran por categorías
+        // habilitadas. Sin commitments → no ve nada (modo estricto:
+        // fuerza al admin a configurar antes de que el cliente compre).
         if (!product.categoryId) return false;
         return customer.categoryCommitments.some(
           (cc) =>
@@ -426,6 +429,19 @@ export class CustomersWriteService {
     const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) throw new NotFoundException('Cliente inexistente');
 
+    // Commitments aplican a WHOLESALE (con piso de tier + compromiso mensual)
+    // y a CONSIGNMENT (solo on/off por categoría — los campos wholesale se
+    // ignoran). STANDARD es walk-in y SPECIAL filtra por productos, no por
+    // categorías.
+    if (
+      customer.type !== CustomerType.WHOLESALE &&
+      customer.type !== CustomerType.CONSIGNMENT
+    ) {
+      throw new BadRequestException(
+        'Las categorías habilitadas solo aplican a clientes WHOLESALE o CONSIGNMENT',
+      );
+    }
+
     const category = await this.prisma.category.findUnique({ where: { id: input.categoryId } });
     if (!category) throw new BadRequestException('Categoría inexistente');
 
@@ -436,20 +452,32 @@ export class CustomersWriteService {
       throw new BadRequestException('monthlyCommitmentQty debe ser ≥ 1');
     }
 
+    // Para CONSIGNMENT los campos wholesale-only siempre van a null —
+    // garantía server-side aunque el frontend los envíe por error.
+    const isWholesale = customer.type === CustomerType.WHOLESALE;
+    const minTierQty = isWholesale ? input.minTierQty ?? null : null;
+    const monthlyCommitmentQty = isWholesale ? input.monthlyCommitmentQty ?? null : null;
+
     const row = await this.prisma.customerCategoryCommitment.upsert({
       where: { customerId_categoryId: { customerId, categoryId: input.categoryId } },
       create: {
         customerId,
         categoryId: input.categoryId,
-        minTierQty: input.minTierQty ?? null,
-        monthlyCommitmentQty: input.monthlyCommitmentQty ?? null,
+        minTierQty,
+        monthlyCommitmentQty,
         notes: input.notes ?? null,
       },
       update: {
-        ...(input.minTierQty !== undefined ? { minTierQty: input.minTierQty } : {}),
-        ...(input.monthlyCommitmentQty !== undefined
+        ...(isWholesale && input.minTierQty !== undefined
+          ? { minTierQty: input.minTierQty }
+          : !isWholesale
+            ? { minTierQty: null }
+            : {}),
+        ...(isWholesale && input.monthlyCommitmentQty !== undefined
           ? { monthlyCommitmentQty: input.monthlyCommitmentQty }
-          : {}),
+          : !isWholesale
+            ? { monthlyCommitmentQty: null }
+            : {}),
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
       },
     });
