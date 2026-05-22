@@ -25,7 +25,10 @@ RUN pnpm --filter @tienda3d/api build
 
 # ----- runner: minimal production image -----
 FROM node:20-alpine AS runner
-RUN apk add --no-cache libc6-compat openssl tini
+# postgresql16-client matchea la versión del servicio db (postgres:16-alpine)
+# para que `pg_dump -Fc` no se queje por version mismatch al dumpear desde
+# el endpoint /admin/backup.
+RUN apk add --no-cache libc6-compat openssl tini postgresql16-client
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 ENV NODE_ENV=production

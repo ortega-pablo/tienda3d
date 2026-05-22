@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { CustomersModule } from './modules/customers/customers.module';
+import { DatabaseBackupModule } from './modules/database-backup/database-backup.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { KeychainTiersModule } from './modules/keychain-tiers/keychain-tiers.module';
@@ -65,6 +66,7 @@ import { UsersModule } from './modules/users/users.module';
     ProductionsModule,
     ReportsModule,
     IntegrationsModule,
+    DatabaseBackupModule,
     HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

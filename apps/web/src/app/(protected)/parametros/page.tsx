@@ -1,6 +1,7 @@
 import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatabaseBackupCard } from './database-backup-card';
 import { ParametersForm } from './parameters-form';
 import { MachineHourCard } from './machine-hour-card';
 
@@ -51,6 +52,8 @@ export default async function ParametersPage() {
 
         <MachineHourCard initial={hour} />
       </div>
+
+      <DatabaseBackupCard />
     </div>
   );
 }
