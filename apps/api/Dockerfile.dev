@@ -1,6 +1,9 @@
 # ===== API development image (hot reload via mounted volumes) =====
 FROM node:20-alpine
-RUN apk add --no-cache libc6-compat openssl tini
+# postgresql16-client matchea la versión del servicio db (postgres:16-alpine)
+# para que `pg_dump -Fc` del endpoint /admin/backup pueda dumpear sin
+# version mismatch.
+RUN apk add --no-cache libc6-compat openssl tini postgresql16-client
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 WORKDIR /app
 
