@@ -117,14 +117,19 @@ export class CustomersController {
   async catalogPdfDownload(
     @Param('id') id: string,
     @Res() res: Response,
+    @Query('showMargins') showMarginsRaw?: string,
   ): Promise<void> {
+    // ?showMargins=true → vista interna con columnas Markup% y Ganancia.
+    // Default false → versión cliente (limpia, solo cantidad + precio).
+    const showMargins = showMarginsRaw === 'true' || showMarginsRaw === '1';
     const data = await this.catalog.forCustomer(id);
-    const buffer = await this.catalogPdf.render(data);
+    const buffer = await this.catalogPdf.render(data, { showMargins });
     const safeName = data.customerName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    const suffix = showMargins ? '-interno' : '';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="catalogo-${safeName}.pdf"`,
+      `attachment; filename="catalogo-${safeName}${suffix}.pdf"`,
     );
     res.send(buffer);
   }

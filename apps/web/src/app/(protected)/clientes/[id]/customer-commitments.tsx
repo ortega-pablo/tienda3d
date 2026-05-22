@@ -158,17 +158,22 @@ export function CustomerCommitments({
     }
     setAdding(true);
     try {
+      // Para CONSIGNMENT mandamos los campos wholesale en null — son
+      // ignorados igual por el backend, pero así el frontend no sugiere
+      // datos que no se van a guardar.
+      const isWholesaleType = customer.type === 'WHOLESALE';
       await api(`/customers/${customer.id}/commitments`, {
         method: 'POST',
         body: {
           categoryId: draft.categoryId,
-          minTierQty: draft.minTierQty ? Number(draft.minTierQty) : null,
-          monthlyCommitmentQty: draft.monthlyCommitmentQty
-            ? Number(draft.monthlyCommitmentQty)
-            : null,
+          minTierQty: isWholesaleType && draft.minTierQty ? Number(draft.minTierQty) : null,
+          monthlyCommitmentQty:
+            isWholesaleType && draft.monthlyCommitmentQty
+              ? Number(draft.monthlyCommitmentQty)
+              : null,
         },
       });
-      toast.success('Categoría asociada.');
+      toast.success(isWholesaleType ? 'Categoría asociada.' : 'Categoría habilitada.');
       setDraft({ categoryId: '', minTierQty: '5', monthlyCommitmentQty: '' });
       await reload();
     } catch (err) {
@@ -178,20 +183,36 @@ export function CustomerCommitments({
     }
   };
 
+  // Para CONSIGNMENT solo es on/off por categoría — los campos
+  // wholesale-only (piso de tier, compromiso mensual, suspensión) no se
+  // muestran ni se envían. Mismo componente, render condicional.
+  const isWholesale = customer.type === 'WHOLESALE';
+  const cardTitle = isWholesale
+    ? 'Categorías asociadas (mayorista)'
+    : 'Categorías habilitadas';
+  const cardDescription = isWholesale
+    ? 'Cada categoría tiene su propio piso de tier y compromiso mensual. La suspensión es granular: si el cliente no cumple en una, se suspende solo esa.'
+    : 'Categorías del catálogo a las que este cliente tiene acceso. Sin categorías habilitadas, no ve productos.';
+  const emptyMessage = isWholesale
+    ? 'Sin categorías asociadas. Agregá una para que este cliente acceda al catálogo mayorista.'
+    : 'Sin categorías habilitadas — este cliente no ve productos hasta que asignes al menos una.';
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Categorías asociadas (mayorista)</CardTitle>
-        <CardDescription>
-          Cada categoría tiene su propio piso de tier y compromiso mensual. La suspensión es
-          granular: si el cliente no cumple en una, se suspende solo esa.
-        </CardDescription>
+        <CardTitle>{cardTitle}</CardTitle>
+        <CardDescription>{cardDescription}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {customer.categoryCommitments.length === 0 && (
-          <p className="rounded-md border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-            Sin categorías asociadas. Agregá una para que este cliente acceda al catálogo
-            mayorista.
+          <p
+            className={`rounded-md border p-4 text-center text-sm ${
+              isWholesale
+                ? 'bg-muted/30 text-muted-foreground'
+                : 'border-warning/40 bg-warning/10 text-foreground'
+            }`}
+          >
+            {emptyMessage}
           </p>
         )}
 
@@ -207,39 +228,47 @@ export function CustomerCommitments({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="font-medium">{c.categoryName}</div>
-                  {c.isWholesaleSuspended ? (
-                    <p className="text-xs text-destructive">
-                      Mayoreo suspendido
-                      {c.suspendedAt
-                        ? ` desde ${new Date(c.suspendedAt).toLocaleDateString('es-AR')}`
-                        : ''}
-                      {c.suspensionReason ? ` (${c.suspensionReason})` : ''}
-                    </p>
+                  {isWholesale ? (
+                    c.isWholesaleSuspended ? (
+                      <p className="text-xs text-destructive">
+                        Mayoreo suspendido
+                        {c.suspendedAt
+                          ? ` desde ${new Date(c.suspendedAt).toLocaleDateString('es-AR')}`
+                          : ''}
+                        {c.suspensionReason ? ` (${c.suspensionReason})` : ''}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Activo</p>
+                    )
                   ) : (
-                    <p className="text-xs text-muted-foreground">Activo</p>
+                    <p className="text-xs text-muted-foreground">Habilitada</p>
                   )}
                 </div>
                 {canWrite && !isEditing && (
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleSuspension(c)}
-                      disabled={busyId === c.id}
-                    >
-                      {c.isWholesaleSuspended ? (
-                        <>
-                          <Play className="h-4 w-4" /> Reactivar
-                        </>
-                      ) : (
-                        <>
-                          <Pause className="h-4 w-4 text-destructive" /> Suspender
-                        </>
-                      )}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => startEdit(c)}>
-                      Editar
-                    </Button>
+                    {isWholesale && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleSuspension(c)}
+                        disabled={busyId === c.id}
+                      >
+                        {c.isWholesaleSuspended ? (
+                          <>
+                            <Play className="h-4 w-4" /> Reactivar
+                          </>
+                        ) : (
+                          <>
+                            <Pause className="h-4 w-4 text-destructive" /> Suspender
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    {isWholesale && (
+                      <Button variant="ghost" size="sm" onClick={() => startEdit(c)}>
+                        Editar
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -252,65 +281,75 @@ export function CustomerCommitments({
                 )}
               </div>
 
-              {isEditing ? (
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Piso de tier (cant.)</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={editDraft.minTierQty}
-                      onChange={(e) =>
-                        setEditDraft({ ...editDraft, minTierQty: e.target.value })
-                      }
-                      placeholder="opcional"
-                    />
+              {isWholesale &&
+                (isEditing ? (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Piso de tier (cant.)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={editDraft.minTierQty}
+                        onChange={(e) =>
+                          setEditDraft({ ...editDraft, minTierQty: e.target.value })
+                        }
+                        placeholder="opcional"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Compromiso mensual (unid.)</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={editDraft.monthlyCommitmentQty}
+                        onChange={(e) =>
+                          setEditDraft({
+                            ...editDraft,
+                            monthlyCommitmentQty: e.target.value,
+                          })
+                        }
+                        placeholder="opcional"
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Button onClick={() => saveEdit(c)} disabled={busyId === c.id}>
+                        {busyId === c.id ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
+                        Guardar
+                      </Button>
+                      <Button variant="ghost" onClick={() => setEditingId(null)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Compromiso mensual (unid.)</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={editDraft.monthlyCommitmentQty}
-                      onChange={(e) =>
-                        setEditDraft({ ...editDraft, monthlyCommitmentQty: e.target.value })
-                      }
-                      placeholder="opcional"
-                    />
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                    <span>
+                      <span className="text-muted-foreground">Piso de tier:</span>{' '}
+                      {c.minTierQty != null ? `${c.minTierQty} unid.` : '—'}
+                    </span>
+                    <span>
+                      <span className="text-muted-foreground">Compromiso/mes:</span>{' '}
+                      {c.monthlyCommitmentQty != null
+                        ? `${c.monthlyCommitmentQty} unid.`
+                        : 'sin compromiso'}
+                    </span>
                   </div>
-                  <div className="flex items-end gap-2">
-                    <Button onClick={() => saveEdit(c)} disabled={busyId === c.id}>
-                      {busyId === c.id ? <Spinner size="sm" /> : <Save className="h-4 w-4" />}
-                      Guardar
-                    </Button>
-                    <Button variant="ghost" onClick={() => setEditingId(null)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                  <span>
-                    <span className="text-muted-foreground">Piso de tier:</span>{' '}
-                    {c.minTierQty != null ? `${c.minTierQty} unid.` : '—'}
-                  </span>
-                  <span>
-                    <span className="text-muted-foreground">Compromiso/mes:</span>{' '}
-                    {c.monthlyCommitmentQty != null
-                      ? `${c.monthlyCommitmentQty} unid.`
-                      : 'sin compromiso'}
-                  </span>
-                </div>
-              )}
+                ))}
             </div>
           );
         })}
 
         {canWrite && availableForNew.length > 0 && (
           <div className="rounded-md border border-dashed p-3">
-            <p className="mb-2 text-sm font-medium">Asociar categoría</p>
-            <div className="grid gap-2 sm:grid-cols-4">
-              <div className="sm:col-span-2 space-y-1.5">
+            <p className="mb-2 text-sm font-medium">
+              {isWholesale ? 'Asociar categoría' : 'Habilitar categoría'}
+            </p>
+            <div
+              className={`grid gap-2 ${isWholesale ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}
+            >
+              <div
+                className={isWholesale ? 'sm:col-span-2 space-y-1.5' : 'space-y-1.5'}
+              >
                 <Label className="text-xs">Categoría</Label>
                 <select
                   value={draft.categoryId}
@@ -325,32 +364,36 @@ export function CustomerCommitments({
                   ))}
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Piso de tier</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={draft.minTierQty}
-                  onChange={(e) => setDraft({ ...draft, minTierQty: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Compromiso/mes</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={draft.monthlyCommitmentQty}
-                  onChange={(e) =>
-                    setDraft({ ...draft, monthlyCommitmentQty: e.target.value })
-                  }
-                  placeholder="opcional"
-                />
-              </div>
+              {isWholesale && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Piso de tier</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={draft.minTierQty}
+                      onChange={(e) => setDraft({ ...draft, minTierQty: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Compromiso/mes</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={draft.monthlyCommitmentQty}
+                      onChange={(e) =>
+                        setDraft({ ...draft, monthlyCommitmentQty: e.target.value })
+                      }
+                      placeholder="opcional"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <div className="mt-2 flex justify-end">
               <Button onClick={addCommitment} disabled={adding || !draft.categoryId}>
                 {adding ? <Spinner size="sm" /> : <Plus className="h-4 w-4" />}
-                Asociar
+                {isWholesale ? 'Asociar' : 'Habilitar'}
               </Button>
             </div>
           </div>

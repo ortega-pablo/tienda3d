@@ -74,12 +74,10 @@ export default async function CustomerDetailPage({
 
       <CustomerEditor mode="edit" customer={customer} />
 
-      {customer.type === 'WHOLESALE' && (
-        <>
-          <CustomerCommitments customer={customer} categories={categories} />
-          <CustomerMonthProgress customer={customer} />
-        </>
+      {(customer.type === 'WHOLESALE' || customer.type === 'CONSIGNMENT') && (
+        <CustomerCommitments customer={customer} categories={categories} />
       )}
+      {customer.type === 'WHOLESALE' && <CustomerMonthProgress customer={customer} />}
 
       {customer.type === 'SPECIAL' && (
         <CustomerSpecialProducts customer={customer} products={products} />
