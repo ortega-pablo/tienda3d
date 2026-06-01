@@ -89,6 +89,17 @@ interface Preview {
   designSurcharge: number;
 }
 
+/**
+ * Una fila del preview multi-grupo. Hay una por cada item ADHOC que
+ * `buildItems()` produjo. La descripción coincide con `item.description`
+ * (que es el `name` del grupo, o "Grupo Adicional" para huérfanos).
+ */
+interface GroupPreviewRow {
+  description: string;
+  quantity: number;
+  preview: Preview;
+}
+
 export interface KeychainTierLite {
   id: string;
   minQty: number;
@@ -178,6 +189,7 @@ export function RapidQuoteForm({
   const onCustomerChange = (id: string) => {
     setCustomerId(id);
     setPreview(null);
+    setGroupPreviews(null);
     const c = customers.find((x) => x.id === id);
     if (c) {
       setCustomer({ name: c.name, email: c.email ?? '', phone: c.phone ?? '', notes: '' });
@@ -323,6 +335,13 @@ export function RapidQuoteForm({
     : null;
 
   const [preview, setPreview] = useState<Preview | 'loading' | 'error' | null>(null);
+  /**
+   * Desglose por grupo del preview (solo en multi-grupo). Cuando hay un
+   * único item este state queda en `null` y se muestra el card
+   * unitario clásico. Cuando hay 2+ items, la UI muestra una tabla con
+   * una fila por grupo en lugar del card unitario.
+   */
+  const [groupPreviews, setGroupPreviews] = useState<GroupPreviewRow[] | null>(null);
   const [matrix, setMatrix] = useState<KeychainMatrixRow[] | 'loading' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -469,6 +488,7 @@ export function RapidQuoteForm({
 
   const calc = async () => {
     setPreview('loading');
+    setGroupPreviews(null);
     if (isKeychain) setMatrix('loading');
     try {
       const items = buildItems();
@@ -478,10 +498,9 @@ export function RapidQuoteForm({
         toast.error('Cargá al menos una pieza o un insumo para calcular el precio.');
         return;
       }
-      // Multi-grupo: hacemos N llamadas en paralelo y sumamos los
-      // totales. Los campos "unitario" pierden sentido cuando hay varios
-      // items, así que el preview los muestra como `null` y la UI
-      // adapta el render. Fase 3 reemplaza esto con una tabla por grupo.
+      // Multi-grupo: hacemos N llamadas en paralelo. Guardamos el
+      // resultado por grupo (para la tabla desglosada) y la suma para el
+      // total general.
       const results = await Promise.all(
         items.map((item) =>
           api<Preview>('/quotes/preview-item', {
@@ -505,6 +524,17 @@ export function RapidQuoteForm({
         { unitCost: 0, unitPrice: 0, unitProfit: 0, lineTotal: 0, designSurcharge: 0 },
       );
       setPreview(summed);
+      // Si hay 2+ items, exponemos el desglose por grupo. Para 1 item
+      // mantenemos el card unitario clásico (groupPreviews = null).
+      if (items.length > 1) {
+        setGroupPreviews(
+          items.map((item, idx) => ({
+            description: item.description,
+            quantity: item.quantity,
+            preview: results[idx]!,
+          })),
+        );
+      }
 
       // En modo keychain, la matriz comparativa solo aplica si hay un
       // único item (las tiers son sobre un payload de keychain unitario).
@@ -717,6 +747,7 @@ export function RapidQuoteForm({
                 onChange={(e) => {
                   setWithoutInvoice(e.target.checked);
                   setPreview(null); // invalida preview previa
+                  setGroupPreviews(null);
                 }}
               />
               <p className="mt-1 text-xs text-muted-foreground">
@@ -1118,11 +1149,36 @@ export function RapidQuoteForm({
           {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}
           {preview && typeof preview === 'object' && (
             <>
-              {hasMultipleGroups ? (
-                <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
-                  Suma de los {groups.length} grupos. El desglose por grupo se ve en el
-                  detalle de la cotización después de guardar.
-                </p>
+              {groupPreviews && groupPreviews.length > 1 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    Desglose por grupo
+                  </p>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <th className="py-1 pr-2 font-medium">Grupo</th>
+                        <th className="py-1 pr-2 font-medium text-right">Cant.</th>
+                        <th className="py-1 pr-2 font-medium text-right">Unitario</th>
+                        <th className="py-1 pr-0 font-medium text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {groupPreviews.map((row, idx) => (
+                        <tr key={idx}>
+                          <td className="py-1 pr-2">{row.description}</td>
+                          <td className="py-1 pr-2 text-right font-mono">{row.quantity}</td>
+                          <td className="py-1 pr-2 text-right font-mono">
+                            {formatMoney(row.preview.unitPrice)}
+                          </td>
+                          <td className="py-1 pr-0 text-right font-mono font-semibold">
+                            {formatMoney(row.preview.lineTotal)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <>
                   <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
