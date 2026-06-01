@@ -326,60 +326,204 @@ export function RapidQuoteForm({
   const [matrix, setMatrix] = useState<KeychainMatrixRow[] | 'loading' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const buildItem = () => ({
-    type: 'ADHOC' as const,
-    description: description || (isKeychain ? 'Llavero personalizado' : 'Pieza a medida'),
-    quantity: Number(quantity || '1'),
+  type AdhocItemPayload = {
+    type: 'ADHOC';
+    description: string;
+    quantity: number;
     payload: {
-      pieces: pieces
-        .filter((p) => p.filamentId)
-        .map((p) => ({
+      pieces: Array<{
+        name: string;
+        grams: number;
+        printMinutes: number;
+        filamentId: string;
+      }>;
+      materials: Array<{ materialId: string; quantity: number }>;
+      assemblyMinutes: number;
+      managementMinutes: number;
+      designMinutes: number;
+      templateKind?: 'KEYCHAIN';
+    };
+  };
+
+  /**
+   * Particiona el state del form en N items ADHOC, uno por grupo.
+   *
+   * Reglas:
+   * - Solo se incluyen grupos con contenido (al menos una pieza o un insumo).
+   * - Las piezas / insumos cuyo `groupId` apunta a un grupo que ya no
+   *   existe (porque el vendedor lo borró) caen en un "Grupo Adicional"
+   *   final.
+   * - El `designMinutes` global se asigna **solo al primer item con
+   *   contenido**. Los demás llevan 0 — diseño es trabajo único del
+   *   proyecto, no se facturará N veces.
+   * - En modo single-group (default), el comportamiento es idéntico a
+   *   la implementación anterior: 1 item con `description` del form.
+   * - En multi-group, cada item usa el `name` del grupo como descripción.
+   */
+  const buildItems = (): AdhocItemPayload[] => {
+    const groupIds = new Set(groups.map((g) => g.id));
+    const piecesByGroup = new Map<string, PieceDraft[]>();
+    const orphanPieces: PieceDraft[] = [];
+    for (const p of pieces) {
+      if (!p.filamentId) continue;
+      if (groupIds.has(p.groupId)) {
+        const arr = piecesByGroup.get(p.groupId) ?? [];
+        arr.push(p);
+        piecesByGroup.set(p.groupId, arr);
+      } else {
+        orphanPieces.push(p);
+      }
+    }
+    const materialsByGroup = new Map<string, MaterialDraft[]>();
+    const orphanMaterials: MaterialDraft[] = [];
+    for (const m of materials) {
+      if (!m.materialId) continue;
+      if (groupIds.has(m.groupId)) {
+        const arr = materialsByGroup.get(m.groupId) ?? [];
+        arr.push(m);
+        materialsByGroup.set(m.groupId, arr);
+      } else {
+        orphanMaterials.push(m);
+      }
+    }
+
+    const buildOne = (
+      desc: string,
+      qty: number,
+      pcs: PieceDraft[],
+      mts: MaterialDraft[],
+      asm: string,
+      mgmt: string,
+      designForThis: number,
+    ): AdhocItemPayload => ({
+      type: 'ADHOC',
+      description: desc,
+      quantity: qty,
+      payload: {
+        pieces: pcs.map((p) => ({
           name: p.name,
           grams: Number(p.grams || '0'),
           printMinutes: Number(p.printMinutes || '0'),
           filamentId: p.filamentId,
         })),
-      materials: materials
-        .filter((m) => m.materialId)
-        .map((m) => ({ materialId: m.materialId, quantity: Number(m.quantity || '1') })),
-      assemblyMinutes: Number(assemblyMinutes || '0'),
-      managementMinutes: Number(managementMinutes || '0'),
-      designMinutes: Number(designMinutes || '0'),
-      ...(isKeychain ? { templateKind: 'KEYCHAIN' as const } : {}),
-    },
-  });
+        materials: mts.map((m) => ({
+          materialId: m.materialId,
+          quantity: Number(m.quantity || '1'),
+        })),
+        assemblyMinutes: Number(asm || '0'),
+        managementMinutes: Number(mgmt || '0'),
+        designMinutes: designForThis,
+        ...(isKeychain ? { templateKind: 'KEYCHAIN' as const } : {}),
+      },
+    });
+
+    const designTotal = Number(designMinutes || '0');
+    const items: AdhocItemPayload[] = [];
+    let designAssigned = false;
+
+    for (const g of groups) {
+      const gPieces = piecesByGroup.get(g.id) ?? [];
+      const gMaterials = materialsByGroup.get(g.id) ?? [];
+      if (gPieces.length === 0 && gMaterials.length === 0) continue;
+      const designForThis = designAssigned ? 0 : designTotal;
+      designAssigned = true;
+      // En single-group (1 grupo, ningún ítem huérfano) usamos la
+      // `description` del form para preservar el flujo histórico. En
+      // multi-group cada item lleva el nombre de su grupo.
+      const isSingleGroup =
+        groups.length === 1 && orphanPieces.length === 0 && orphanMaterials.length === 0;
+      const desc = isSingleGroup
+        ? description || (isKeychain ? 'Llavero personalizado' : 'Pieza a medida')
+        : g.name || `Grupo`;
+      items.push(
+        buildOne(
+          desc,
+          Number(g.quantity || '1'),
+          gPieces,
+          gMaterials,
+          g.assemblyMinutes,
+          g.managementMinutes,
+          designForThis,
+        ),
+      );
+    }
+
+    if (orphanPieces.length > 0 || orphanMaterials.length > 0) {
+      const designForThis = designAssigned ? 0 : designTotal;
+      items.push(
+        buildOne(
+          'Grupo Adicional',
+          1,
+          orphanPieces,
+          orphanMaterials,
+          '0',
+          '0',
+          designForThis,
+        ),
+      );
+    }
+
+    return items;
+  };
+
 
   const calc = async () => {
     setPreview('loading');
     if (isKeychain) setMatrix('loading');
     try {
-      const item = buildItem();
-      const result = await api<Preview>('/quotes/preview-item', {
-        method: 'POST',
-        body: {
-          channelId,
-          customerId: customerId || null,
-          item,
-        },
-      });
-      setPreview(result);
-      // En modo keychain, además del precio para la cantidad elegida
-      // traemos la matriz comparativa de todos los tiers — para que el
-      // vendedor vea el incentivo de saltar de escala.
-      if (isKeychain) {
+      const items = buildItems();
+      if (items.length === 0) {
+        setPreview('error');
+        if (isKeychain) setMatrix(null);
+        toast.error('Cargá al menos una pieza o un insumo para calcular el precio.');
+        return;
+      }
+      // Multi-grupo: hacemos N llamadas en paralelo y sumamos los
+      // totales. Los campos "unitario" pierden sentido cuando hay varios
+      // items, así que el preview los muestra como `null` y la UI
+      // adapta el render. Fase 3 reemplaza esto con una tabla por grupo.
+      const results = await Promise.all(
+        items.map((item) =>
+          api<Preview>('/quotes/preview-item', {
+            method: 'POST',
+            body: {
+              channelId,
+              customerId: customerId || null,
+              item,
+            },
+          }),
+        ),
+      );
+      const summed = results.reduce<Preview>(
+        (acc, r) => ({
+          unitCost: acc.unitCost + r.unitCost,
+          unitPrice: acc.unitPrice + r.unitPrice,
+          unitProfit: acc.unitProfit + r.unitProfit,
+          lineTotal: acc.lineTotal + r.lineTotal,
+          designSurcharge: acc.designSurcharge + r.designSurcharge,
+        }),
+        { unitCost: 0, unitPrice: 0, unitProfit: 0, lineTotal: 0, designSurcharge: 0 },
+      );
+      setPreview(summed);
+
+      // En modo keychain, la matriz comparativa solo aplica si hay un
+      // único item (las tiers son sobre un payload de keychain unitario).
+      if (isKeychain && items.length === 1) {
         try {
           const m = await api<{ tiers: KeychainMatrixRow[] }>('/quotes/keychain-matrix', {
             method: 'POST',
             body: {
               channelId,
               customerId: customerId || null,
-              payload: item.payload,
+              payload: items[0]!.payload,
             },
           });
           setMatrix(m.tiers);
         } catch {
           setMatrix('error');
         }
+      } else if (isKeychain) {
+        setMatrix(null);
       }
     } catch (err) {
       setPreview('error');
@@ -391,6 +535,12 @@ export function RapidQuoteForm({
   const submit = async () => {
     setSaving(true);
     try {
+      const items = buildItems();
+      if (items.length === 0) {
+        toast.error('Necesitás al menos una pieza o un insumo para cotizar.');
+        setSaving(false);
+        return;
+      }
       const created = await api<{ id: string }>('/quotes', {
         method: 'POST',
         body: {
@@ -404,10 +554,14 @@ export function RapidQuoteForm({
           validUntil: validUntil ? new Date(validUntil).toISOString() : null,
           notes: notes || null,
           discount: Number(discount || '0'),
-          items: [buildItem()],
+          items,
         },
       });
-      toast.success('Cotización a medida creada.');
+      toast.success(
+        items.length === 1
+          ? 'Cotización a medida creada.'
+          : `Cotización creada con ${items.length} items.`,
+      );
       router.replace(`/cotizaciones/${created.id}`);
     } catch (err) {
       handleApiError(err);
@@ -441,11 +595,31 @@ export function RapidQuoteForm({
       (qtyNumber < 5 || qtyNumber % 5 === 0) &&
       activeKeychainTier != null
     : qtyNumber > 0;
+
+  // Validación multi-grupo:
+  //  - Cada grupo debe tener un nombre no vacío.
+  //  - Cada grupo debe tener una cantidad válida (entero positivo).
+  //  - Al menos un grupo (incluyendo el grupo adicional) debe tener
+  //    contenido (pieza con filamento o insumo).
+  const groupIds = new Set(groups.map((g) => g.id));
+  const groupHasContent = (gid: string) =>
+    pieces.some((p) => p.groupId === gid && p.filamentId && Number(p.grams || '0') > 0) ||
+    materials.some((m) => m.groupId === gid && m.materialId);
+  const orphanHasContent =
+    pieces.some(
+      (p) => !groupIds.has(p.groupId) && p.filamentId && Number(p.grams || '0') > 0,
+    ) || materials.some((m) => !groupIds.has(m.groupId) && m.materialId);
+  const groupsValid = hasMultipleGroups
+    ? groups.every((g) => {
+        if (!groupHasContent(g.id)) return true; // grupos vacíos se filtran al guardar
+        return g.name.trim().length > 0 && Number(g.quantity || '0') > 0;
+      }) &&
+      (groups.some((g) => groupHasContent(g.id)) || orphanHasContent)
+    : pieces.some((p) => p.filamentId && Number(p.grams || '0') > 0);
+
   const isFormValid =
     customer.name.trim().length > 0 &&
-    isQtyValid &&
-    description.trim().length > 0 &&
-    pieces.some((p) => p.filamentId && Number(p.grams || '0') > 0);
+    (hasMultipleGroups ? groupsValid : isQtyValid && description.trim().length > 0 && groupsValid);
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -944,22 +1118,33 @@ export function RapidQuoteForm({
           {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}
           {preview && typeof preview === 'object' && (
             <>
-              <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
-              {usesBatchInputs && (
+              {hasMultipleGroups ? (
                 <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
-                  Calculado dividiendo por {batchSize} los valores que cargaste
-                  (batch de {batchSize} llaveros · costo total de batch ≈{' '}
-                  {formatMoney(preview.unitCost * batchSize)}).
+                  Suma de los {groups.length} grupos. El desglose por grupo se ve en el
+                  detalle de la cotización después de guardar.
                 </p>
+              ) : (
+                <>
+                  <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
+                  {usesBatchInputs && (
+                    <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                      Calculado dividiendo por {batchSize} los valores que cargaste
+                      (batch de {batchSize} llaveros · costo total de batch ≈{' '}
+                      {formatMoney(preview.unitCost * batchSize)}).
+                    </p>
+                  )}
+                  <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
+                  <div className="flex justify-between rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1">
+                    <span className="text-emerald-700 dark:text-emerald-300">
+                      Ganancia / unidad
+                    </span>
+                    <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">
+                      {formatMoney(preview.unitProfit)}
+                    </span>
+                  </div>
+                  <Row label="Cantidad" value={quantity} />
+                </>
               )}
-              <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
-              <div className="flex justify-between rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1">
-                <span className="text-emerald-700 dark:text-emerald-300">Ganancia / unidad</span>
-                <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">
-                  {formatMoney(preview.unitProfit)}
-                </span>
-              </div>
-              <Row label="Cantidad" value={quantity} />
               {preview.designSurcharge > 0 && (
                 <Row
                   label="Cargo único de diseño"
