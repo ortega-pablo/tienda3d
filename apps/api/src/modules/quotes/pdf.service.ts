@@ -15,6 +15,45 @@ const STATUS_LABEL: Record<string, string> = {
   EXPIRED: 'Vencida',
 };
 
+// Layout: márgenes A4 + columnas fijas para que la tabla quede prolija
+// y los multi-line de PDFKit no se desalineen (evitamos `continued: true`
+// con coordenadas relativas que era el problema del layout viejo).
+const PAGE_LEFT = 40;
+const PAGE_RIGHT = 555;
+const CONTENT_WIDTH = PAGE_RIGHT - PAGE_LEFT;
+
+// Anchos de columna de la tabla de items (totalizan CONTENT_WIDTH = 515).
+const COL_DETAIL_W = 245;
+const COL_QTY_W = 60;
+const COL_PRICE_W = 100;
+const COL_SUBTOTAL_W = 110;
+const COL_QTY_X = PAGE_LEFT + COL_DETAIL_W;
+const COL_PRICE_X = COL_QTY_X + COL_QTY_W;
+const COL_SUBTOTAL_X = COL_PRICE_X + COL_PRICE_W;
+
+// Colores (paleta neutra muy parecida a Tailwind slate).
+const COLOR_TITLE = '#0f172a';
+const COLOR_BODY = '#1e293b';
+const COLOR_MUTED = '#64748b';
+const COLOR_SUBTLE = '#94a3b8';
+const COLOR_HAIRLINE = '#e2e8f0';
+
+interface AdhocPayloadView {
+  pieces?: Array<{
+    name?: string;
+    grams?: number;
+    printMinutes?: number;
+    filamentName?: string;
+  }>;
+  materials?: Array<{
+    quantity?: number;
+    materialName?: string;
+  }>;
+  designSurcharge?: number;
+  templateKind?: string;
+  batchSize?: number;
+}
+
 @Injectable()
 export class PdfService {
   async generateQuotePdf(quote: QuoteDto): Promise<Buffer> {
@@ -35,196 +74,384 @@ export class PdfService {
     });
   }
 
+  // ----- Header: dos columnas (branding izq + metadata der) -----
+
   private renderHeader(doc: PDFKit.PDFDocument, quote: QuoteDto): void {
-    doc
-      .fontSize(20)
-      .fillColor('#0f172a')
-      .text('Plastik 3D', { continued: true })
-      .fontSize(10)
-      .fillColor('#64748b')
-      .text('   ·   Cotización', { align: 'left' });
+    const top = 40;
+    const rightColW = 200;
+    const rightColX = PAGE_RIGHT - rightColW;
 
+    // Branding (izquierda)
     doc
-      .moveDown(0.2)
+      .font('Helvetica-Bold')
+      .fontSize(22)
+      .fillColor(COLOR_TITLE)
+      .text('Plastik 3D', PAGE_LEFT, top, { width: 300, lineBreak: false });
+    doc
+      .font('Helvetica')
       .fontSize(9)
-      .fillColor('#475569')
-      .text('Cotizador, costeo y stock');
+      .fillColor(COLOR_MUTED)
+      .text('Cotizador, costeo y stock', PAGE_LEFT, top + 28, {
+        width: 300,
+        lineBreak: false,
+      });
 
-    doc.moveDown(1);
-
-    const headerY = doc.y;
+    // Metadata (derecha) — código, status, fechas alineados a la derecha
     doc
-      .fontSize(16)
-      .fillColor('#0f172a')
-      .text(quote.code, { continued: true });
-    doc
-      .fontSize(10)
-      .fillColor('#64748b')
-      .text(`   ·   ${STATUS_LABEL[quote.status] ?? quote.status}`);
+      .font('Helvetica-Bold')
+      .fontSize(18)
+      .fillColor(COLOR_TITLE)
+      .text(quote.code, rightColX, top, { width: rightColW, align: 'right', lineBreak: false });
 
+    // Status badge: fondo pintado, texto encima
+    const statusLabel = STATUS_LABEL[quote.status] ?? quote.status;
+    const statusFontSize = 8.5;
+    doc.font('Helvetica').fontSize(statusFontSize);
+    const statusW = doc.widthOfString(statusLabel) + 12;
+    const statusH = 14;
+    const statusY = top + 26;
+    const statusX = PAGE_RIGHT - statusW;
+    doc
+      .roundedRect(statusX, statusY, statusW, statusH, 3)
+      .fillColor('#f1f5f9')
+      .fill();
+    doc
+      .fillColor(COLOR_MUTED)
+      .text(statusLabel, statusX, statusY + 3.5, {
+        width: statusW,
+        align: 'center',
+        lineBreak: false,
+      });
+
+    let dateY = statusY + statusH + 6;
     doc
       .fontSize(9)
-      .fillColor('#475569')
-      .text(`Emitida ${quote.createdAt.toLocaleDateString('es-AR')}`);
+      .fillColor(COLOR_MUTED)
+      .text(`Emitida ${quote.createdAt.toLocaleDateString('es-AR')}`, rightColX, dateY, {
+        width: rightColW,
+        align: 'right',
+        lineBreak: false,
+      });
+    dateY += 12;
     if (quote.validUntil) {
-      doc.text(`Válida hasta ${quote.validUntil.toLocaleDateString('es-AR')}`);
+      doc.text(`Válida hasta ${quote.validUntil.toLocaleDateString('es-AR')}`, rightColX, dateY, {
+        width: rightColW,
+        align: 'right',
+        lineBreak: false,
+      });
+      dateY += 12;
     }
 
-    doc.moveDown(0.8);
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).strokeColor('#e2e8f0').stroke();
-    doc.moveDown(0.6);
-    void headerY;
+    // Separador
+    const sepY = Math.max(top + 70, dateY + 6);
+    doc.moveTo(PAGE_LEFT, sepY).lineTo(PAGE_RIGHT, sepY).strokeColor(COLOR_HAIRLINE).stroke();
+    doc.y = sepY + 14;
   }
+
+  // ----- Cliente -----
 
   private renderCustomer(doc: PDFKit.PDFDocument, quote: QuoteDto): void {
-    doc.fontSize(11).fillColor('#0f172a').text('Cliente', { continued: false });
-    doc.fontSize(10).fillColor('#0f172a').text(quote.customerName);
-    doc.fontSize(9).fillColor('#475569');
-    if (quote.customerEmail) doc.text(quote.customerEmail);
-    if (quote.customerPhone) doc.text(quote.customerPhone);
-    if (quote.channelName) doc.text(`Canal: ${quote.channelName}`);
-    doc.moveDown(0.8);
+    const startY = doc.y;
+    doc
+      .font('Helvetica')
+      .fontSize(8)
+      .fillColor(COLOR_MUTED)
+      .text('CLIENTE', PAGE_LEFT, startY, {
+        characterSpacing: 1.2,
+        lineBreak: false,
+      });
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(13)
+      .fillColor(COLOR_TITLE)
+      .text(quote.customerName, PAGE_LEFT, startY + 12, { width: CONTENT_WIDTH });
+
+    let lineY = doc.y + 2;
+    doc.font('Helvetica').fontSize(9).fillColor(COLOR_MUTED);
+    const writeLine = (text: string) => {
+      doc.text(text, PAGE_LEFT, lineY, { width: CONTENT_WIDTH, lineBreak: false });
+      lineY += 12;
+    };
+    if (quote.customerEmail) writeLine(quote.customerEmail);
+    if (quote.customerPhone) writeLine(quote.customerPhone);
+    if (quote.channelName) writeLine(`Canal: ${quote.channelName}`);
+
+    doc.y = lineY + 8;
+    doc.moveTo(PAGE_LEFT, doc.y).lineTo(PAGE_RIGHT, doc.y).strokeColor(COLOR_HAIRLINE).stroke();
+    doc.y += 14;
   }
+
+  // ----- Items -----
 
   private renderItems(doc: PDFKit.PDFDocument, quote: QuoteDto): void {
-    const startX = 40;
-    const widths = [240, 60, 90, 90];
-    const headerY = doc.y;
-
-    doc
-      .fontSize(9)
-      .fillColor('#475569')
-      .text('Detalle', startX, headerY, { width: widths[0] });
-    doc.text('Cant.', startX + widths[0]!, headerY, { width: widths[1], align: 'right' });
-    doc.text('Precio unit.', startX + widths[0]! + widths[1]!, headerY, {
-      width: widths[2],
-      align: 'right',
-    });
-    doc.text('Subtotal', startX + widths[0]! + widths[1]! + widths[2]!, headerY, {
-      width: widths[3],
-      align: 'right',
-    });
-
-    doc
-      .moveTo(startX, headerY + 14)
-      .lineTo(555, headerY + 14)
-      .strokeColor('#e2e8f0')
-      .stroke();
-    doc.y = headerY + 22;
-    doc.fillColor('#0f172a').fontSize(10);
+    // Header de la tabla
+    this.renderTableHeader(doc);
 
     for (const item of quote.items) {
-      // Si el item ADHOC tiene cargo de diseño, lo mostramos como sub-línea
-      // separada para que el cliente vea el desglose. La fila principal pasa
-      // a mostrar (qty × unitPrice), y la sub-fila aporta el diseño hasta
-      // sumar el lineTotal persistido.
-      const designSurcharge =
-        item.adhocPayload && typeof item.adhocPayload.designSurcharge === 'number'
-          ? item.adhocPayload.designSurcharge
-          : 0;
-      const productLineTotal = item.lineTotal - designSurcharge;
-      const batchSize =
-        item.adhocPayload &&
-        item.adhocPayload.templateKind === 'KEYCHAIN' &&
-        typeof item.adhocPayload.batchSize === 'number' &&
-        item.adhocPayload.batchSize > 1
-          ? item.adhocPayload.batchSize
-          : null;
-
-      const rowY = doc.y;
-      doc.text(item.description, startX, rowY, { width: widths[0] });
-      doc.text(this.fmtQty(item.quantity), startX + widths[0]!, rowY, {
-        width: widths[1],
-        align: 'right',
-      });
-      doc.text(FORMATTER.format(item.unitPrice), startX + widths[0]! + widths[1]!, rowY, {
-        width: widths[2],
-        align: 'right',
-      });
-      doc.text(
-        FORMATTER.format(productLineTotal),
-        startX + widths[0]! + widths[1]! + widths[2]!,
-        rowY,
-        { width: widths[3], align: 'right' },
-      );
-      doc.moveDown(0.6);
-
-      if (batchSize != null) {
-        const subY = doc.y;
-        doc
-          .fontSize(8)
-          .fillColor('#64748b')
-          .text(
-            `  Cotización basada en un batch de ${batchSize} unidades`,
-            startX,
-            subY,
-            { width: widths[0]! + widths[1]! + widths[2]! + widths[3]! },
-          );
-        doc.fontSize(10).fillColor('#0f172a');
-        doc.moveDown(0.5);
-      }
-
-      if (designSurcharge > 0) {
-        const subY = doc.y;
-        doc
-          .fontSize(9)
-          .fillColor('#475569')
-          .text('  Cargo único de diseño', startX, subY, { width: widths[0] });
-        doc.text(
-          FORMATTER.format(designSurcharge),
-          startX + widths[0]! + widths[1]! + widths[2]!,
-          subY,
-          { width: widths[3], align: 'right' },
-        );
-        doc.fontSize(10).fillColor('#0f172a');
-        doc.moveDown(0.6);
-      }
+      this.ensureSpace(doc, 60);
+      this.renderItemRow(doc, item);
     }
 
-    doc.moveDown(0.3);
-    doc.moveTo(startX, doc.y).lineTo(555, doc.y).strokeColor('#e2e8f0').stroke();
-    doc.moveDown(0.5);
+    doc.moveDown(0.4);
+    doc.moveTo(PAGE_LEFT, doc.y).lineTo(PAGE_RIGHT, doc.y).strokeColor(COLOR_HAIRLINE).stroke();
+    doc.moveDown(0.6);
   }
+
+  private renderTableHeader(doc: PDFKit.PDFDocument): void {
+    const y = doc.y;
+    doc
+      .font('Helvetica')
+      .fontSize(8)
+      .fillColor(COLOR_MUTED);
+    doc.text('DETALLE', PAGE_LEFT, y, {
+      width: COL_DETAIL_W,
+      characterSpacing: 1.1,
+      lineBreak: false,
+    });
+    doc.text('CANT.', COL_QTY_X, y, {
+      width: COL_QTY_W,
+      align: 'right',
+      characterSpacing: 1.1,
+      lineBreak: false,
+    });
+    doc.text('PRECIO UNIT.', COL_PRICE_X, y, {
+      width: COL_PRICE_W,
+      align: 'right',
+      characterSpacing: 1.1,
+      lineBreak: false,
+    });
+    doc.text('SUBTOTAL', COL_SUBTOTAL_X, y, {
+      width: COL_SUBTOTAL_W,
+      align: 'right',
+      characterSpacing: 1.1,
+      lineBreak: false,
+    });
+    doc.y = y + 14;
+    doc.moveTo(PAGE_LEFT, doc.y).lineTo(PAGE_RIGHT, doc.y).strokeColor(COLOR_HAIRLINE).stroke();
+    doc.y += 6;
+  }
+
+  private renderItemRow(doc: PDFKit.PDFDocument, item: QuoteDto['items'][number]): void {
+    const adhocPayload = (item.adhocPayload ?? null) as AdhocPayloadView | null;
+    const designSurcharge =
+      adhocPayload && typeof adhocPayload.designSurcharge === 'number'
+        ? adhocPayload.designSurcharge
+        : 0;
+    const productLineTotal = item.lineTotal - designSurcharge;
+    const batchSize =
+      adhocPayload &&
+      adhocPayload.templateKind === 'KEYCHAIN' &&
+      typeof adhocPayload.batchSize === 'number' &&
+      adhocPayload.batchSize > 1
+        ? adhocPayload.batchSize
+        : null;
+
+    const rowY = doc.y;
+    doc
+      .font('Helvetica-Bold')
+      .fontSize(10)
+      .fillColor(COLOR_BODY)
+      .text(item.description, PAGE_LEFT, rowY, {
+        width: COL_DETAIL_W,
+        lineBreak: false,
+        ellipsis: true,
+      });
+    doc.font('Helvetica').text(this.fmtQty(item.quantity), COL_QTY_X, rowY, {
+      width: COL_QTY_W,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.text(FORMATTER.format(item.unitPrice), COL_PRICE_X, rowY, {
+      width: COL_PRICE_W,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.text(FORMATTER.format(productLineTotal), COL_SUBTOTAL_X, rowY, {
+      width: COL_SUBTOTAL_W,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.y = rowY + 14;
+
+    // Itemizado: solo si hay 2+ componentes (piezas + insumos). Una sola
+    // pieza o un solo insumo no necesita desglose — la descripción del
+    // grupo ya identifica de qué se trata.
+    const componentLines = this.composeComponentList(adhocPayload);
+    if (componentLines.length >= 2) {
+      doc.font('Helvetica').fontSize(8.5).fillColor(COLOR_MUTED);
+      for (const line of componentLines) {
+        this.ensureSpace(doc, 12);
+        doc.text(`• ${line}`, PAGE_LEFT + 8, doc.y, {
+          width: COL_DETAIL_W - 8,
+          lineBreak: false,
+        });
+        doc.y += 11;
+      }
+      doc.y += 2;
+    }
+
+    // Nota de batch para keychain
+    if (batchSize != null) {
+      this.ensureSpace(doc, 14);
+      doc
+        .font('Helvetica-Oblique')
+        .fontSize(8)
+        .fillColor(COLOR_SUBTLE)
+        .text(
+          `Cotización basada en un batch de ${batchSize} unidades`,
+          PAGE_LEFT + 8,
+          doc.y,
+          { width: CONTENT_WIDTH - 8, lineBreak: false },
+        );
+      doc.y += 12;
+    }
+
+    // Cargo de diseño como sub-fila
+    if (designSurcharge > 0) {
+      this.ensureSpace(doc, 14);
+      const subY = doc.y;
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(COLOR_MUTED)
+        .text('Cargo único de diseño', PAGE_LEFT + 8, subY, {
+          width: COL_DETAIL_W - 8,
+          lineBreak: false,
+        });
+      doc.text(FORMATTER.format(designSurcharge), COL_SUBTOTAL_X, subY, {
+        width: COL_SUBTOTAL_W,
+        align: 'right',
+        lineBreak: false,
+      });
+      doc.y = subY + 13;
+    }
+
+    doc.y += 4;
+  }
+
+  /**
+   * Lista textual de los componentes del item (piezas e insumos) para el
+   * itemizado. Sin precios — solo identifica de qué se compone el grupo.
+   * Por convención mostramos primero las piezas impresas y después los
+   * insumos.
+   *
+   *   - Piezas: "{name} ({filamentName})" o solo el nombre si no hay
+   *     filamento snapshoteado.
+   *   - Insumos: "{qty} × {materialName}".
+   */
+  private composeComponentList(payload: AdhocPayloadView | null): string[] {
+    if (!payload) return [];
+    const lines: string[] = [];
+    const pieces = payload.pieces ?? [];
+    for (const p of pieces) {
+      const name = p.name?.trim() || 'Pieza';
+      lines.push(p.filamentName ? `${name} (${p.filamentName})` : name);
+    }
+    const materials = payload.materials ?? [];
+    for (const m of materials) {
+      const name = m.materialName?.trim() || 'Insumo';
+      const qty = typeof m.quantity === 'number' ? m.quantity : 1;
+      lines.push(`${this.fmtQty(qty)} × ${name}`);
+    }
+    return lines;
+  }
+
+  // ----- Totales -----
 
   private renderTotals(doc: PDFKit.PDFDocument, quote: QuoteDto): void {
-    const right = (label: string, value: string, opts: { bold?: boolean } = {}) => {
+    const labelX = 360;
+    const valueX = 480;
+    const totalRowW = PAGE_RIGHT - labelX;
+
+    const row = (label: string, value: string, opts: { bold?: boolean } = {}) => {
+      this.ensureSpace(doc, 18);
       const y = doc.y;
-      doc.fontSize(opts.bold ? 12 : 10).fillColor(opts.bold ? '#0f172a' : '#475569');
-      doc.text(label, 320, y, { width: 120, align: 'right' });
-      doc.fontSize(opts.bold ? 13 : 10).fillColor('#0f172a');
-      doc.text(value, 445, y, { width: 110, align: 'right' });
-      doc.moveDown(0.6);
+      doc
+        .font(opts.bold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(opts.bold ? 12 : 10)
+        .fillColor(opts.bold ? COLOR_TITLE : COLOR_MUTED)
+        .text(label, labelX, y, { width: 110, align: 'right', lineBreak: false });
+      doc
+        .fontSize(opts.bold ? 13 : 10)
+        .fillColor(COLOR_TITLE)
+        .text(value, valueX, y, { width: 75, align: 'right', lineBreak: false });
+      doc.y = y + (opts.bold ? 16 : 14);
     };
 
-    right('Subtotal', FORMATTER.format(quote.subtotal));
-    if (quote.discount > 0) right('Descuento', `- ${FORMATTER.format(quote.discount)}`);
-    right('Total', FORMATTER.format(quote.total), { bold: true });
+    row('Subtotal', FORMATTER.format(quote.subtotal));
+    if (quote.discount > 0) row('Descuento', `- ${FORMATTER.format(quote.discount)}`);
 
+    // Línea encima del total para separar visualmente
+    doc.y += 2;
+    doc
+      .moveTo(labelX, doc.y)
+      .lineTo(PAGE_RIGHT, doc.y)
+      .strokeColor(COLOR_HAIRLINE)
+      .stroke();
+    doc.y += 6;
+    row('Total', FORMATTER.format(quote.total), { bold: true });
+
+    // Tag de facturación al pie del bloque de totales
     if (quote.withInvoice) {
-      doc.moveDown(0.3);
-      doc.fontSize(9).fillColor('#475569').text('Operación con factura', { align: 'right' });
+      this.ensureSpace(doc, 16);
+      doc.y += 4;
+      doc
+        .font('Helvetica-Oblique')
+        .fontSize(8.5)
+        .fillColor(COLOR_SUBTLE)
+        .text('Operación con factura', labelX, doc.y, {
+          width: totalRowW,
+          align: 'right',
+          lineBreak: false,
+        });
+      doc.y += 12;
     }
   }
+
+  // ----- Footer / notas -----
 
   private renderFooter(doc: PDFKit.PDFDocument, quote: QuoteDto): void {
     if (quote.notes) {
-      doc.moveDown(1);
-      doc.fontSize(10).fillColor('#0f172a').text('Notas');
-      doc.fontSize(9).fillColor('#475569').text(quote.notes, { width: 515 });
+      doc.y += 8;
+      this.ensureSpace(doc, 40);
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor(COLOR_MUTED)
+        .text('NOTAS', PAGE_LEFT, doc.y, {
+          characterSpacing: 1.1,
+          lineBreak: false,
+        });
+      doc.y += 12;
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(COLOR_BODY)
+        .text(quote.notes, PAGE_LEFT, doc.y, { width: CONTENT_WIDTH });
     }
-    doc.moveDown(2);
+    // Footer fijo al pie de la página
     doc
+      .font('Helvetica')
       .fontSize(8)
-      .fillColor('#94a3b8')
+      .fillColor(COLOR_SUBTLE)
       .text(
-        `Generado por Plastik 3D · Cotizador y costeo · ${new Date().toLocaleString('es-AR')}`,
-        40,
-        780,
-        { align: 'center', width: 515 },
+        `Generado por Plastik 3D · ${new Date().toLocaleString('es-AR')}`,
+        PAGE_LEFT,
+        790,
+        { width: CONTENT_WIDTH, align: 'center', lineBreak: false },
       );
   }
 
+  // ----- Utils -----
+
   private fmtQty(n: number): string {
     return Number.isInteger(n) ? n.toString() : n.toFixed(2);
+  }
+
+  private ensureSpace(doc: PDFKit.PDFDocument, needed: number): void {
+    const bottom = doc.page.height - doc.page.margins.bottom - 20;
+    if (doc.y + needed > bottom) {
+      doc.addPage();
+    }
   }
 }
