@@ -101,14 +101,14 @@ export class PdfService {
       .font('Helvetica')
       .fontSize(9)
       .fillColor(COLOR_MUTED)
-      .text(`Emitida ${quote.createdAt.toLocaleDateString('es-AR')}`, rightColX, dateY, {
+      .text(`Emitido ${quote.createdAt.toLocaleDateString('es-AR')}`, rightColX, dateY, {
         width: rightColW,
         align: 'right',
         lineBreak: false,
       });
     dateY += 12;
     if (quote.validUntil) {
-      doc.text(`Válida hasta ${quote.validUntil.toLocaleDateString('es-AR')}`, rightColX, dateY, {
+      doc.text(`Válido hasta ${quote.validUntil.toLocaleDateString('es-AR')}`, rightColX, dateY, {
         width: rightColW,
         align: 'right',
         lineBreak: false,
