@@ -618,6 +618,22 @@ export class QuotesService {
     // y se incluya en el subtotal / descuento de la cotización.
     const lineTotal = unitPrice * item.quantity + designSurcharge;
 
+    // Snapshot de nombres de filamento e insumo para que el PDF y el
+    // detalle puedan listar los componentes del item sin tener que
+    // resolver los ids en runtime. Si un material se borra después,
+    // el snapshot histórico sigue mostrando el nombre que el cliente vio.
+    const allIds = new Set<string>();
+    for (const p of item.payload.pieces) if (p.filamentId) allIds.add(p.filamentId);
+    for (const m of item.payload.materials) if (m.materialId) allIds.add(m.materialId);
+    const nameLookup = new Map<string, string>();
+    if (allIds.size > 0) {
+      const materials = await this.prisma.material.findMany({
+        where: { id: { in: [...allIds] } },
+        select: { id: true, name: true },
+      });
+      for (const m of materials) nameLookup.set(m.id, m.name);
+    }
+
     // Persistimos designMinutes + designSurcharge en el payload JSON:
     // así el PDF muestra el desglose exacto que se firmó, aunque el
     // global param cambie después. Si es keychain, también snapshoteamos
@@ -628,6 +644,14 @@ export class QuotesService {
     // existen solo en `costingInputs`, no se persisten.
     const persistedPayload: AdhocItemPayload = {
       ...item.payload,
+      pieces: item.payload.pieces.map((p) => ({
+        ...p,
+        filamentName: nameLookup.get(p.filamentId),
+      })),
+      materials: item.payload.materials.map((m) => ({
+        ...m,
+        materialName: nameLookup.get(m.materialId),
+      })),
       designMinutes,
       designSurcharge,
       ...(keychainTier

@@ -72,6 +72,21 @@ export default async function QuoteDetailPage({
                       ? i.adhocPayload.designSurcharge
                       : 0;
                   const productLineTotal = i.lineTotal - designSurcharge;
+                  // Itemizado de componentes (sin precios): pieces + materials.
+                  // Solo se muestra cuando el grupo tiene 2+ componentes.
+                  const componentLines: string[] = [];
+                  for (const p of i.adhocPayload?.pieces ?? []) {
+                    const name = p.name?.trim() || 'Pieza';
+                    componentLines.push(
+                      p.filamentName ? `${name} (${p.filamentName})` : name,
+                    );
+                  }
+                  for (const m of i.adhocPayload?.materials ?? []) {
+                    const name = m.materialName?.trim() || 'Insumo';
+                    const qty = typeof m.quantity === 'number' ? m.quantity : 1;
+                    componentLines.push(`${qty} × ${name}`);
+                  }
+                  const showComponents = componentLines.length >= 2;
                   const rows = [
                     <tr key={i.id}>
                       <td className="py-3 pr-4">
@@ -83,6 +98,16 @@ export default async function QuoteDetailPage({
                               ? `Llavero — tier ${i.adhocPayload.tierLabel ?? ''} (markup ${i.adhocPayload.appliedMarkupPct}%)`
                               : 'Pieza a medida'}
                         </div>
+                        {showComponents && (
+                          <ul className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+                            {componentLines.map((line, idx) => (
+                              <li key={idx} className="flex items-start gap-1.5">
+                                <span className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-muted-foreground/60" />
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                         {i.adhocPayload?.templateKind === 'KEYCHAIN' &&
                           typeof i.adhocPayload.batchSize === 'number' &&
                           i.adhocPayload.batchSize > 1 && (

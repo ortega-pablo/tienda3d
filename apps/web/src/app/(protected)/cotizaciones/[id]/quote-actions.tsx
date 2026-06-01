@@ -56,6 +56,17 @@ export interface QuoteDto {
       appliedMarkupPct?: number;
       tierLabel?: string;
       batchSize?: number;
+      /** Snapshot de los componentes del item (sin precios). Útil para
+       * que la UI y el PDF muestren el itemizado cuando hay 2+
+       * componentes en el mismo grupo. */
+      pieces?: Array<{
+        name?: string;
+        filamentName?: string;
+      }>;
+      materials?: Array<{
+        quantity?: number;
+        materialName?: string;
+      }>;
     } | null;
   }>;
 }
