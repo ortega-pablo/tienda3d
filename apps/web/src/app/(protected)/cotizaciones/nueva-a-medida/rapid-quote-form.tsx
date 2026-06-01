@@ -44,11 +44,42 @@ interface PieceDraft {
   grams: string;
   printMinutes: string;
   filamentId: string;
+  /**
+   * Id del grupo al que pertenece la pieza. En modo ADHOC libre, el
+   * vendedor puede crear varios grupos y asignar piezas a uno u otro
+   * para que cada grupo cotice como un item separado. Si la pieza queda
+   * con un `groupId` que ya no existe (porque el vendedor borró el
+   * grupo), el builder la trata como huérfana y la mete en un grupo
+   * adicional automático al guardar.
+   */
+  groupId: string;
 }
 interface MaterialDraft {
   materialId: string;
   quantity: string;
+  groupId: string;
 }
+
+/**
+ * Cada grupo termina siendo un ADHOC item en la cotización. El motor
+ * calcula y costea cada grupo por separado. El grupo NO se persiste como
+ * entidad — solo se usa para particionar el payload en N items al
+ * guardar.
+ *
+ * `designMinutes` queda fuera de los grupos: es cargo único del proyecto
+ * entero (un solo modelo 3D, se cobra una sola vez). El builder lo
+ * asigna al primer grupo no vacío.
+ */
+interface GroupDraft {
+  id: string;
+  name: string;
+  quantity: string;
+  assemblyMinutes: string;
+  managementMinutes: string;
+}
+
+/** Id estable del grupo default — siempre existe al arrancar el form. */
+const DEFAULT_GROUP_ID = 'g1';
 
 interface Preview {
   unitCost: number;
@@ -168,15 +199,9 @@ export function RapidQuoteForm({
   const [description, setDescription] = useState(
     isKeychain ? 'Llavero personalizado' : 'Pieza a medida',
   );
-  const [quantity, setQuantity] = useState('1');
-
-  // Tier activa según la cantidad — solo para modo keychain. Si no cae
-  // dentro de la grilla, devuelve null y deshabilitamos el submit.
-  const activeKeychainTier = isKeychain
-    ? (keychainTiers.find(
-        (t) => Number(quantity) >= t.minQty && (t.maxQty == null || Number(quantity) <= t.maxQty),
-      ) ?? null)
-    : null;
+  // `quantity`, `assemblyMinutes`, `managementMinutes` viven en `groups[0]`
+  // (definido más abajo). Los alias para retro-compatibilidad del render
+  // se exponen después de declarar `groups`.
   // Pre-carga en modo keychain: tomamos los defaults configurados en
   // `/parametros/llaveros` (pieza, insumos, tiempos). En modo ADHOC libre
   // arrancamos con el placeholder vacío de siempre. El vendedor puede
@@ -193,11 +218,18 @@ export function RapidQuoteForm({
               : '',
           filamentId:
             keychainDefaults.pieceFilamentId ?? filaments[0]?.id ?? '',
+          groupId: DEFAULT_GROUP_ID,
         },
       ];
     }
     return [
-      { name: 'Pieza', grams: '', printMinutes: '', filamentId: filaments[0]?.id ?? '' },
+      {
+        name: 'Pieza',
+        grams: '',
+        printMinutes: '',
+        filamentId: filaments[0]?.id ?? '',
+        groupId: DEFAULT_GROUP_ID,
+      },
     ];
     // Solo corre una vez al montar — el form es controlado a partir de ahí.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,6 +239,7 @@ export function RapidQuoteForm({
       return keychainDefaults.materials.map((m) => ({
         materialId: m.materialId,
         quantity: String(m.quantity),
+        groupId: DEFAULT_GROUP_ID,
       }));
     }
     return [];
@@ -214,17 +247,80 @@ export function RapidQuoteForm({
   }, []);
   const [pieces, setPieces] = useState<PieceDraft[]>(initialPieces);
   const [materials, setMaterials] = useState<MaterialDraft[]>(initialMaterials);
-  const [assemblyMinutes, setAssemblyMinutes] = useState(
-    isKeychain && keychainDefaults
-      ? String(keychainDefaults.assemblyMinutes)
-      : '0',
-  );
-  const [managementMinutes, setManagementMinutes] = useState(
-    isKeychain && keychainDefaults
-      ? String(keychainDefaults.managementMinutes)
-      : '0',
-  );
+
+  /**
+   * Grupos del form. El grupo default `g1` siempre existe — backs los
+   * campos cantidad / armado / gestión cuando no hay multi-grupo. En
+   * modo keychain queda fijo en 1 (la grilla de tiers no soporta grupos).
+   */
+  const [groups, setGroups] = useState<GroupDraft[]>([
+    {
+      id: DEFAULT_GROUP_ID,
+      name: isKeychain ? 'Llavero' : 'Grupo 1',
+      quantity: '1',
+      assemblyMinutes:
+        isKeychain && keychainDefaults ? String(keychainDefaults.assemblyMinutes) : '0',
+      managementMinutes:
+        isKeychain && keychainDefaults ? String(keychainDefaults.managementMinutes) : '0',
+    },
+  ]);
   const [designMinutes, setDesignMinutes] = useState('0');
+
+  // Atajos al primer grupo: en single-group (default) este es EL grupo,
+  // y la UI usa estos getters/setters directos en lugar de los del array.
+  const firstGroup = groups[0]!;
+  const setFirstGroup = (patch: Partial<GroupDraft>) => {
+    setGroups((arr) => arr.map((g, i) => (i === 0 ? { ...g, ...patch } : g)));
+  };
+  // Alias legibles para minimizar el diff en el render existente.
+  const quantity = firstGroup.quantity;
+  const setQuantity = (v: string) => setFirstGroup({ quantity: v });
+  const assemblyMinutes = firstGroup.assemblyMinutes;
+  const setAssemblyMinutes = (v: string) => setFirstGroup({ assemblyMinutes: v });
+  const managementMinutes = firstGroup.managementMinutes;
+  const setManagementMinutes = (v: string) => setFirstGroup({ managementMinutes: v });
+
+  // ----- Helpers de multi-grupo (solo modo ADHOC; keychain queda en 1) -----
+  const hasMultipleGroups = !isKeychain && groups.length > 1;
+  const addGroup = () => {
+    if (isKeychain) return;
+    setGroups((arr) => {
+      const nextNumber = arr.length + 1;
+      const newId = `g${nextNumber}_${Date.now()}`;
+      return [
+        ...arr,
+        {
+          id: newId,
+          name: `Grupo ${nextNumber}`,
+          quantity: '1',
+          assemblyMinutes: '0',
+          managementMinutes: '0',
+        },
+      ];
+    });
+  };
+  const updateGroup = (id: string, patch: Partial<GroupDraft>) => {
+    setGroups((arr) => arr.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  };
+  /**
+   * Borra un grupo. Las piezas e insumos asignados a ese grupo quedan
+   * con un `groupId` huérfano — el builder los recoge en el "grupo
+   * adicional" al guardar (Fase 2). El primer grupo nunca se borra:
+   * siempre hay al menos uno.
+   */
+  const removeGroup = (id: string) => {
+    if (id === groups[0]?.id) return;
+    setGroups((arr) => arr.filter((g) => g.id !== id));
+  };
+
+  // Tier activa según la cantidad — solo para modo keychain. Si no cae
+  // dentro de la grilla, devuelve null y deshabilitamos el submit.
+  // La cantidad de keychain siempre vive en el primer (y único) grupo.
+  const activeKeychainTier = isKeychain
+    ? (keychainTiers.find(
+        (t) => Number(quantity) >= t.minQty && (t.maxQty == null || Number(quantity) <= t.maxQty),
+      ) ?? null)
+    : null;
 
   const [preview, setPreview] = useState<Preview | 'loading' | 'error' | null>(null);
   const [matrix, setMatrix] = useState<KeychainMatrixRow[] | 'loading' | 'error' | null>(null);
@@ -465,17 +561,27 @@ export function RapidQuoteForm({
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-4 w-4" /> Pieza / servicio a cotizar
-            </CardTitle>
-            <CardDescription>
-              Una pieza con uno o varios componentes impresos. Para servicios, dejá las piezas
-              vacías y completá solo los minutos de mano de obra.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" /> Pieza / servicio a cotizar
+                </CardTitle>
+                <CardDescription>
+                  {hasMultipleGroups
+                    ? 'Cada grupo se cotiza como un item separado en la cotización.'
+                    : 'Una pieza con uno o varios componentes impresos. Para servicios, dejá las piezas vacías y completá solo los minutos de mano de obra.'}
+                </CardDescription>
+              </div>
+              {!isKeychain && (
+                <Button variant="outline" size="sm" onClick={addGroup}>
+                  <Plus className="h-3 w-3" /> Agregar grupo
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-12">
-              <div className="sm:col-span-9">
+              <div className={hasMultipleGroups ? 'sm:col-span-12' : 'sm:col-span-9'}>
                 <Field label="Descripción" required>
                   <Input
                     value={description}
@@ -484,25 +590,97 @@ export function RapidQuoteForm({
                   />
                 </Field>
               </div>
-              <div className="sm:col-span-3">
-                <Field label="Cantidad" required>
-                  {isKeychain ? (
-                    <KeychainQtySelect
-                      value={quantity}
-                      onChange={setQuantity}
-                      tiers={keychainTiers}
-                    />
-                  ) : (
-                    <Input
-                      type="number"
-                      min="1"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                    />
-                  )}
-                </Field>
-              </div>
+              {!hasMultipleGroups && (
+                <div className="sm:col-span-3">
+                  <Field label="Cantidad" required>
+                    {isKeychain ? (
+                      <KeychainQtySelect
+                        value={quantity}
+                        onChange={setQuantity}
+                        tiers={keychainTiers}
+                      />
+                    ) : (
+                      <Input
+                        type="number"
+                        min="1"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                      />
+                    )}
+                  </Field>
+                </div>
+              )}
             </div>
+
+            {hasMultipleGroups && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Grupos</p>
+                <div className="space-y-2">
+                  {groups.map((g, idx) => (
+                    <div
+                      key={g.id}
+                      className="grid gap-2 rounded-md border bg-muted/20 p-3 sm:grid-cols-12"
+                    >
+                      <div className="sm:col-span-4">
+                        <Label className="text-xs">Nombre del grupo</Label>
+                        <Input
+                          value={g.name}
+                          onChange={(e) => updateGroup(g.id, { name: e.target.value })}
+                          placeholder={`Grupo ${idx + 1}`}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs" required>
+                          Cantidad
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={g.quantity}
+                          onChange={(e) => updateGroup(g.id, { quantity: e.target.value })}
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs">Armado (min)</Label>
+                        <Input
+                          type="number"
+                          value={g.assemblyMinutes}
+                          onChange={(e) =>
+                            updateGroup(g.id, { assemblyMinutes: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs">Gestión (min)</Label>
+                        <Input
+                          type="number"
+                          value={g.managementMinutes}
+                          onChange={(e) =>
+                            updateGroup(g.id, { managementMinutes: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="flex items-end justify-end sm:col-span-2">
+                        {idx > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeGroup(g.id)}
+                            title="Eliminar grupo"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Las piezas e insumos huérfanos (asignados a un grupo que ya no existe) caen
+                  en un "Grupo adicional" automático al guardar.
+                </p>
+              </div>
+            )}
             {isKeychain && activeKeychainTier && (
               <div className="flex flex-wrap items-center gap-2 rounded-md bg-secondary px-3 py-2 text-xs">
                 <span className="font-medium">
@@ -531,7 +709,15 @@ export function RapidQuoteForm({
                   onClick={() =>
                     setPieces((arr) => [
                       ...arr,
-                      { name: 'Pieza', grams: '', printMinutes: '', filamentId: filaments[0]?.id ?? '' },
+                      {
+                        name: 'Pieza',
+                        grams: '',
+                        printMinutes: '',
+                        filamentId: filaments[0]?.id ?? '',
+                        // Las piezas nuevas arrancan en el primer grupo
+                        // disponible. El vendedor las reasigna después si quiere.
+                        groupId: groups[0]?.id ?? DEFAULT_GROUP_ID,
+                      },
                     ])
                   }
                 >
@@ -540,7 +726,7 @@ export function RapidQuoteForm({
               </div>
               {pieces.map((p, idx) => (
                 <div key={idx} className="mb-2 grid gap-2 rounded border p-2 sm:grid-cols-12">
-                  <div className="sm:col-span-4">
+                  <div className={hasMultipleGroups ? 'sm:col-span-3' : 'sm:col-span-4'}>
                     <Label className="text-xs">Nombre</Label>
                     <Input value={p.name} onChange={(e) => setPiece(idx, { name: e.target.value })} />
                   </div>
@@ -564,7 +750,7 @@ export function RapidQuoteForm({
                       onChange={(e) => setPiece(idx, { printMinutes: e.target.value })}
                     />
                   </div>
-                  <div className="sm:col-span-3">
+                  <div className={hasMultipleGroups ? 'sm:col-span-2' : 'sm:col-span-3'}>
                     <Label className="text-xs" required>
                       Filamento
                     </Label>
@@ -580,6 +766,22 @@ export function RapidQuoteForm({
                       ))}
                     </select>
                   </div>
+                  {hasMultipleGroups && (
+                    <div className="sm:col-span-2">
+                      <Label className="text-xs">Grupo</Label>
+                      <select
+                        value={p.groupId}
+                        onChange={(e) => setPiece(idx, { groupId: e.target.value })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+                      >
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="flex items-end justify-end sm:col-span-1">
                     {pieces.length > 1 && (
                       <Button
@@ -604,7 +806,11 @@ export function RapidQuoteForm({
                   onClick={() =>
                     setMaterials((arr) => [
                       ...arr,
-                      { materialId: nonFilaments[0]?.id ?? '', quantity: '1' },
+                      {
+                        materialId: nonFilaments[0]?.id ?? '',
+                        quantity: '1',
+                        groupId: groups[0]?.id ?? DEFAULT_GROUP_ID,
+                      },
                     ])
                   }
                 >
@@ -616,7 +822,7 @@ export function RapidQuoteForm({
               )}
               {materials.map((m, idx) => (
                 <div key={idx} className="mb-2 grid gap-2 rounded border p-2 sm:grid-cols-12">
-                  <div className="sm:col-span-7">
+                  <div className={hasMultipleGroups ? 'sm:col-span-5' : 'sm:col-span-7'}>
                     <Label className="text-xs" required>
                       Insumo
                     </Label>
@@ -632,7 +838,7 @@ export function RapidQuoteForm({
                       ))}
                     </select>
                   </div>
-                  <div className="sm:col-span-3">
+                  <div className={hasMultipleGroups ? 'sm:col-span-2' : 'sm:col-span-3'}>
                     <Label className="text-xs" required>
                       Cantidad
                     </Label>
@@ -643,6 +849,22 @@ export function RapidQuoteForm({
                       onChange={(e) => setMaterial(idx, { quantity: e.target.value })}
                     />
                   </div>
+                  {hasMultipleGroups && (
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs">Grupo</Label>
+                      <select
+                        value={m.groupId}
+                        onChange={(e) => setMaterial(idx, { groupId: e.target.value })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+                      >
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="flex items-end sm:col-span-2">
                     <Button
                       variant="ghost"
@@ -656,21 +878,28 @@ export function RapidQuoteForm({
               ))}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field label={`Tiempo de armado (min)${batchSuffix}`}>
-                <Input
-                  type="number"
-                  value={assemblyMinutes}
-                  onChange={(e) => setAssemblyMinutes(e.target.value)}
-                />
-              </Field>
-              <Field label={`Tiempo de gestión (min)${batchSuffix}`}>
-                <Input
-                  type="number"
-                  value={managementMinutes}
-                  onChange={(e) => setManagementMinutes(e.target.value)}
-                />
-              </Field>
+            {/* En multi-grupo los tiempos de armado/gestión viven en cada
+                grupo (arriba). Acá solo queda el cargo de diseño, que es
+                global al proyecto (un solo modelo, se cobra una vez). */}
+            <div className={hasMultipleGroups ? '' : 'grid gap-3 sm:grid-cols-3'}>
+              {!hasMultipleGroups && (
+                <>
+                  <Field label={`Tiempo de armado (min)${batchSuffix}`}>
+                    <Input
+                      type="number"
+                      value={assemblyMinutes}
+                      onChange={(e) => setAssemblyMinutes(e.target.value)}
+                    />
+                  </Field>
+                  <Field label={`Tiempo de gestión (min)${batchSuffix}`}>
+                    <Input
+                      type="number"
+                      value={managementMinutes}
+                      onChange={(e) => setManagementMinutes(e.target.value)}
+                    />
+                  </Field>
+                </>
+              )}
               <Field label="Tiempo de diseño (min)">
                 <Input
                   type="number"
