@@ -7,14 +7,6 @@ const FORMATTER = new Intl.NumberFormat('es-AR', {
   currency: 'ARS',
   maximumFractionDigits: 2,
 });
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: 'Borrador',
-  SENT: 'Enviada',
-  ACCEPTED: 'Aceptada',
-  REJECTED: 'Rechazada',
-  EXPIRED: 'Vencida',
-};
-
 // Layout: márgenes A4 + columnas fijas para que la tabla quede prolija
 // y los multi-line de PDFKit no se desalineen (evitamos `continued: true`
 // con coordenadas relativas que era el problema del layout viejo).
@@ -81,50 +73,32 @@ export class PdfService {
     const rightColW = 200;
     const rightColX = PAGE_RIGHT - rightColW;
 
-    // Branding (izquierda)
+    // Branding (izquierda): nombre + label "PRESUPUESTO" como tipo de documento
     doc
       .font('Helvetica-Bold')
       .fontSize(22)
       .fillColor(COLOR_TITLE)
       .text('Plastik 3D', PAGE_LEFT, top, { width: 300, lineBreak: false });
     doc
-      .font('Helvetica')
-      .fontSize(9)
+      .font('Helvetica-Bold')
+      .fontSize(10)
       .fillColor(COLOR_MUTED)
-      .text('Cotizador, costeo y stock', PAGE_LEFT, top + 28, {
+      .text('PRESUPUESTO', PAGE_LEFT, top + 30, {
         width: 300,
+        characterSpacing: 1.5,
         lineBreak: false,
       });
 
-    // Metadata (derecha) — código, status, fechas alineados a la derecha
+    // Metadata (derecha) — código + fechas alineados a la derecha
     doc
       .font('Helvetica-Bold')
       .fontSize(18)
       .fillColor(COLOR_TITLE)
       .text(quote.code, rightColX, top, { width: rightColW, align: 'right', lineBreak: false });
 
-    // Status badge: fondo pintado, texto encima
-    const statusLabel = STATUS_LABEL[quote.status] ?? quote.status;
-    const statusFontSize = 8.5;
-    doc.font('Helvetica').fontSize(statusFontSize);
-    const statusW = doc.widthOfString(statusLabel) + 12;
-    const statusH = 14;
-    const statusY = top + 26;
-    const statusX = PAGE_RIGHT - statusW;
+    let dateY = top + 28;
     doc
-      .roundedRect(statusX, statusY, statusW, statusH, 3)
-      .fillColor('#f1f5f9')
-      .fill();
-    doc
-      .fillColor(COLOR_MUTED)
-      .text(statusLabel, statusX, statusY + 3.5, {
-        width: statusW,
-        align: 'center',
-        lineBreak: false,
-      });
-
-    let dateY = statusY + statusH + 6;
-    doc
+      .font('Helvetica')
       .fontSize(9)
       .fillColor(COLOR_MUTED)
       .text(`Emitida ${quote.createdAt.toLocaleDateString('es-AR')}`, rightColX, dateY, {
@@ -143,7 +117,7 @@ export class PdfService {
     }
 
     // Separador
-    const sepY = Math.max(top + 70, dateY + 6);
+    const sepY = Math.max(top + 60, dateY + 6);
     doc.moveTo(PAGE_LEFT, sepY).lineTo(PAGE_RIGHT, sepY).strokeColor(COLOR_HAIRLINE).stroke();
     doc.y = sepY + 14;
   }
@@ -390,22 +364,7 @@ export class PdfService {
       .stroke();
     doc.y += 6;
     row('Total', FORMATTER.format(quote.total), { bold: true });
-
-    // Tag de facturación al pie del bloque de totales
-    if (quote.withInvoice) {
-      this.ensureSpace(doc, 16);
-      doc.y += 4;
-      doc
-        .font('Helvetica-Oblique')
-        .fontSize(8.5)
-        .fillColor(COLOR_SUBTLE)
-        .text('Operación con factura', labelX, doc.y, {
-          width: totalRowW,
-          align: 'right',
-          lineBreak: false,
-        });
-      doc.y += 12;
-    }
+    void totalRowW;
   }
 
   // ----- Footer / notas -----
