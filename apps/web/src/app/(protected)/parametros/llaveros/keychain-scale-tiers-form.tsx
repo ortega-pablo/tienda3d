@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useEditMode } from '@/hooks/use-edit-mode';
 import { useHasPermission } from '@/components/user-provider';
 
-export interface KeychainTierDto {
+export interface KeychainScaleTierDto {
   id: string;
   minQty: number;
   maxQty: number | null;
@@ -20,13 +20,18 @@ export interface KeychainTierDto {
   updatedAt: string;
 }
 
-function tierLabel(t: KeychainTierDto): string {
+function tierLabel(t: KeychainScaleTierDto): string {
   if (t.maxQty == null) return `${t.minQty}+`;
   if (t.minQty === t.maxQty) return `${t.minQty}`;
   return `${t.minQty}-${t.maxQty}`;
 }
 
-export function KeychainTiersForm({ initial }: { initial: KeychainTierDto[] }) {
+/**
+ * Editor de la grilla GLOBAL de escalas para productos de catálogo tipo
+ * llavero. Escalas contiguas (1-4 / 5-24 / 25-49 / 50-99 / 100+): cubren
+ * cualquier cantidad. Solo se edita el markup de cada escala.
+ */
+export function KeychainScaleTiersForm({ initial }: { initial: KeychainScaleTierDto[] }) {
   const can = useHasPermission();
   const canWrite = can('parameter:write');
   const router = useRouter();
@@ -41,11 +46,9 @@ export function KeychainTiersForm({ initial }: { initial: KeychainTierDto[] }) {
     e.preventDefault();
     await editMode.save(
       async () => {
-        // Solo PATCH-eamos las tiers que cambiaron. Cada tier es un
-        // recurso independiente y el endpoint solo acepta una a la vez.
         const changed = initial.filter((t) => Number(values[t.id]) !== t.markupPct);
         for (const tier of changed) {
-          await api(`/keychain-tiers/${tier.id}`, {
+          await api(`/keychain-scale-tiers/${tier.id}`, {
             method: 'PATCH',
             body: { markupPct: Number(values[tier.id]) },
           });
@@ -96,8 +99,8 @@ export function KeychainTiersForm({ initial }: { initial: KeychainTierDto[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <th className="py-2 pr-4 font-medium">Tier</th>
-              <th className="py-2 pr-4 font-medium">Cantidades válidas</th>
+              <th className="py-2 pr-4 font-medium">Escala</th>
+              <th className="py-2 pr-4 font-medium">Base de piezas</th>
               <th className="py-2 pr-4 font-medium text-right">Markup %</th>
             </tr>
           </thead>
@@ -106,11 +109,7 @@ export function KeychainTiersForm({ initial }: { initial: KeychainTierDto[] }) {
               <tr key={t.id}>
                 <td className="py-3 pr-4 font-medium">{tierLabel(t)}</td>
                 <td className="py-3 pr-4 text-muted-foreground">
-                  {t.maxQty == null
-                    ? `${t.minQty}, ${t.minQty + 5}, ${t.minQty + 10}, … (múltiplos de 5)`
-                    : t.minQty < 5
-                      ? `${t.minQty}, ${t.minQty + 1}, …, ${t.maxQty}`
-                      : `${t.minQty}, ${t.minQty + 5}, …, ${t.maxQty}`}
+                  {t.minQty < 5 ? 'Individual (1 unidad)' : 'Tanda ÷ 5'}
                 </td>
                 <td className="py-3 pr-4 text-right">
                   <div className="relative inline-block w-32">

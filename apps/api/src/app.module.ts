@@ -13,6 +13,7 @@ import { CustomersModule } from './modules/customers/customers.module';
 import { DatabaseBackupModule } from './modules/database-backup/database-backup.module';
 import { HealthModule } from './modules/health/health.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { KeychainScaleTiersModule } from './modules/keychain-scale-tiers/keychain-scale-tiers.module';
 import { KeychainTiersModule } from './modules/keychain-tiers/keychain-tiers.module';
 import { MachinesModule } from './modules/machines/machines.module';
 import { MaterialsModule } from './modules/materials/materials.module';
@@ -63,6 +64,7 @@ import { UsersModule } from './modules/users/users.module';
     CustomersModule,
     QuotesModule,
     KeychainTiersModule,
+    KeychainScaleTiersModule,
     ProductionsModule,
     ReportsModule,
     IntegrationsModule,

@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ChannelKind, Prisma } from '@prisma/client';
+import { ChannelKind, PieceScope, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec, decOrNull } from '@/common/utils/decimal';
 import { CategoryTiersService } from '../categories/category-tiers.service';
 import { CostingService } from '../costing/costing.service';
+import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scale-tiers.service';
 import { PricingEngine } from './pricing.engine';
 import type { CostingResult } from '../costing/costing.types';
 import type {
@@ -64,14 +65,19 @@ export class PricingService {
     private readonly costing: CostingService,
     private readonly engine: PricingEngine,
     private readonly categoryTiers: CategoryTiersService,
+    private readonly keychainScaleTiers: KeychainScaleTiersService,
   ) {}
 
   async forProduct(productId: string): Promise<ProductPricesResponse> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, name: true, categoryId: true },
+      select: { id: true, name: true, categoryId: true, kind: true },
     });
     if (!product) throw new NotFoundException('Producto inexistente');
+
+    if (product.kind === 'KEYCHAIN') {
+      return this.forKeychainProduct(product);
+    }
 
     const cost = await this.costing.forProduct(productId);
 
@@ -173,6 +179,104 @@ export class PricingService {
       targetMarkupPct: baseMarkup,
       channels: blocks,
     };
+  }
+
+  /**
+   * Grilla de precios para un producto tipo llavero. A diferencia del producto
+   * estándar (tiers por categoría/canal), usa la grilla GLOBAL de 5 escalas
+   * (`KeychainScaleTier`): la escala 1-4 se cotiza con la base de piezas
+   * INDIVIDUAL y las escalas 5+ con la base de tanda ÷ keychain_batch_size.
+   * El markup de cada escala pisa el target vía override en el motor.
+   */
+  private async forKeychainProduct(product: {
+    id: string;
+    name: string;
+    categoryId: string;
+  }): Promise<ProductPricesResponse> {
+    const batchSize = await this.loadKeychainBatchSize();
+    const [costIndiv, costBatch, tiers, productChannels, globals] = await Promise.all([
+      this.costing.forProduct(product.id, { pieceScope: PieceScope.INDIVIDUAL }),
+      this.costing.forProduct(product.id, { pieceScope: PieceScope.BATCH, divideBy: batchSize }),
+      this.keychainScaleTiers.list(),
+      this.prisma.productChannel.findMany({
+        where: { productId: product.id, isEnabled: true },
+        include: { channel: true },
+      }),
+      this.loadGlobals(),
+    ]);
+
+    const inputsIndiv = {
+      fabricationPrice: costIndiv.fabricationPrice,
+      otherMaterialsWithReplenishment: costIndiv.materials.totalWithReplenishment,
+    };
+    const inputsBatch = {
+      fabricationPrice: costBatch.fabricationPrice,
+      otherMaterialsWithReplenishment: costBatch.materials.totalWithReplenishment,
+    };
+
+    const sorted = [...productChannels].sort(
+      (a, b) => a.channel.sortOrder - b.channel.sortOrder,
+    );
+
+    const blocks: ChannelPriceBlock[] = sorted
+      .filter((pc) => pc.channel.isActive)
+      .map((pc): ChannelPriceBlock => {
+        const cfg = this.toConfig(pc.channel);
+        const productInputs: ProductPricingInputs = {
+          targetMarkupPct: 0, // irrelevante: cada escala pisa con su markup.
+          marketplaceCommissionPct: decOrNull(pc.commissionPct),
+        };
+        const tierPrices: ChannelTierPrice[] = tiers.map((t) => {
+          const useIndividual =
+            KeychainScaleTiersService.resolveScope(tiers, t.minQty) === PieceScope.INDIVIDUAL;
+          const base = useIndividual ? inputsIndiv : inputsBatch;
+          return {
+            tierId: t.id,
+            minQty: t.minQty,
+            maxQty: t.maxQty,
+            line: this.engine.price(base, cfg, productInputs, globals, {
+              markupPct: t.markupPct,
+            }),
+          };
+        });
+        const needsConfig = tierPrices.some((t) => t.line.missingCommission);
+        return {
+          channelId: pc.channelId,
+          channelName: pc.channel.name,
+          channelSlug: pc.channel.slug,
+          channelKind: pc.channel.kind,
+          icon: pc.channel.icon,
+          taxMode: pc.channel.taxMode,
+          withInvoiceDefault: pc.channel.withInvoiceDefault,
+          enabled: true,
+          needsConfig,
+          productCommissionPct: decOrNull(pc.commissionPct),
+          base: null, // los llaveros siempre muestran escala, nunca "base" suelta.
+          tiers: tierPrices,
+        };
+      });
+
+    // Para el resumen usamos la base individual (unidad) y el markup de la
+    // primera escala (1-4) como referencia.
+    const firstMarkup = tiers[0]?.markupPct ?? 0;
+    return {
+      productId: product.id,
+      productName: product.name,
+      costWithProvisions: costIndiv.totalCost,
+      fabricationPrice: costIndiv.fabricationPrice,
+      otherMaterialsWithReplenishment: costIndiv.materials.totalWithReplenishment,
+      totalCost: costIndiv.totalCost,
+      profitPerUnit: costIndiv.fabricationPrice * (firstMarkup / 100),
+      targetMarkupPct: firstMarkup,
+      channels: blocks,
+    };
+  }
+
+  private async loadKeychainBatchSize(): Promise<number> {
+    const param = await this.prisma.globalParam.findUnique({
+      where: { key: 'keychain_batch_size' },
+    });
+    return param ? Math.max(1, Math.floor(Number(param.value))) : 5;
   }
 
   /**

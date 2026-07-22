@@ -36,7 +36,7 @@ export default async function NewKeychainQuotePage() {
       canReadCustomers
         ? api<CustomerOption[]>('/customers?activeOnly=true')
         : Promise.resolve([] as CustomerOption[]),
-      api<KeychainTierLite[]>('/keychain-tiers'),
+      api<KeychainTierLite[]>('/keychain-scale-tiers'),
       api<ParamDto[]>('/parameters'),
       api<KeychainDefaultsLite>('/keychain-defaults'),
     ]);
@@ -58,22 +58,21 @@ export default async function NewKeychainQuotePage() {
       <header>
         <h1 className="text-3xl font-bold">Cotización de llaveros</h1>
         <p className="text-muted-foreground">
-          Cotizá llaveros personalizados en cantidad usando la escala fija del taller. La
-          cantidad debe ser 1-4 o múltiplo de 5 (5, 10, 15, …, 100, 105, …). Cada tier
-          aplica su propio markup, editable desde{' '}
+          Cotizá llaveros personalizados en <strong>cualquier cantidad</strong> con las
+          escalas contiguas del taller (1-4, 5-24, 25-49, 50-99, 100+). Cada escala aplica
+          su propio markup, editable desde{' '}
           <span className="font-mono text-xs">/parametros/llaveros</span>.
         </p>
         <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
           <p>
-            <strong>Carga los valores para un batch de {batchSize} llaveros</strong> — los
-            gramos, minutos y consumos que ingreses deben ser el total para producir{' '}
-            {batchSize} unidades (una bandeja de impresión típica). El sistema divide
-            internamente para calcular el costo por unidad. Para cantidades entre 1 y{' '}
-            {batchSize - 1} el precio se prorratea; para múltiplos de {batchSize} el precio
-            escala con la cantidad.
+            Cargá las piezas en dos secciones: <strong>individual</strong> (para 1
+            llavero, base de 1-4) y <strong>tanda</strong> (la placa de {batchSize}, base
+            de 5+, se divide por {batchSize}). Los <strong>insumos y adicionales son por
+            unidad</strong>. Ej.: para 7 llaveros el precio usa la base de tanda ÷{' '}
+            {batchSize} con el markup de la escala 5-24.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            El tamaño del batch se configura en{' '}
+            El tamaño de la tanda se configura en{' '}
             <span className="font-mono">/parametros</span> (keychain_batch_size).
           </p>
         </div>

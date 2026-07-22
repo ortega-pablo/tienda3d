@@ -53,6 +53,12 @@ interface PieceDraft {
    * adicional automático al guardar.
    */
   groupId: string;
+  /**
+   * Solo en modo keychain: 'BATCH' = pieza de la tanda (placa), base de las
+   * escalas 5+; 'INDIVIDUAL' = pieza para 1 unidad, base de la escala 1-4.
+   * En modo ADHOC libre se ignora (todas van a `pieces`).
+   */
+  scope: 'INDIVIDUAL' | 'BATCH';
 }
 interface MaterialDraft {
   materialId: string;
@@ -202,12 +208,10 @@ export function RapidQuoteForm({
   const [notes, setNotes] = useState('');
 
   const isKeychain = mode === 'keychain';
-  // Cuando estamos en modo keychain y el admin configuró batch > 1, los
-  // inputs (gramos, minutos, consumos) se cargan como totales para
-  // `batchSize` unidades. Lo usamos en los labels y en la línea de
-  // "costo por unidad" del preview.
-  const usesBatchInputs = isKeychain && batchSize > 1;
-  const batchSuffix = usesBatchInputs ? ` (para ${batchSize} llaveros)` : '';
+  // En modo keychain los insumos y adicionales se cargan POR UNIDAD (solo las
+  // piezas de la tanda se dividen por batchSize al costear). El sufijo aclara
+  // la semántica en los labels.
+  const perUnitSuffix = isKeychain ? ' (por unidad)' : '';
   const [description, setDescription] = useState(
     isKeychain ? 'Llavero personalizado' : 'Pieza a medida',
   );
@@ -220,6 +224,8 @@ export function RapidQuoteForm({
   // editar/quitar/agregar lo que quiera.
   const initialPieces: PieceDraft[] = useMemo(() => {
     if (isKeychain && keychainDefaults) {
+      // El default representa la placa (tanda de N), así que lo precargamos en
+      // la sección BATCH. La sección individual arranca vacía.
       return [
         {
           name: keychainDefaults.pieceName || 'Llavero',
@@ -231,6 +237,7 @@ export function RapidQuoteForm({
           filamentId:
             keychainDefaults.pieceFilamentId ?? filaments[0]?.id ?? '',
           groupId: DEFAULT_GROUP_ID,
+          scope: 'BATCH',
         },
       ];
     }
@@ -241,6 +248,7 @@ export function RapidQuoteForm({
         printMinutes: '',
         filamentId: filaments[0]?.id ?? '',
         groupId: DEFAULT_GROUP_ID,
+        scope: isKeychain ? 'BATCH' : 'INDIVIDUAL',
       },
     ];
     // Solo corre una vez al montar — el form es controlado a partir de ahí.
@@ -356,6 +364,12 @@ export function RapidQuoteForm({
         printMinutes: number;
         filamentId: string;
       }>;
+      individualPieces?: Array<{
+        name: string;
+        grams: number;
+        printMinutes: number;
+        filamentId: string;
+      }>;
       materials: Array<{ materialId: string; quantity: number }>;
       assemblyMinutes: number;
       managementMinutes: number;
@@ -406,6 +420,13 @@ export function RapidQuoteForm({
       }
     }
 
+    const toPiece = (p: PieceDraft) => ({
+      name: p.name,
+      grams: Number(p.grams || '0'),
+      printMinutes: Number(p.printMinutes || '0'),
+      filamentId: p.filamentId,
+    });
+
     const buildOne = (
       desc: string,
       qty: number,
@@ -414,27 +435,32 @@ export function RapidQuoteForm({
       asm: string,
       mgmt: string,
       designForThis: number,
-    ): AdhocItemPayload => ({
-      type: 'ADHOC',
-      description: desc,
-      quantity: qty,
-      payload: {
-        pieces: pcs.map((p) => ({
-          name: p.name,
-          grams: Number(p.grams || '0'),
-          printMinutes: Number(p.printMinutes || '0'),
-          filamentId: p.filamentId,
-        })),
-        materials: mts.map((m) => ({
-          materialId: m.materialId,
-          quantity: Number(m.quantity || '1'),
-        })),
-        assemblyMinutes: Number(asm || '0'),
-        managementMinutes: Number(mgmt || '0'),
-        designMinutes: designForThis,
-        ...(isKeychain ? { templateKind: 'KEYCHAIN' as const } : {}),
-      },
-    });
+    ): AdhocItemPayload => {
+      // En keychain separamos las piezas por scope: BATCH → `pieces` (tanda),
+      // INDIVIDUAL → `individualPieces` (base de la escala 1-4). En ADHOC libre
+      // todas van a `pieces`.
+      const batchPieces = isKeychain ? pcs.filter((p) => p.scope !== 'INDIVIDUAL') : pcs;
+      const individualPieces = isKeychain ? pcs.filter((p) => p.scope === 'INDIVIDUAL') : [];
+      return {
+        type: 'ADHOC',
+        description: desc,
+        quantity: qty,
+        payload: {
+          pieces: batchPieces.map(toPiece),
+          ...(isKeychain && individualPieces.length > 0
+            ? { individualPieces: individualPieces.map(toPiece) }
+            : {}),
+          materials: mts.map((m) => ({
+            materialId: m.materialId,
+            quantity: Number(m.quantity || '1'),
+          })),
+          assemblyMinutes: Number(asm || '0'),
+          managementMinutes: Number(mgmt || '0'),
+          designMinutes: designForThis,
+          ...(isKeychain ? { templateKind: 'KEYCHAIN' as const } : {}),
+        },
+      };
+    };
 
     const designTotal = Number(designMinutes || '0');
     const items: AdhocItemPayload[] = [];
@@ -615,15 +641,100 @@ export function RapidQuoteForm({
     });
   };
 
+  const addPiece = (scope: 'INDIVIDUAL' | 'BATCH') =>
+    setPieces((arr) => [
+      ...arr,
+      {
+        name: 'Pieza',
+        grams: '',
+        printMinutes: '',
+        filamentId: filaments[0]?.id ?? '',
+        groupId: groups[0]?.id ?? DEFAULT_GROUP_ID,
+        scope,
+      },
+    ]);
+
+  // Render de una fila de pieza. Recibe el índice ABSOLUTO en `pieces` para que
+  // setPiece/remove sigan operando por índice aunque haya dos secciones
+  // filtradas por scope (individual / tanda) en modo keychain.
+  const pieceRow = (p: PieceDraft, idx: number) => (
+    <div key={idx} className="mb-2 grid gap-2 rounded border p-2 sm:grid-cols-12">
+      <div className={hasMultipleGroups ? 'sm:col-span-3' : 'sm:col-span-4'}>
+        <Label className="text-xs">Nombre</Label>
+        <Input value={p.name} onChange={(e) => setPiece(idx, { name: e.target.value })} />
+      </div>
+      <div className="sm:col-span-2">
+        <Label className="text-xs" required>
+          Gramos
+        </Label>
+        <Input
+          type="number"
+          step="any"
+          value={p.grams}
+          onChange={(e) => setPiece(idx, { grams: e.target.value })}
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <Label className="text-xs">Min impr.</Label>
+        <Input
+          type="number"
+          step="any"
+          value={p.printMinutes}
+          onChange={(e) => setPiece(idx, { printMinutes: e.target.value })}
+        />
+      </div>
+      <div className={hasMultipleGroups ? 'sm:col-span-2' : 'sm:col-span-3'}>
+        <Label className="text-xs" required>
+          Filamento
+        </Label>
+        <select
+          value={p.filamentId}
+          onChange={(e) => setPiece(idx, { filamentId: e.target.value })}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+        >
+          {filaments.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {hasMultipleGroups && (
+        <div className="sm:col-span-2">
+          <Label className="text-xs">Grupo</Label>
+          <select
+            value={p.groupId}
+            onChange={(e) => setPiece(idx, { groupId: e.target.value })}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+          >
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="flex items-end justify-end sm:col-span-1">
+        {pieces.length > 1 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPieces((arr) => arr.filter((_, i) => i !== idx))}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+
   const lineTotal = preview && typeof preview === 'object' ? preview.lineTotal : 0;
   const total = Math.max(lineTotal - Number(discount || '0'), 0);
 
   const qtyNumber = Number(quantity || '0');
   const isQtyValid = isKeychain
-    ? Number.isInteger(qtyNumber) &&
-      qtyNumber >= 1 &&
-      (qtyNumber < 5 || qtyNumber % 5 === 0) &&
-      activeKeychainTier != null
+    ? Number.isInteger(qtyNumber) && qtyNumber >= 1 && activeKeychainTier != null
     : qtyNumber > 0;
 
   // Validación multi-grupo:
@@ -798,20 +909,13 @@ export function RapidQuoteForm({
               {!hasMultipleGroups && (
                 <div className="sm:col-span-3">
                   <Field label="Cantidad" required>
-                    {isKeychain ? (
-                      <KeychainQtySelect
-                        value={quantity}
-                        onChange={setQuantity}
-                        tiers={keychainTiers}
-                      />
-                    ) : (
-                      <Input
-                        type="number"
-                        min="1"
-                        value={quantity}
-                        onChange={(e) => setQuantity(e.target.value)}
-                      />
-                    )}
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                    />
                   </Field>
                 </div>
               )}
@@ -889,122 +993,83 @@ export function RapidQuoteForm({
             {isKeychain && activeKeychainTier && (
               <div className="flex flex-wrap items-center gap-2 rounded-md bg-secondary px-3 py-2 text-xs">
                 <span className="font-medium">
-                  Tier aplicado:{' '}
+                  Escala aplicada:{' '}
                   {activeKeychainTier.maxQty == null
                     ? `${activeKeychainTier.minQty}+`
                     : `${activeKeychainTier.minQty}-${activeKeychainTier.maxQty}`}
                 </span>
                 <span className="text-muted-foreground">
-                  Markup {activeKeychainTier.markupPct}% sobre fabricación
+                  Markup {activeKeychainTier.markupPct}% ·{' '}
+                  {qtyNumber < 5 ? 'base individual' : `base tanda ÷ ${batchSize}`}
                 </span>
               </div>
             )}
             {isKeychain && !activeKeychainTier && qtyNumber > 0 && (
               <p className="text-xs text-destructive">
-                La cantidad {qtyNumber} no cae en ninguna tier. Usá 1-4 o un múltiplo de 5.
+                La cantidad {qtyNumber} no cae en ninguna escala. Ingresá un entero ≥ 1.
               </p>
+            )}
+
+            {isKeychain ? (
+              <>
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Piezas — producto individual</p>
+                      <p className="text-xs text-muted-foreground">
+                        Piezas para imprimir 1 llavero. Base del precio para 1-4 unidades
+                        (opcional — si la dejás vacía, 1-4 usa la tanda ÷ {batchSize}).
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
+                      <Plus className="h-3 w-3" /> Componente
+                    </Button>
+                  </div>
+                  {pieces
+                    .map((p, idx) => ({ p, idx }))
+                    .filter(({ p }) => p.scope === 'INDIVIDUAL')
+                    .map(({ p, idx }) => pieceRow(p, idx))}
+                  {pieces.every((p) => p.scope !== 'INDIVIDUAL') && (
+                    <p className="text-xs text-muted-foreground">Sin piezas individuales.</p>
+                  )}
+                </div>
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Piezas — tanda (placa de {batchSize})</p>
+                      <p className="text-xs text-muted-foreground">
+                        Piezas del mismo llavero dispuestas en una placa de {batchSize}. Base
+                        del precio para 5 o más (se divide por {batchSize}).
+                      </p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => addPiece('BATCH')}>
+                      <Plus className="h-3 w-3" /> Componente
+                    </Button>
+                  </div>
+                  {pieces
+                    .map((p, idx) => ({ p, idx }))
+                    .filter(({ p }) => p.scope === 'BATCH')
+                    .map(({ p, idx }) => pieceRow(p, idx))}
+                  {pieces.every((p) => p.scope !== 'BATCH') && (
+                    <p className="text-xs text-muted-foreground">Sin piezas de tanda.</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-medium">Componentes impresos</p>
+                  <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
+                    <Plus className="h-3 w-3" /> Componente
+                  </Button>
+                </div>
+                {pieces.map((p, idx) => pieceRow(p, idx))}
+              </div>
             )}
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium">Componentes impresos{batchSuffix}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setPieces((arr) => [
-                      ...arr,
-                      {
-                        name: 'Pieza',
-                        grams: '',
-                        printMinutes: '',
-                        filamentId: filaments[0]?.id ?? '',
-                        // Las piezas nuevas arrancan en el primer grupo
-                        // disponible. El vendedor las reasigna después si quiere.
-                        groupId: groups[0]?.id ?? DEFAULT_GROUP_ID,
-                      },
-                    ])
-                  }
-                >
-                  <Plus className="h-3 w-3" /> Componente
-                </Button>
-              </div>
-              {pieces.map((p, idx) => (
-                <div key={idx} className="mb-2 grid gap-2 rounded border p-2 sm:grid-cols-12">
-                  <div className={hasMultipleGroups ? 'sm:col-span-3' : 'sm:col-span-4'}>
-                    <Label className="text-xs">Nombre</Label>
-                    <Input value={p.name} onChange={(e) => setPiece(idx, { name: e.target.value })} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-xs" required>
-                      Gramos
-                    </Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={p.grams}
-                      onChange={(e) => setPiece(idx, { grams: e.target.value })}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-xs">Min impr.</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={p.printMinutes}
-                      onChange={(e) => setPiece(idx, { printMinutes: e.target.value })}
-                    />
-                  </div>
-                  <div className={hasMultipleGroups ? 'sm:col-span-2' : 'sm:col-span-3'}>
-                    <Label className="text-xs" required>
-                      Filamento
-                    </Label>
-                    <select
-                      value={p.filamentId}
-                      onChange={(e) => setPiece(idx, { filamentId: e.target.value })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-                    >
-                      {filaments.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {hasMultipleGroups && (
-                    <div className="sm:col-span-2">
-                      <Label className="text-xs">Grupo</Label>
-                      <select
-                        value={p.groupId}
-                        onChange={(e) => setPiece(idx, { groupId: e.target.value })}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-                      >
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className="flex items-end justify-end sm:col-span-1">
-                    {pieces.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPieces((arr) => arr.filter((_, i) => i !== idx))}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium">Insumos extra{batchSuffix}</p>
+                <p className="text-sm font-medium">Insumos extra{perUnitSuffix}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1089,14 +1154,14 @@ export function RapidQuoteForm({
             <div className={hasMultipleGroups ? '' : 'grid gap-3 sm:grid-cols-3'}>
               {!hasMultipleGroups && (
                 <>
-                  <Field label={`Tiempo de armado (min)${batchSuffix}`}>
+                  <Field label={`Tiempo de armado (min)${perUnitSuffix}`}>
                     <Input
                       type="number"
                       value={assemblyMinutes}
                       onChange={(e) => setAssemblyMinutes(e.target.value)}
                     />
                   </Field>
-                  <Field label={`Tiempo de gestión (min)${batchSuffix}`}>
+                  <Field label={`Tiempo de gestión (min)${perUnitSuffix}`}>
                     <Input
                       type="number"
                       value={managementMinutes}
@@ -1182,11 +1247,11 @@ export function RapidQuoteForm({
               ) : (
                 <>
                   <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
-                  {usesBatchInputs && (
+                  {isKeychain && (
                     <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
-                      Calculado dividiendo por {batchSize} los valores que cargaste
-                      (batch de {batchSize} llaveros · costo total de batch ≈{' '}
-                      {formatMoney(preview.unitCost * batchSize)}).
+                      {qtyNumber < 5
+                        ? 'Base individual (piezas para 1 unidad).'
+                        : `Base tanda: piezas de la placa ÷ ${batchSize}. Insumos y adicionales por unidad.`}
                     </p>
                   )}
                   <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
@@ -1310,80 +1375,3 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-/**
- * Selector de cantidad para cotización de llaveros. Muestra:
- *   - todas las cantidades válidas de las tiers acotadas (1-4, 5-95 en
- *     pasos de 5)
- *   - cada múltiplo de 5 desde el `minQty` del tier abierto hasta 200
- *     (suficiente para cotizaciones comunes)
- *   - una opción "Otra cantidad" que abre un input numérico libre con
- *     `step=5` para pedidos más grandes
- *
- * La cantidad final se devuelve como string vía `onChange` para que
- * encaje con el state existente del form.
- */
-function KeychainQtySelect({
-  value,
-  onChange,
-  tiers,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  tiers: KeychainTierLite[];
-}) {
-  const openTier = tiers.find((t) => t.maxQty == null);
-  const openStart = openTier?.minQty ?? 100;
-
-  // Lista predefinida: 1..4, luego múltiplos de 5 desde 5 hasta openStart-5,
-  // luego múltiplos de 5 desde openStart hasta 200 (cota razonable para el
-  // dropdown; valores mayores se cargan vía "Otra cantidad").
-  const presets: number[] = [];
-  for (let n = 1; n <= 4; n++) presets.push(n);
-  for (let n = 5; n < openStart; n += 5) presets.push(n);
-  for (let n = openStart; n <= 200; n += 5) presets.push(n);
-
-  const numValue = Number(value);
-  const isCustom = !presets.includes(numValue) && numValue > 0;
-  const [customMode, setCustomMode] = useState(isCustom);
-  const [customQty, setCustomQty] = useState(isCustom ? value : '');
-
-  const onSelectChange = (raw: string) => {
-    if (raw === '__custom__') {
-      setCustomMode(true);
-      // No tocamos `value` todavía; se actualiza cuando el usuario tipea.
-      return;
-    }
-    setCustomMode(false);
-    onChange(raw);
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <select
-        value={customMode ? '__custom__' : value}
-        onChange={(e) => onSelectChange(e.target.value)}
-        className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-      >
-        {presets.map((n) => (
-          <option key={n} value={String(n)}>
-            {n}
-          </option>
-        ))}
-        <option value="__custom__">Otra cantidad (múltiplo de 5)…</option>
-      </select>
-      {customMode && (
-        <Input
-          type="number"
-          min={openStart}
-          step={5}
-          placeholder={`≥ ${openStart}, múltiplo de 5`}
-          value={customQty}
-          onChange={(e) => {
-            setCustomQty(e.target.value);
-            onChange(e.target.value);
-          }}
-        />
-      )}
-    </div>
-  );
-}

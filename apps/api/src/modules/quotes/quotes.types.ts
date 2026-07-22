@@ -57,6 +57,19 @@ export interface AdhocItemPayload {
     filamentId: string;
     filamentName?: string;
   }>;
+  /**
+   * Solo para llaveros (`templateKind: 'KEYCHAIN'`): piezas para imprimir 1
+   * unidad. Es la base de la escala 1-4. `pieces` pasa a ser la TANDA (placa
+   * de `batchSize`), base de las escalas 5+ (se divide por batchSize). Si está
+   * ausente, la escala 1-4 cae a `pieces` ÷ batchSize (fallback).
+   */
+  individualPieces?: Array<{
+    name: string;
+    grams: number;
+    printMinutes: number;
+    filamentId: string;
+    filamentName?: string;
+  }>;
   materials: Array<{
     materialId: string;
     quantity: number;
@@ -77,26 +90,25 @@ export interface AdhocItemPayload {
    */
   designSurcharge?: number;
   /**
-   * Marca que esta cotización a medida usa la grilla fija de llaveros.
-   * Si está presente, la cantidad debe respetar `1..4` o múltiplo de 5,
-   * y el markup viene de la tier que cubre la cantidad cotizada (no del
-   * markup default del producto, que en ADHOC es 0).
+   * Marca que esta cotización a medida usa el modelo de llaveros (grilla
+   * global contigua `KeychainScaleTier`, escalas 1-4 / 5-24 / 25-49 / 50-99 /
+   * 100+). Acepta cualquier cantidad entera ≥ 1. La escala 1-4 se cotiza con
+   * `individualPieces`; las escalas 5+ con `pieces` (tanda) ÷ batchSize. Los
+   * insumos y adicionales son por unidad (no se dividen). El markup viene de
+   * la escala que cubre la cantidad.
    */
   templateKind?: 'KEYCHAIN';
   /**
-   * Tamaño del batch usado al crear la cotización (snapshot del global
-   * param `keychain_batch_size`). Cuando está presente, los inputs (gramos,
-   * minutos, consumos, assembly/management minutes) se interpretan como
-   * totales para `batchSize` unidades — el backend los divide antes de
-   * costear. `designMinutes` queda fuera de esta división.
-   *
-   * Ausente = cotización legacy pre-cambio, los inputs son per-unidad
-   * (comportamiento original).
+   * Tamaño de la tanda/placa (snapshot del global param `keychain_batch_size`).
+   * Solo las piezas de la TANDA (`pieces`) se dividen por este valor para las
+   * escalas 5+. Insumos, armado, gestión y `designMinutes` NO se dividen.
    */
   batchSize?: number;
-  /** Snapshot del markup aplicado por la tier (informativo / auditoría). */
+  /** Base usada para esta cantidad: 'INDIVIDUAL' (1-4) o 'BATCH' (5+). */
+  pricingBase?: 'INDIVIDUAL' | 'BATCH';
+  /** Snapshot del markup aplicado por la escala (informativo / auditoría). */
   appliedMarkupPct?: number;
-  /** Label legible del tier ("5-20", "100+") para el PDF y el detalle. */
+  /** Label legible de la escala ("5-24", "100+") para el PDF y el detalle. */
   tierLabel?: string;
 }
 

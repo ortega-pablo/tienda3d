@@ -4,16 +4,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, QuoteStatus, QuoteType } from '@prisma/client';
+import { PieceScope, Prisma, QuoteStatus, QuoteType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
 import { CostingService } from '../costing/costing.service';
+import type { CostingResult } from '../costing/costing.types';
 import {
   CustomersService,
   type CustomerWithRelations,
 } from '../customers/customers.service';
-import { KeychainTiersService } from '../keychain-tiers/keychain-tiers.service';
+import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scale-tiers.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
 import type { CustomerPricingProfile } from '../pricing/pricing.types';
@@ -45,7 +46,7 @@ export class QuotesService {
     private readonly categoryTiers: CategoryTiersService,
     private readonly audit: AuditService,
     private readonly customers: CustomersService,
-    private readonly keychainTiers: KeychainTiersService,
+    private readonly keychainScaleTiers: KeychainScaleTiersService,
   ) {}
 
   async list(
@@ -389,10 +390,10 @@ export class QuotesService {
   }
 
   /**
-   * Devuelve precio por unidad y total para cada tier de llaveros, con el
-   * mismo payload (materiales/minutos). Se itera la grilla seedeada en
-   * `keychain_tiers` con un qty representativo por tier (el minQty); el
-   * caller pinta la fila y el cliente decide en qué escala cotizar.
+   * Devuelve precio por unidad y total para cada escala de llaveros, con el
+   * mismo payload. Se itera la grilla contigua `KeychainScaleTier` con un qty
+   * representativo por escala (el minQty); el caller pinta la fila y el cliente
+   * decide en qué escala cotizar.
    *
    * Compartimos `buildItemRow` para no duplicar costing/comisión/régimen:
    * cada fila se calcula como si fuese una cotización ADHOC con esa qty,
@@ -404,6 +405,12 @@ export class QuotesService {
     customerId?: string | null;
     payload: {
       pieces: Array<{ name: string; grams: number; printMinutes: number; filamentId: string }>;
+      individualPieces?: Array<{
+        name: string;
+        grams: number;
+        printMinutes: number;
+        filamentId: string;
+      }>;
       materials: Array<{ materialId: string; quantity: number }>;
       assemblyMinutes: number;
       managementMinutes: number;
@@ -422,7 +429,7 @@ export class QuotesService {
       designSurcharge: number;
     }>;
   }> {
-    const tiers = await this.keychainTiers.list();
+    const tiers = await this.keychainScaleTiers.list();
     if (tiers.length === 0) {
       return { tiers: [] };
     }
@@ -433,7 +440,7 @@ export class QuotesService {
 
     const rows = await Promise.all(
       tiers.map(async (tier) => {
-        // Usamos el minQty como cantidad representativa del tier.
+        // Usamos el minQty como cantidad representativa de la escala.
         const item = {
           type: 'ADHOC' as const,
           description: 'Llavero personalizado',
@@ -453,12 +460,7 @@ export class QuotesService {
             : 0;
         return {
           tierId: tier.id,
-          tierLabel:
-            tier.maxQty == null
-              ? `${tier.minQty}+`
-              : tier.minQty === tier.maxQty
-                ? `${tier.minQty}`
-                : `${tier.minQty}-${tier.maxQty}`,
+          tierLabel: KeychainScaleTiersService.tierLabel(tier),
           minQty: tier.minQty,
           maxQty: tier.maxQty,
           markupPct: tier.markupPct,
@@ -483,7 +485,31 @@ export class QuotesService {
       const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
       if (!product) throw new NotFoundException(`Producto ${item.productId} inexistente`);
 
-      const cost = await this.costing.forProduct(item.productId);
+      // Producto tipo llavero: la base de costo y el markup dependen de la
+      // cantidad. Para 1-4 se usa la base de piezas INDIVIDUAL; para 5+ la
+      // base de tanda ÷ keychain_batch_size. El markup viene de la grilla
+      // global de escalas (pisa el target del motor vía override).
+      const isKeychain = product.kind === 'KEYCHAIN';
+      let keychainMarkupOverride: number | null = null;
+      let cost: CostingResult;
+      if (isKeychain) {
+        const scaleTiers = await this.keychainScaleTiers.list();
+        const scaleTier = KeychainScaleTiersService.resolveApplicable(scaleTiers, item.quantity);
+        if (!scaleTier) {
+          throw new BadRequestException(
+            `Sin escala de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros.`,
+          );
+        }
+        keychainMarkupOverride = scaleTier.markupPct;
+        const scope = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
+        const costingOpts =
+          scope === PieceScope.INDIVIDUAL
+            ? { pieceScope: PieceScope.INDIVIDUAL }
+            : { pieceScope: PieceScope.BATCH, divideBy: await this.loadKeychainBatchSize() };
+        cost = await this.costing.forProduct(item.productId, costingOpts);
+      } else {
+        cost = await this.costing.forProduct(item.productId);
+      }
 
       // Si hay cliente, resolvemos su profile para este producto
       // (puede tener custom markup, tier piso por categoría, etc.).
@@ -510,6 +536,8 @@ export class QuotesService {
         item.productId,
         item.quantity,
         profile,
+        0,
+        keychainMarkupOverride,
       );
       const lineTotal = unitPrice * item.quantity;
 
@@ -526,56 +554,64 @@ export class QuotesService {
 
     // ADHOC
     const isKeychain = item.payload.templateKind === 'KEYCHAIN';
-    if (isKeychain) {
-      // Valida que la cantidad respete la grilla fija (1..4 o múltiplo de 5).
-      this.keychainTiers.assertValidQty(item.quantity);
+    if (isKeychain && (!Number.isInteger(item.quantity) || item.quantity < 1)) {
+      throw new BadRequestException('La cantidad de llaveros debe ser un entero ≥ 1');
     }
 
-    // Cargamos los params globales relevantes en paralelo. Para keychain,
-    // los inputs (gramos, minutos, consumos) representan un BATCH de N
-    // llaveros — el batch size es configurable via `keychain_batch_size`.
-    // Hay que dividir antes de costear para que el lineTotal escale como
-    // espera el negocio (qty=5 → unitPrice × 5; qty=1 → unitPrice × 1, etc.).
-    const [designHourCostParam, batchSizeParam, keychainTier] = await Promise.all([
+    const [designHourCostParam, batchSizeParam, scaleTiers] = await Promise.all([
       this.prisma.globalParam.findUnique({ where: { key: 'design_hour_cost' } }),
       isKeychain
         ? this.prisma.globalParam.findUnique({ where: { key: 'keychain_batch_size' } })
         : Promise.resolve(null),
-      isKeychain ? this.keychainTiers.findApplicable(item.quantity) : Promise.resolve(null),
+      isKeychain ? this.keychainScaleTiers.list() : Promise.resolve([]),
     ]);
-    if (isKeychain && !keychainTier) {
-      throw new BadRequestException(
-        `Sin tier de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros/llaveros.`,
-      );
-    }
+
     const batchSize = isKeychain
       ? batchSizeParam
         ? Math.max(1, Math.floor(Number(batchSizeParam.value)))
         : 5
       : 1;
-    const costingInputs = isKeychain
-      ? KeychainTiersService.divideForBatch(
-          {
-            pieces: item.payload.pieces,
-            materials: item.payload.materials,
-            assemblyMinutes: item.payload.assemblyMinutes,
-            managementMinutes: item.payload.managementMinutes,
-          },
-          batchSize,
-        )
-      : {
-          pieces: item.payload.pieces,
-          materials: item.payload.materials,
-          assemblyMinutes: item.payload.assemblyMinutes,
-          managementMinutes: item.payload.managementMinutes,
-        };
+
+    // Modelo de llaveros: la escala (grilla contigua) y la base dependen de la
+    // cantidad. 1-4 usa `individualPieces` (piezas para 1 unidad); 5+ usa la
+    // tanda (`pieces`) ÷ batchSize. Insumos y adicionales NO se dividen: son
+    // por unidad. `designMinutes` es cargo plano aparte.
+    let keychainScale: { markupPct: number; minQty: number; maxQty: number | null } | null =
+      null;
+    let pricingBase: 'INDIVIDUAL' | 'BATCH' | null = null;
+    let costingPieces = item.payload.pieces;
+    if (isKeychain) {
+      keychainScale = KeychainScaleTiersService.resolveApplicable(scaleTiers, item.quantity);
+      if (!keychainScale) {
+        throw new BadRequestException(
+          `Sin escala de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros.`,
+        );
+      }
+      pricingBase = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
+      const dividePieces = (pcs: typeof item.payload.pieces) =>
+        pcs.map((p) => ({
+          ...p,
+          grams: p.grams / batchSize,
+          printMinutes: p.printMinutes / batchSize,
+        }));
+      if (pricingBase === PieceScope.INDIVIDUAL) {
+        // Base individual: usamos `individualPieces` si el vendedor las cargó;
+        // si no, caemos a la tanda ÷ batchSize (fallback).
+        costingPieces =
+          item.payload.individualPieces && item.payload.individualPieces.length > 0
+            ? item.payload.individualPieces
+            : dividePieces(item.payload.pieces);
+      } else {
+        costingPieces = dividePieces(item.payload.pieces);
+      }
+    }
 
     const cost = await this.costing.forAdhoc({
       description: item.description,
-      pieces: costingInputs.pieces,
-      materials: costingInputs.materials,
-      assemblyMinutes: costingInputs.assemblyMinutes,
-      managementMinutes: costingInputs.managementMinutes,
+      pieces: costingPieces,
+      materials: item.payload.materials,
+      assemblyMinutes: item.payload.assemblyMinutes,
+      managementMinutes: item.payload.managementMinutes,
     });
     const designMinutes = item.payload.designMinutes ?? 0;
     const designHourCost = designHourCostParam ? Number(designHourCostParam.value) : 0;
@@ -611,7 +647,7 @@ export class QuotesService {
       item.quantity,
       profile,
       designRaw,
-      keychainTier ? keychainTier.markupPct : null,
+      keychainScale ? keychainScale.markupPct : null,
     );
     // El cargo de diseño es plano por línea (no escala con la cantidad)
     // pero forma parte del lineTotal para que paye comisión + régimen
@@ -624,6 +660,7 @@ export class QuotesService {
     // el snapshot histórico sigue mostrando el nombre que el cliente vio.
     const allIds = new Set<string>();
     for (const p of item.payload.pieces) if (p.filamentId) allIds.add(p.filamentId);
+    for (const p of item.payload.individualPieces ?? []) if (p.filamentId) allIds.add(p.filamentId);
     for (const m of item.payload.materials) if (m.materialId) allIds.add(m.materialId);
     const nameLookup = new Map<string, string>();
     if (allIds.size > 0) {
@@ -634,32 +671,38 @@ export class QuotesService {
       for (const m of materials) nameLookup.set(m.id, m.name);
     }
 
-    // Persistimos designMinutes + designSurcharge en el payload JSON:
-    // así el PDF muestra el desglose exacto que se firmó, aunque el
-    // global param cambie después. Si es keychain, también snapshoteamos
-    // el markup aplicado, el label de la tier ("5-20", "100+") y el
-    // batchSize usado al cotizar (para que cambios futuros del global
-    // param no alteren la lectura histórica del PDF).
-    // El payload original se guarda SIN DIVIDIR — los valores divididos
-    // existen solo en `costingInputs`, no se persisten.
+    // Persistimos designMinutes + designSurcharge en el payload JSON: así el
+    // PDF muestra el desglose exacto que se firmó aunque el global param cambie
+    // después. Para keychain también snapshoteamos el markup aplicado, el label
+    // de la escala ("5-24", "100+"), el batchSize y la base usada. El payload
+    // se guarda SIN DIVIDIR — la división por tanda existe solo en el costeo.
     const persistedPayload: AdhocItemPayload = {
       ...item.payload,
       pieces: item.payload.pieces.map((p) => ({
         ...p,
         filamentName: nameLookup.get(p.filamentId),
       })),
+      ...(item.payload.individualPieces
+        ? {
+            individualPieces: item.payload.individualPieces.map((p) => ({
+              ...p,
+              filamentName: nameLookup.get(p.filamentId),
+            })),
+          }
+        : {}),
       materials: item.payload.materials.map((m) => ({
         ...m,
         materialName: nameLookup.get(m.materialId),
       })),
       designMinutes,
       designSurcharge,
-      ...(keychainTier
+      ...(keychainScale
         ? {
             templateKind: 'KEYCHAIN' as const,
-            appliedMarkupPct: keychainTier.markupPct,
-            tierLabel: KeychainTiersService.tierLabel(keychainTier),
+            appliedMarkupPct: keychainScale.markupPct,
+            tierLabel: KeychainScaleTiersService.tierLabel(keychainScale),
             batchSize,
+            ...(pricingBase ? { pricingBase } : {}),
           }
         : {}),
     };
@@ -674,6 +717,14 @@ export class QuotesService {
       lineTotal,
       adhocPayload: persistedPayload as unknown as Prisma.InputJsonValue,
     };
+  }
+
+  /** Lee `keychain_batch_size` (default 5). Tamaño de la placa de llaveros. */
+  private async loadKeychainBatchSize(): Promise<number> {
+    const param = await this.prisma.globalParam.findUnique({
+      where: { key: 'keychain_batch_size' },
+    });
+    return param ? Math.max(1, Math.floor(Number(param.value))) : 5;
   }
 
   private async computeUnitPrice(

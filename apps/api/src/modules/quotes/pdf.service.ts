@@ -44,6 +44,7 @@ interface AdhocPayloadView {
   designSurcharge?: number;
   templateKind?: string;
   batchSize?: number;
+  pricingBase?: 'INDIVIDUAL' | 'BATCH';
 }
 
 @Injectable()
@@ -212,9 +213,12 @@ export class PdfService {
         ? adhocPayload.designSurcharge
         : 0;
     const productLineTotal = item.lineTotal - designSurcharge;
+    // La nota de tanda solo aplica cuando el precio se calculó con la base de
+    // placa (escalas 5+). Para 1-4 (base individual) no se muestra.
     const batchSize =
       adhocPayload &&
       adhocPayload.templateKind === 'KEYCHAIN' &&
+      adhocPayload.pricingBase === 'BATCH' &&
       typeof adhocPayload.batchSize === 'number' &&
       adhocPayload.batchSize > 1
         ? adhocPayload.batchSize
@@ -272,7 +276,7 @@ export class PdfService {
         .fontSize(8)
         .fillColor(COLOR_SUBTLE)
         .text(
-          `Cotización basada en un batch de ${batchSize} unidades`,
+          `Precio en base a la tanda (placa de ${batchSize} unidades)`,
           PAGE_LEFT + 8,
           doc.y,
           { width: CONTENT_WIDTH - 8, lineBreak: false },

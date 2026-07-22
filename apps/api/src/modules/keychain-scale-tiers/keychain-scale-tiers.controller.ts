@@ -5,16 +5,16 @@ import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
-import { KeychainTiersService } from './keychain-tiers.service';
+import { KeychainScaleTiersService } from './keychain-scale-tiers.service';
 
 const updateSchema = z.object({
   markupPct: z.number().nonnegative(),
 });
 
 @UseGuards(PermissionsGuard)
-@Controller('keychain-tiers')
-export class KeychainTiersController {
-  constructor(private readonly tiers: KeychainTiersService) {}
+@Controller('keychain-scale-tiers')
+export class KeychainScaleTiersController {
+  constructor(private readonly tiers: KeychainScaleTiersService) {}
 
   @Permissions('parameter:read')
   @Get()

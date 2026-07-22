@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ChannelKind, Prisma } from '@prisma/client';
+import { ChannelKind, PieceScope, Prisma, ProductKind } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec, decOrNull } from '@/common/utils/decimal';
 
@@ -12,6 +12,8 @@ export interface ProductPieceDto {
   defaultFilamentName: string | null;
   defaultFilamentColorHex: string | null;
   sortOrder: number;
+  /** INDIVIDUAL para productos estándar; INDIVIDUAL o BATCH en llaveros. */
+  scope: PieceScope;
 }
 
 export interface ProductMaterialDto {
@@ -40,6 +42,8 @@ export interface ProductDto {
   description: string | null;
   imageUrl: string | null;
   isActive: boolean;
+  /** STANDARD o KEYCHAIN — define el modelo de pricing del producto. */
+  kind: ProductKind;
   marketingMonthly: number;
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
@@ -68,6 +72,7 @@ export interface ProductSummaryDto {
   sku: string | null;
   isActive: boolean;
   imageUrl: string | null;
+  kind: ProductKind;
   pieceCount: number;
   materialCount: number;
   totalGrams: number;
@@ -85,6 +90,8 @@ interface PieceInput {
   printMinutes: number;
   defaultFilamentId: string | null;
   sortOrder?: number;
+  /** INDIVIDUAL por default; BATCH para piezas de tanda en llaveros. */
+  scope?: PieceScope;
 }
 interface MaterialLineInput {
   materialId: string;
@@ -102,6 +109,7 @@ export interface ProductInput {
   description?: string | null;
   imageUrl?: string | null;
   isActive?: boolean;
+  kind?: ProductKind;
   marketingMonthly: number;
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
@@ -134,6 +142,7 @@ export class ProductsService {
       sku: p.sku,
       isActive: p.isActive,
       imageUrl: p.imageUrl,
+      kind: p.kind,
       pieceCount: p.pieces.length,
       materialCount: p.materials.length,
       totalGrams: p.pieces.reduce((acc, piece) => acc + dec(piece.grams), 0),
@@ -176,6 +185,8 @@ export class ProductsService {
         'El producto debe tener al menos una pieza impresa o un insumo',
       );
     }
+    const kind = input.kind ?? ProductKind.STANDARD;
+    this.assertPieceScopes(kind, input.pieces);
 
     const channels = await this.resolveChannels(input.channels);
     await this.validateChannels(channels);
@@ -188,6 +199,7 @@ export class ProductsService {
       data: {
         name: input.name,
         sku,
+        kind,
         description: input.description ?? null,
         imageUrl: input.imageUrl ?? null,
         isActive: input.isActive ?? true,
@@ -204,6 +216,7 @@ export class ProductsService {
             printMinutes: piece.printMinutes,
             defaultFilamentId: piece.defaultFilamentId,
             sortOrder: piece.sortOrder ?? idx,
+            scope: piece.scope ?? PieceScope.INDIVIDUAL,
           })),
         },
         materials: {
@@ -247,6 +260,10 @@ export class ProductsService {
         'El producto debe tener al menos una pieza impresa o un insumo',
       );
     }
+    // El kind es inmutable después de crear: un producto no cambia de estándar
+    // a llavero (ni al revés) porque el modelo de pricing y las piezas difieren.
+    const kind = exists.kind;
+    this.assertPieceScopes(kind, input.pieces);
 
     const channelsToPersist = await this.resolveChannels(input.channels);
     await this.validateChannels(channelsToPersist);
@@ -256,7 +273,7 @@ export class ProductsService {
         where: { id },
         data: {
           name: input.name,
-          // sku no se incluye: es inmutable, vive desde la creación.
+          // sku ni kind se incluyen: son inmutables, viven desde la creación.
           description: input.description ?? null,
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive ?? true,
@@ -279,6 +296,7 @@ export class ProductsService {
             printMinutes: piece.printMinutes,
             defaultFilamentId: piece.defaultFilamentId,
             sortOrder: piece.sortOrder ?? idx,
+            scope: piece.scope ?? PieceScope.INDIVIDUAL,
           })),
         });
       }
@@ -387,6 +405,24 @@ export class ProductsService {
     return `PTK-PROD-${n.toString().padStart(6, '0')}`;
   }
 
+  /**
+   * Defensa en profundidad (el controller ya valida con Zod): un producto
+   * KEYCHAIN necesita ≥1 pieza INDIVIDUAL y ≥1 BATCH; uno STANDARD no admite
+   * piezas BATCH.
+   */
+  private assertPieceScopes(kind: ProductKind, pieces: PieceInput[]): void {
+    if (kind === ProductKind.KEYCHAIN) {
+      const scopes = pieces.map((p) => p.scope ?? PieceScope.INDIVIDUAL);
+      if (!scopes.includes(PieceScope.INDIVIDUAL) || !scopes.includes(PieceScope.BATCH)) {
+        throw new BadRequestException(
+          'Un producto tipo llavero necesita al menos una pieza individual y una pieza de tanda',
+        );
+      }
+    } else if (pieces.some((p) => (p.scope ?? PieceScope.INDIVIDUAL) === PieceScope.BATCH)) {
+      throw new BadRequestException('Un producto estándar no puede tener piezas de tanda');
+    }
+  }
+
   private async assertMachineExists(machineId: string): Promise<void> {
     const machine = await this.prisma.machine.findUnique({ where: { id: machineId } });
     if (!machine) throw new BadRequestException('Máquina inexistente');
@@ -415,6 +451,7 @@ export class ProductsService {
       description: p.description,
       imageUrl: p.imageUrl,
       isActive: p.isActive,
+      kind: p.kind,
       marketingMonthly: dec(p.marketingMonthly),
       estimatedUnitsMonth: dec(p.estimatedUnitsMonth),
       assemblyMinutes: dec(p.assemblyMinutes),
@@ -433,6 +470,7 @@ export class ProductsService {
         defaultFilamentName: piece.defaultFilament?.name ?? null,
         defaultFilamentColorHex: piece.defaultFilament?.colorHex ?? null,
         sortOrder: piece.sortOrder,
+        scope: piece.scope,
       })),
       materials: p.materials.map((m) => ({
         id: m.id,

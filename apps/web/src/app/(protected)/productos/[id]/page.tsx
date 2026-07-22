@@ -6,6 +6,7 @@ import {
   type CategoryLite,
   type ChannelLite,
   type CostingResult,
+  type KeychainCosts,
   type MachineLite,
   type MaterialLite,
   type ProductDto,
@@ -28,14 +29,22 @@ export default async function ProductDetailPage({
     throw err;
   }
 
-  const [materials, cost, prices, channels, machines, categories] = await Promise.all([
-    api<MaterialLite[]>('/materials'),
-    api<CostingResult>(`/products/${id}/cost`).catch(() => null),
-    api<ProductPricesResponse>(`/products/${id}/prices`).catch(() => null),
-    api<ChannelLite[]>('/channels'),
-    api<MachineLite[]>('/machines'),
-    api<CategoryLite[]>('/categories'),
-  ]);
+  const isKeychain = product.kind === 'KEYCHAIN';
+  const [materials, cost, keychainCosts, prices, channels, machines, categories] =
+    await Promise.all([
+      api<MaterialLite[]>('/materials'),
+      // Producto estándar: costo único. Llavero: dos bases (individual + tanda).
+      isKeychain
+        ? Promise.resolve(null)
+        : api<CostingResult>(`/products/${id}/cost`).catch(() => null),
+      isKeychain
+        ? api<KeychainCosts>(`/products/${id}/keychain-costs`).catch(() => null)
+        : Promise.resolve(null),
+      api<ProductPricesResponse>(`/products/${id}/prices`).catch(() => null),
+      api<ChannelLite[]>('/channels'),
+      api<MachineLite[]>('/machines'),
+      api<CategoryLite[]>('/categories'),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -55,9 +64,10 @@ export default async function ProductDetailPage({
         machines={machines}
         categories={categories}
         initialCost={cost}
+        keychainCosts={keychainCosts}
       />
 
-      <ProductPrices prices={prices} categoryId={product.categoryId} />
+      <ProductPrices prices={prices} categoryId={product.categoryId} kind={product.kind} />
     </div>
   );
 }
