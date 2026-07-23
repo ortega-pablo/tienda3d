@@ -95,4 +95,25 @@ describe('KeychainScaleTiersService.assertValidGrid', () => {
       ]),
     ).toThrow();
   });
+
+  it('acepta markups iguales en escalas contiguas (sin descuento entre tramos)', () => {
+    expect(() =>
+      KeychainScaleTiersService.assertValidGrid([
+        { minQty: 1, maxQty: 4, markupPct: 80 },
+        { minQty: 5, maxQty: 24, markupPct: 80 },
+        { minQty: 25, maxQty: 49, markupPct: 60 },
+        { minQty: 50, maxQty: 99, markupPct: 40 },
+        { minQty: 100, maxQty: null, markupPct: 35 },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('acepta una grilla toda con el mismo markup', () => {
+    expect(() =>
+      KeychainScaleTiersService.assertValidGrid([
+        { minQty: 1, maxQty: 4, markupPct: 50 },
+        { minQty: 5, maxQty: null, markupPct: 50 },
+      ]),
+    ).not.toThrow();
+  });
 });

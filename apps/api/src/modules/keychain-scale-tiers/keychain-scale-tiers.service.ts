@@ -34,11 +34,16 @@ export class KeychainScaleTiersService {
     private readonly audit: AuditService,
   ) {}
 
+  /**
+   * Lectura pura: NUNCA valida ni tira. Un estado inconsistente en DB no debe
+   * dejar la pantalla de parámetros (ni el pricing de los llaveros) inutilizable
+   * — la validación vive en la escritura, que es donde se puede prevenir.
+   */
   async list(): Promise<KeychainScaleTierDto[]> {
     const rows = await this.prisma.keychainScaleTier.findMany({
       orderBy: { sortOrder: 'asc' },
     });
-    const dtos = rows.map((r) => ({
+    return rows.map((r) => ({
       id: r.id,
       minQty: r.minQty,
       maxQty: r.maxQty,
@@ -47,8 +52,6 @@ export class KeychainScaleTiersService {
       notes: r.notes,
       updatedAt: r.updatedAt,
     }));
-    KeychainScaleTiersService.assertValidGrid(dtos);
-    return dtos;
   }
 
   async updateMarkup(
@@ -61,6 +64,14 @@ export class KeychainScaleTiersService {
     }
     const before = await this.prisma.keychainScaleTier.findUnique({ where: { id } });
     if (!before) throw new NotFoundException('Escala inexistente');
+
+    // Validamos la grilla RESULTANTE antes de escribir: si el cambio la deja
+    // inconsistente, rechazamos sin tocar la DB (nada de estados corruptos).
+    const prospective = (await this.list()).map((t) =>
+      t.id === id ? { ...t, markupPct } : t,
+    );
+    KeychainScaleTiersService.assertValidGrid(prospective);
+
     await this.prisma.keychainScaleTier.update({
       where: { id },
       data: { markupPct },
@@ -132,7 +143,10 @@ export class KeychainScaleTiersService {
    *   1. La primera fila arranca en minQty = 1.
    *   2. Cadena contigua sin huecos: cada fila arranca en prev.maxQty + 1.
    *   3. Solo la última fila puede ser abierta (maxQty = null).
-   *   4. Markups estrictamente decrecientes al subir la cantidad.
+   *   4. Markups no crecientes al subir la cantidad. Dos escalas contiguas
+   *      pueden compartir markup (decisión de negocio válida: sin descuento
+   *      adicional entre esos tramos); lo que se rechaza es que SUBA, porque
+   *      cobrar más markup por comprar más no tiene sentido comercial.
    */
   static assertValidGrid(
     tiers: Array<{ minQty: number; maxQty: number | null; markupPct: number }>,
@@ -156,9 +170,9 @@ export class KeychainScaleTiersService {
             `La grilla de escalas de llavero tiene un hueco entre ${prev.maxQty ?? '∞'} y ${t.minQty}.`,
           );
         }
-        if (t.markupPct >= prev.markupPct) {
+        if (t.markupPct > prev.markupPct) {
           throw new BadRequestException(
-            'Los markups de las escalas de llavero deben ser estrictamente decrecientes al subir la cantidad.',
+            `El markup de la escala ${KeychainScaleTiersService.tierLabel(t)} (${t.markupPct}%) no puede ser mayor al de la escala anterior ${KeychainScaleTiersService.tierLabel(prev)} (${prev.markupPct}%): a mayor cantidad, el markup no puede subir.`,
           );
         }
       }
