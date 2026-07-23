@@ -138,6 +138,7 @@ async function seedGlobalParams() {
     ['reinvestment_pct', '10', 'Reinversión aplicada al costo de producción (%)'],
     ['unified_regime_pct', '4', 'Régimen unificado Mendoza (%) — modelo simple'],
     ['direct_sale_commission_pct', '6.5', 'Comisión global del canal Venta Directa (%)'],
+    ['price_rounding_step', '50', 'Paso de redondeo de los precios finales de venta (ARS). Los precios al cliente se redondean hacia arriba a este múltiplo. 0 = sin redondeo.'],
     ['currency', 'ARS', 'Moneda principal del sistema'],
   ];
   for (const [key, value, description] of params) {

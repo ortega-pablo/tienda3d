@@ -46,6 +46,12 @@ export interface PricingGlobals {
   directSaleCommissionPct: number;
   /** Régimen unificado for SIMPLE tax mode — applies to every SIMPLE channel. */
   unifiedRegimePct: number;
+  /**
+   * Paso de redondeo del precio final de venta (ARS). El motor redondea solo
+   * `finalPrice` hacia arriba a este múltiplo. 0 = sin redondeo. No afecta
+   * costos, netPrice, profit ni márgenes.
+   */
+  roundingStep: number;
 }
 
 export interface ProductPricingInputs {

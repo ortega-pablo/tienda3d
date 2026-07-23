@@ -17,6 +17,7 @@ import {
 import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scale-tiers.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
+import { roundPriceUp } from '../pricing/round-price';
 import type { CustomerPricingProfile } from '../pricing/pricing.types';
 import { CategoryTiersService } from '../categories/category-tiers.service';
 import type {
@@ -139,9 +140,14 @@ export class QuotesService {
     const itemsData = await Promise.all(
       input.items.map((item) => this.buildItemRow(item, channelId, customerCtx)),
     );
+    // Cada lineTotal ya es múltiplo del paso (unitPrice y designSurcharge vienen
+    // redondeados del motor), así que el subtotal también lo es. El descuento
+    // puede romper el múltiplo, por eso el total se redondea hacia arriba tras
+    // restarlo. loadGlobals trae el paso (0 = sin redondeo).
+    const { roundingStep } = await this.pricing.loadGlobals();
     const subtotal = itemsData.reduce((acc, i) => acc + Number(i.lineTotal), 0);
     const discount = input.discount ?? 0;
-    const total = Math.max(subtotal - discount, 0);
+    const total = roundPriceUp(Math.max(subtotal - discount, 0), roundingStep);
 
     // Datos textuales del cliente: si vino customerId, los usamos como fuente
     // de verdad pero el caller puede pisarlos (ej. cliente paga a nombre de

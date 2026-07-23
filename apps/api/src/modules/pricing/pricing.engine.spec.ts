@@ -31,7 +31,11 @@ describe('PricingEngine — Logic C v3', () => {
     fabricationPrice: 10_000,
     otherMaterialsWithReplenishment: 2_000,
   };
-  const globals: PricingGlobals = { directSaleCommissionPct: 6.5, unifiedRegimePct: 4 };
+  const globals: PricingGlobals = {
+    directSaleCommissionPct: 6.5,
+    unifiedRegimePct: 4,
+    roundingStep: 0, // redondeo desactivado por default en la mayoría de los tests
+  };
   const product: ProductPricingInputs = { targetMarkupPct: 60 };
 
   const make = (
@@ -278,6 +282,42 @@ describe('PricingEngine — Logic C v3', () => {
       const sinProfile = engine.price(cost, directa, product, globals);
       const conProfileVacio = engine.price(cost, directa, product, globals, {}, {});
       expect(sinProfileEqual(sinProfile, conProfileVacio)).toBe(true);
+    });
+  });
+
+  describe('Redondeo del precio de venta (price_rounding_step)', () => {
+    const directa = make({ name: 'Venta Directa', slug: 'directa', kind: 'DIRECT_SALE' });
+    const exact = engine.price(cost, directa, product, { ...globals, roundingStep: 0 });
+    const rounded = engine.price(cost, directa, product, { ...globals, roundingStep: 50 });
+
+    it('finalPrice se redondea hacia arriba al múltiplo de 50 y es ≥ al exacto', () => {
+      expect(rounded.finalPrice % 50).toBe(0);
+      expect(rounded.finalPrice).toBeGreaterThanOrEqual(exact.finalPrice);
+      expect(rounded.finalPrice - exact.finalPrice).toBeLessThan(50);
+    });
+
+    it('NO afecta profit, netPrice ni effectiveMarginPct (datos intermedios exactos)', () => {
+      expect(rounded.profit).toBe(exact.profit);
+      expect(rounded.netPrice).toBe(exact.netPrice);
+      expect(rounded.effectiveMarginPct).toBe(exact.effectiveMarginPct);
+    });
+
+    it('step 0 no redondea (idéntico al exacto)', () => {
+      expect(exact.finalPrice).toBeCloseTo(18_000 / 0.895, 6);
+    });
+
+    it('un finalPrice ya múltiplo queda igual (ceil idempotente)', () => {
+      // fabricación que da un neto exacto múltiplo de 50 en CASH (denom=1, sin IVA).
+      const cash = make({ name: 'Efectivo', slug: 'efectivo', kind: 'CASH' });
+      const c: PricingCostInputs = { fabricationPrice: 10_000, otherMaterialsWithReplenishment: 0 };
+      const r = engine.price(c, cash, { targetMarkupPct: 0 }, { ...globals, roundingStep: 50 });
+      expect(r.finalPrice).toBe(10_000); // 10.000 ya es múltiplo de 50
+    });
+
+    it('surcharge (cargo de diseño) también se redondea', () => {
+      const s = engine.surcharge(1234, directa, { ...globals, roundingStep: 50 });
+      expect(s % 50).toBe(0);
+      expect(s).toBeGreaterThanOrEqual(1234);
     });
   });
 });
