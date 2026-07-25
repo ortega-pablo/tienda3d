@@ -10,12 +10,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
+import type { AccessPayload } from '../auth/auth.service';
 import { CostingService } from '../costing/costing.service';
 import { PricingService } from '../pricing/pricing.service';
 import { ProductsService } from './products.service';
+
+/** Las notas internas del producto solo las ven/editan usuarios admin. */
+const NOTES_PERMISSION = 'parameter:write';
 
 // Cuando una pieza impresa está cargada, todos sus campos son obligatorios:
 // nombre no vacío, gramos > 0, tiempo > 0 y filamento default asignado.
@@ -49,6 +54,9 @@ const inputSchema = z
     // sku no se acepta del input: se auto-genera al crear (PTK-PROD-NNNNNN)
     // y es inmutable después.
     description: z.string().max(2000).nullable().optional(),
+    // Notas internas (admin). Se aceptan del input pero el controller las
+    // ignora si el usuario no es administrativo.
+    notes: z.string().max(4000).nullable().optional(),
     imageUrl: z.string().url().nullable().optional(),
     isActive: z.boolean().optional(),
     // STANDARD por default. KEYCHAIN activa el modelo de escalas de llavero
@@ -116,8 +124,9 @@ export class ProductsController {
 
   @Permissions('product:read')
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.products.get(id);
+  get(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    // Las notas internas solo se devuelven a usuarios administrativos.
+    return this.products.get(id, user.permissions.includes(NOTES_PERMISSION));
   }
 
   @Permissions('product:read')
@@ -150,8 +159,12 @@ export class ProductsController {
 
   @Permissions('product:write')
   @Post()
-  create(@Body(ZodValidation(inputSchema)) body: z.infer<typeof inputSchema>) {
-    return this.products.create(body);
+  create(
+    @Body(ZodValidation(inputSchema)) body: z.infer<typeof inputSchema>,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    const canNotes = user.permissions.includes(NOTES_PERMISSION);
+    return this.products.create({ ...body, notes: canNotes ? (body.notes ?? null) : null });
   }
 
   @Permissions('product:write')
@@ -159,8 +172,11 @@ export class ProductsController {
   update(
     @Param('id') id: string,
     @Body(ZodValidation(inputSchema)) body: z.infer<typeof inputSchema>,
+    @CurrentUser() user: AccessPayload,
   ) {
-    return this.products.update(id, body);
+    const canNotes = user.permissions.includes(NOTES_PERMISSION);
+    // No-admin: notes = undefined → el service preserva las existentes.
+    return this.products.update(id, { ...body, notes: canNotes ? (body.notes ?? null) : undefined });
   }
 
   @Permissions('product:write')

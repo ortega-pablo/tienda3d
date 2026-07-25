@@ -8,6 +8,7 @@ import { PieceScope, Prisma, QuoteStatus, QuoteType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
+import { addBusinessDays } from '@/common/utils/date';
 import { CostingService } from '../costing/costing.service';
 import type { CostingResult } from '../costing/costing.types';
 import {
@@ -18,7 +19,7 @@ import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scal
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
 import { roundPriceUp } from '../pricing/round-price';
-import type { CustomerPricingProfile } from '../pricing/pricing.types';
+import type { CustomerPricingProfile, PriceLine } from '../pricing/pricing.types';
 import { CategoryTiersService } from '../categories/category-tiers.service';
 import type {
   AdhocItemPayload,
@@ -26,6 +27,8 @@ import type {
   QuoteDto,
   QuoteItemDto,
   QuoteItemInput,
+  QuoteItemPricingBreakdown,
+  QuoteItemPricingContext,
   QuoteSummaryDto,
 } from './quotes.types';
 
@@ -101,13 +104,13 @@ export class QuotesService {
     }));
   }
 
-  async get(id: string): Promise<QuoteDto> {
+  async get(id: string, includeBreakdown = false): Promise<QuoteDto> {
     const q = await this.prisma.quote.findUnique({
       where: { id },
       include: { items: true, channel: { select: { name: true } } },
     });
     if (!q) throw new NotFoundException('Cotización inexistente');
-    return this.toDto(q);
+    return this.toDto(q, includeBreakdown);
   }
 
   async create(input: QuoteCreateInput, actorId: string): Promise<QuoteDto> {
@@ -175,7 +178,10 @@ export class QuotesService {
           : Prisma.JsonNull,
         channelId,
         withInvoice: input.withInvoice ?? false,
-        validUntil: input.validUntil ? new Date(input.validUntil) : null,
+        // Validez del documento: 15 días hábiles (lun-vie) desde la emisión.
+        // Es una regla fija del negocio — si el caller manda validUntil se
+        // respeta, si no se computa el default.
+        validUntil: input.validUntil ? new Date(input.validUntil) : addBusinessDays(new Date(), 15),
         notes: input.notes ?? null,
         subtotal,
         discount,
@@ -497,6 +503,7 @@ export class QuotesService {
       // global de escalas (pisa el target del motor vía override).
       const isKeychain = product.kind === 'KEYCHAIN';
       let keychainMarkupOverride: number | null = null;
+      let keychainCtx: Partial<QuoteItemPricingContext> = {};
       let cost: CostingResult;
       if (isKeychain) {
         const scaleTiers = await this.keychainScaleTiers.list();
@@ -508,11 +515,19 @@ export class QuotesService {
         }
         keychainMarkupOverride = scaleTier.markupPct;
         const scope = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
+        const batchSize =
+          scope === PieceScope.BATCH ? await this.loadKeychainBatchSize() : undefined;
         const costingOpts =
           scope === PieceScope.INDIVIDUAL
             ? { pieceScope: PieceScope.INDIVIDUAL }
-            : { pieceScope: PieceScope.BATCH, divideBy: await this.loadKeychainBatchSize() };
+            : { pieceScope: PieceScope.BATCH, divideBy: batchSize! };
         cost = await this.costing.forProduct(item.productId, costingOpts);
+        keychainCtx = {
+          pricingBase: scope,
+          scaleLabel: KeychainScaleTiersService.tierLabel(scaleTier),
+          scaleMarkupPct: scaleTier.markupPct,
+          ...(batchSize ? { batchSize } : {}),
+        };
       } else {
         cost = await this.costing.forProduct(item.productId);
       }
@@ -532,7 +547,7 @@ export class QuotesService {
             otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
           };
 
-      const { unitPrice, unitProfit } = await this.computeUnitPrice(
+      const { unitPrice, unitProfit, line, roundingStep } = await this.computeUnitPrice(
         {
           fabricationPrice: adjustedCost.fabricationPrice,
           otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
@@ -547,6 +562,17 @@ export class QuotesService {
       );
       const lineTotal = unitPrice * item.quantity;
 
+      const breakdown: QuoteItemPricingBreakdown = {
+        cost,
+        price: line,
+        context: {
+          ...keychainCtx,
+          customerAdjusted: adjustedCost.fabricationPrice !== cost.fabricationPrice,
+          fabricationPriceUsed: adjustedCost.fabricationPrice,
+          roundingStep,
+        },
+      };
+
       return {
         productId: item.productId,
         description: item.description ?? product.name,
@@ -555,6 +581,7 @@ export class QuotesService {
         unitPrice,
         unitProfit,
         lineTotal,
+        pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       };
     }
 
@@ -642,19 +669,20 @@ export class QuotesService {
           fabricationPrice: cost.fabricationPrice,
           otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
         };
-    const { unitPrice, unitProfit, designSurcharge } = await this.computeUnitPrice(
-      {
-        fabricationPrice: adjustedCost.fabricationPrice,
-        otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
-        totalCost: adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment,
-      },
-      channelId,
-      null,
-      item.quantity,
-      profile,
-      designRaw,
-      keychainScale ? keychainScale.markupPct : null,
-    );
+    const { unitPrice, unitProfit, designSurcharge, line, roundingStep } =
+      await this.computeUnitPrice(
+        {
+          fabricationPrice: adjustedCost.fabricationPrice,
+          otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
+          totalCost: adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment,
+        },
+        channelId,
+        null,
+        item.quantity,
+        profile,
+        designRaw,
+        keychainScale ? keychainScale.markupPct : null,
+      );
     // El cargo de diseño es plano por línea (no escala con la cantidad)
     // pero forma parte del lineTotal para que paye comisión + régimen
     // y se incluya en el subtotal / descuento de la cotización.
@@ -713,6 +741,25 @@ export class QuotesService {
         : {}),
     };
 
+    const breakdown: QuoteItemPricingBreakdown = {
+      cost,
+      price: line,
+      context: {
+        ...(keychainScale
+          ? {
+              pricingBase: pricingBase ?? undefined,
+              scaleLabel: KeychainScaleTiersService.tierLabel(keychainScale),
+              scaleMarkupPct: keychainScale.markupPct,
+              ...(pricingBase === 'BATCH' ? { batchSize } : {}),
+            }
+          : {}),
+        ...(designRaw > 0 ? { designRaw, designSurcharge } : {}),
+        customerAdjusted: adjustedCost.fabricationPrice !== cost.fabricationPrice,
+        fabricationPriceUsed: adjustedCost.fabricationPrice,
+        roundingStep,
+      },
+    };
+
     return {
       productId: null,
       description: item.description,
@@ -722,6 +769,7 @@ export class QuotesService {
       unitProfit,
       lineTotal,
       adhocPayload: persistedPayload as unknown as Prisma.InputJsonValue,
+      pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
     };
   }
 
@@ -746,12 +794,26 @@ export class QuotesService {
     designRawAmount = 0,
     /** Override explícito de markup (p.ej. tier de llaveros). Pisa el target. */
     markupOverridePct: number | null = null,
-  ): Promise<{ unitPrice: number; unitProfit: number; designSurcharge: number }> {
+  ): Promise<{
+    unitPrice: number;
+    unitProfit: number;
+    designSurcharge: number;
+    /** PriceLine del motor (para el snapshot de desglose). null sin canal. */
+    line: PriceLine | null;
+    /** Paso de redondeo aplicado (0 sin canal / sin redondeo). */
+    roundingStep: number;
+  }> {
     if (!channelId) {
       // Sin canal el precio = costo total (caller puede sobreescribir).
       // El profit no se puede calcular sin markup del producto, queda 0.
       // El surcharge tampoco aplica sin canal: se devuelve crudo (sin gross-up).
-      return { unitPrice: cost.totalCost, unitProfit: 0, designSurcharge: designRawAmount };
+      return {
+        unitPrice: cost.totalCost,
+        unitProfit: 0,
+        designSurcharge: designRawAmount,
+        line: null,
+        roundingStep: 0,
+      };
     }
 
     const channel = await this.prisma.channel.findUnique({ where: { id: channelId } });
@@ -838,7 +900,13 @@ export class QuotesService {
       globals,
       customerProfile ?? {},
     );
-    return { unitPrice: line.finalPrice, unitProfit: line.profit, designSurcharge };
+    return {
+      unitPrice: line.finalPrice,
+      unitProfit: line.profit,
+      designSurcharge,
+      line,
+      roundingStep: globals.roundingStep ?? 0,
+    };
   }
 
   private async nextCode(type: QuoteType): Promise<string> {
@@ -898,8 +966,9 @@ export class QuotesService {
       unitProfit: Prisma.Decimal;
       lineTotal: Prisma.Decimal;
       adhocPayload: Prisma.JsonValue;
+      pricingBreakdown?: Prisma.JsonValue;
     }>;
-  }): QuoteDto {
+  }, includeBreakdown = false): QuoteDto {
     const items: QuoteItemDto[] = q.items.map((i) => ({
       id: i.id,
       productId: i.productId,
@@ -912,6 +981,11 @@ export class QuotesService {
       adhocPayload:
         i.adhocPayload && typeof i.adhocPayload === 'object'
           ? (i.adhocPayload as unknown as AdhocItemPayload)
+          : null,
+      // Solo se expone a usuarios con permiso (gate en el controller).
+      pricingBreakdown:
+        includeBreakdown && i.pricingBreakdown && typeof i.pricingBreakdown === 'object'
+          ? (i.pricingBreakdown as unknown as QuoteItemPricingBreakdown)
           : null,
     }));
     return {

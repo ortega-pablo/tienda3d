@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api-client';
+import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -80,7 +81,7 @@ export function AuditLogView({ initialLogs }: { initialLogs: AuditLog[] }) {
             {logs.map((l) => (
               <tr key={l.id}>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {new Date(l.at).toLocaleString('es-AR')}
+                  {formatDateTime(l.at)}
                 </td>
                 <td className="px-3 py-2 text-xs">{l.actorName ?? '—'}</td>
                 <td className="px-3 py-2 text-xs">

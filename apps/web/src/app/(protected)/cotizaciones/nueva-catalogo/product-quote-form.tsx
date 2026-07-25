@@ -35,10 +35,27 @@ export interface CustomerOption {
   skipReinvestment: boolean;
 }
 
-interface ItemDraft {
+export interface ItemDraft {
   productId: string;
   quantity: string;
   description: string;
+}
+
+/**
+ * Estado inicial para precargar el form al "usar una cotización como base"
+ * (re-cotizar). Lo arma el server-side desde el `QuoteDto` (ver
+ * `quote-prefill.ts`). Ausente = form vacío / defaults de siempre.
+ */
+export interface ProductQuoteInitialState {
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerNotes: string;
+  withoutInvoice: boolean;
+  discount: string;
+  notes: string;
+  items: ItemDraft[];
 }
 
 interface ItemPreview {
@@ -59,6 +76,8 @@ export function ProductQuoteForm({
   customers,
   ventaDirectaId,
   efectivoId,
+  initialState,
+  prefillNotice,
 }: {
   products: ProductLite[];
   customers: CustomerOption[];
@@ -66,18 +85,32 @@ export function ProductQuoteForm({
   ventaDirectaId: string;
   /** Id del canal "Efectivo" — usado cuando se tilda "sin factura". */
   efectivoId: string;
+  /** Precarga al re-cotizar desde una cotización existente (ver quote-prefill.ts). */
+  initialState?: ProductQuoteInitialState;
+  /** Avisos de precarga (p.ej. producto del payload que ya no está activo). */
+  prefillNotice?: string[];
 }) {
   const router = useRouter();
-  const [customerId, setCustomerId] = useState<string>('');
-  const [customer, setCustomer] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [customerId, setCustomerId] = useState<string>(initialState?.customerId ?? '');
+  const [customer, setCustomer] = useState(
+    initialState
+      ? {
+          name: initialState.customerName,
+          email: initialState.customerEmail,
+          phone: initialState.customerPhone,
+          notes: initialState.customerNotes,
+        }
+      : { name: '', email: '', phone: '', notes: '' },
+  );
   // Default: sin tildar = con factura = Venta Directa.
   // Tildado = sin factura = canal Efectivo.
-  const [withoutInvoice, setWithoutInvoice] = useState(false);
+  const [withoutInvoice, setWithoutInvoice] = useState(initialState?.withoutInvoice ?? false);
   const channelId = withoutInvoice ? efectivoId : ventaDirectaId;
-  const [validUntil, setValidUntil] = useState('');
-  const [discount, setDiscount] = useState('0');
-  const [notes, setNotes] = useState('');
-  const [items, setItems] = useState<ItemDraft[]>([newItem(products[0]?.id ?? '')]);
+  const [discount, setDiscount] = useState(initialState?.discount ?? '0');
+  const [notes, setNotes] = useState(initialState?.notes ?? '');
+  const [items, setItems] = useState<ItemDraft[]>(
+    initialState?.items ?? [newItem(products[0]?.id ?? '')],
+  );
   const [previews, setPreviews] = useState<Record<number, ItemPreview | 'loading' | 'error'>>({});
   const [saving, setSaving] = useState(false);
 
@@ -173,7 +206,6 @@ export function ProductQuoteForm({
           // El motor sigue usando `withInvoice` para metadata del Quote;
           // el flag visible es su negación.
           withInvoice: !withoutInvoice,
-          validUntil: validUntil ? new Date(validUntil).toISOString() : null,
           notes: notes || null,
           discount: Number(discount || '0'),
           items: items.map((i) => ({
@@ -207,6 +239,20 @@ export function ProductQuoteForm({
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {initialState && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+            📋 Precargado desde otra cotización. Revisá los valores y editá lo que necesites
+            antes de guardar — se crea una <strong>cotización nueva</strong> con precios
+            recalculados.
+            {prefillNotice && prefillNotice.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 text-xs text-destructive">
+                {prefillNotice.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>Cliente</CardTitle>
@@ -293,12 +339,10 @@ export function ProductQuoteForm({
                 onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
               />
             </Field>
-            <Field label="Válida hasta">
-              <Input
-                type="date"
-                value={validUntil}
-                onChange={(e) => setValidUntil(e.target.value)}
-              />
+            <Field label="Validez">
+              <p className="flex h-10 items-center text-sm text-muted-foreground">
+                15 días hábiles desde la emisión
+              </p>
             </Field>
             <Field label="Descuento ($)">
               <Input

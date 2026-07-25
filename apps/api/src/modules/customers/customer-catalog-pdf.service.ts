@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
+import { formatDateAr } from '@/common/utils/date';
 import type { CatalogProduct, CustomerCatalog } from './customer-catalog.service';
 
 const MONEY = new Intl.NumberFormat('es-AR', {
@@ -85,7 +86,7 @@ export class CustomerCatalogPdfService {
     doc
       .fontSize(20)
       .fillColor('#0f172a')
-      .text('Plastik 3D', { continued: true })
+      .text('Tienda Plastik', { continued: true })
       .fontSize(10)
       .fillColor('#64748b')
       .text('   ·   Catálogo personalizado', { align: 'left' });
@@ -99,7 +100,7 @@ export class CustomerCatalogPdfService {
     if (catalog.channelName) {
       doc.text(`Precios para canal: ${catalog.channelName}`);
     }
-    doc.text(`Generado el ${new Date(catalog.generatedAt).toLocaleDateString('es-AR')}`);
+    doc.text(`Generado el ${formatDateAr(new Date(catalog.generatedAt))}`);
 
     doc.moveDown(0.6);
     doc.moveTo(PAGE_LEFT, doc.y).lineTo(PAGE_RIGHT, doc.y).strokeColor('#e2e8f0').stroke();

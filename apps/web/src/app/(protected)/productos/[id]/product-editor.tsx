@@ -82,6 +82,8 @@ export interface ProductDto {
   name: string;
   sku: string | null;
   description: string | null;
+  /** Notas internas (solo presente si el usuario es administrativo). */
+  notes?: string | null;
   imageUrl: string | null;
   isActive: boolean;
   kind: ProductKind;
@@ -174,6 +176,7 @@ const EMPTY_PIECE: PieceState = {
 interface FormState {
   name: string;
   description: string;
+  notes: string;
   isActive: boolean;
   marketingMonthly: string;
   estimatedUnitsMonth: string;
@@ -217,6 +220,7 @@ function buildInitialState(
     return {
       name: product.name,
       description: product.description ?? '',
+      notes: product.notes ?? '',
       isActive: product.isActive,
       marketingMonthly: product.marketingMonthly.toString(),
       estimatedUnitsMonth: product.estimatedUnitsMonth.toString(),
@@ -242,6 +246,7 @@ function buildInitialState(
   return {
     name: '',
     description: '',
+    notes: '',
     isActive: true,
     marketingMonthly: '0',
     estimatedUnitsMonth: '1',
@@ -297,6 +302,9 @@ export function ProductEditor({
 }: Props) {
   const can = useHasPermission();
   const canWrite = can('product:write');
+  // Notas internas: solo usuarios administrativos las ven/editan (mismo gate
+  // que el backend). El valor solo llega en el DTO si el usuario tiene permiso.
+  const canSeeNotes = can('parameter:write');
   const router = useRouter();
   // En edit el tipo lo manda el producto persistido; en create, la prop.
   const isKeychain = mode === 'edit' ? product?.kind === 'KEYCHAIN' : variant === 'keychain';
@@ -424,6 +432,7 @@ export function ProductEditor({
   const buildPayload = () => ({
     name: form.name,
     description: form.description || null,
+    ...(canSeeNotes ? { notes: form.notes || null } : {}),
     isActive: form.isActive,
     kind: isKeychain ? 'KEYCHAIN' : 'STANDARD',
     marketingMonthly: Number(form.marketingMonthly),
@@ -693,8 +702,27 @@ export function ProductEditor({
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Visible para el equipo y para el cliente (catálogo).
+                </p>
               </Field>
             </div>
+            {canSeeNotes && (
+              <div className="sm:col-span-2">
+                <Field label="Notas internas">
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    rows={3}
+                    disabled={readOnly}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    🔒 Solo visible para usuarios administrativos. Nunca se muestra al cliente.
+                  </p>
+                </Field>
+              </div>
+            )}
           </CardContent>
         </Card>
 

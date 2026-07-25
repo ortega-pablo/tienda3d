@@ -39,7 +39,7 @@ export interface MaterialLite {
   isActive: boolean;
 }
 
-interface PieceDraft {
+export interface PieceDraft {
   name: string;
   grams: string;
   printMinutes: string;
@@ -60,7 +60,7 @@ interface PieceDraft {
    */
   scope: 'INDIVIDUAL' | 'BATCH';
 }
-interface MaterialDraft {
+export interface MaterialDraft {
   materialId: string;
   quantity: string;
   groupId: string;
@@ -76,12 +76,33 @@ interface MaterialDraft {
  * entero (un solo modelo 3D, se cobra una sola vez). El builder lo
  * asigna al primer grupo no vacío.
  */
-interface GroupDraft {
+export interface GroupDraft {
   id: string;
   name: string;
   quantity: string;
   assemblyMinutes: string;
   managementMinutes: string;
+}
+
+/**
+ * Estado inicial para precargar el form al "usar una cotización como base"
+ * (re-cotizar). Lo arma el server-side desde el `QuoteDto` (ver
+ * `quote-prefill.ts`). Ausente = form vacío / defaults de siempre.
+ */
+export interface RapidQuoteInitialState {
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerNotes: string;
+  withoutInvoice: boolean;
+  discount: string;
+  notes: string;
+  description: string;
+  designMinutes: string;
+  groups: GroupDraft[];
+  pieces: PieceDraft[];
+  materials: MaterialDraft[];
 }
 
 /** Id estable del grupo default — siempre existe al arrancar el form. */
@@ -160,6 +181,8 @@ export function RapidQuoteForm({
   keychainTiers = [],
   batchSize = 1,
   keychainDefaults,
+  initialState,
+  prefillNotice,
 }: {
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
@@ -168,6 +191,10 @@ export function RapidQuoteForm({
   efectivoId: string;
   mode?: 'adhoc' | 'keychain';
   keychainTiers?: KeychainTierLite[];
+  /** Precarga al re-cotizar desde una cotización existente (ver quote-prefill.ts). */
+  initialState?: RapidQuoteInitialState;
+  /** Avisos de precarga (p.ej. insumo del payload que ya no está activo). */
+  prefillNotice?: string[];
   /**
    * Tamaño del batch para modo keychain. Si > 1, los labels/help-text
    * indican que los inputs se cargan como totales para `batchSize`
@@ -184,10 +211,19 @@ export function RapidQuoteForm({
   keychainDefaults?: KeychainDefaultsLite;
 }) {
   const router = useRouter();
-  const [customerId, setCustomerId] = useState('');
-  const [customer, setCustomer] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [customerId, setCustomerId] = useState(initialState?.customerId ?? '');
+  const [customer, setCustomer] = useState(
+    initialState
+      ? {
+          name: initialState.customerName,
+          email: initialState.customerEmail,
+          phone: initialState.customerPhone,
+          notes: initialState.customerNotes,
+        }
+      : { name: '', email: '', phone: '', notes: '' },
+  );
   // Sin tildar = con factura = Venta Directa. Tildado = sin factura = Efectivo.
-  const [withoutInvoice, setWithoutInvoice] = useState(false);
+  const [withoutInvoice, setWithoutInvoice] = useState(initialState?.withoutInvoice ?? false);
   const channelId = withoutInvoice ? efectivoId : ventaDirectaId;
 
   const selectedCustomer = customers.find((c) => c.id === customerId) ?? null;
@@ -203,9 +239,8 @@ export function RapidQuoteForm({
       setCustomer({ name: '', email: '', phone: '', notes: '' });
     }
   };
-  const [validUntil, setValidUntil] = useState('');
-  const [discount, setDiscount] = useState('0');
-  const [notes, setNotes] = useState('');
+  const [discount, setDiscount] = useState(initialState?.discount ?? '0');
+  const [notes, setNotes] = useState(initialState?.notes ?? '');
 
   const isKeychain = mode === 'keychain';
   // En modo keychain los insumos y adicionales se cargan POR UNIDAD (solo las
@@ -213,7 +248,7 @@ export function RapidQuoteForm({
   // la semántica en los labels.
   const perUnitSuffix = isKeychain ? ' (por unidad)' : '';
   const [description, setDescription] = useState(
-    isKeychain ? 'Llavero personalizado' : 'Pieza a medida',
+    initialState?.description ?? (isKeychain ? 'Llavero personalizado' : 'Pieza a medida'),
   );
   // `quantity`, `assemblyMinutes`, `managementMinutes` viven en `groups[0]`
   // (definido más abajo). Los alias para retro-compatibilidad del render
@@ -223,6 +258,7 @@ export function RapidQuoteForm({
   // arrancamos con el placeholder vacío de siempre. El vendedor puede
   // editar/quitar/agregar lo que quiera.
   const initialPieces: PieceDraft[] = useMemo(() => {
+    if (initialState) return initialState.pieces;
     if (isKeychain && keychainDefaults) {
       // El default representa la placa (tanda de N), así que lo precargamos en
       // la sección BATCH. La sección individual arranca vacía.
@@ -255,6 +291,7 @@ export function RapidQuoteForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const initialMaterials: MaterialDraft[] = useMemo(() => {
+    if (initialState) return initialState.materials;
     if (isKeychain && keychainDefaults) {
       return keychainDefaults.materials.map((m) => ({
         materialId: m.materialId,
@@ -273,18 +310,20 @@ export function RapidQuoteForm({
    * campos cantidad / armado / gestión cuando no hay multi-grupo. En
    * modo keychain queda fijo en 1 (la grilla de tiers no soporta grupos).
    */
-  const [groups, setGroups] = useState<GroupDraft[]>([
-    {
-      id: DEFAULT_GROUP_ID,
-      name: isKeychain ? 'Llavero' : 'Grupo 1',
-      quantity: '1',
-      assemblyMinutes:
-        isKeychain && keychainDefaults ? String(keychainDefaults.assemblyMinutes) : '0',
-      managementMinutes:
-        isKeychain && keychainDefaults ? String(keychainDefaults.managementMinutes) : '0',
-    },
-  ]);
-  const [designMinutes, setDesignMinutes] = useState('0');
+  const [groups, setGroups] = useState<GroupDraft[]>(
+    initialState?.groups ?? [
+      {
+        id: DEFAULT_GROUP_ID,
+        name: isKeychain ? 'Llavero' : 'Grupo 1',
+        quantity: '1',
+        assemblyMinutes:
+          isKeychain && keychainDefaults ? String(keychainDefaults.assemblyMinutes) : '0',
+        managementMinutes:
+          isKeychain && keychainDefaults ? String(keychainDefaults.managementMinutes) : '0',
+      },
+    ],
+  );
+  const [designMinutes, setDesignMinutes] = useState(initialState?.designMinutes ?? '0');
 
   // Atajos al primer grupo: en single-group (default) este es EL grupo,
   // y la UI usa estos getters/setters directos en lugar de los del array.
@@ -607,7 +646,6 @@ export function RapidQuoteForm({
           customerNotes: customer.notes || null,
           channelId,
           withInvoice: !withoutInvoice,
-          validUntil: validUntil ? new Date(validUntil).toISOString() : null,
           notes: notes || null,
           discount: Number(discount || '0'),
           items,
@@ -765,6 +803,20 @@ export function RapidQuoteForm({
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
+        {initialState && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+            📋 Precargado desde otra cotización. Revisá los valores y editá lo que necesites
+            antes de guardar — se crea una <strong>cotización nueva</strong> con precios
+            recalculados.
+            {prefillNotice && prefillNotice.length > 0 && (
+              <ul className="mt-2 list-disc pl-5 text-xs text-destructive">
+                {prefillNotice.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>Cliente</CardTitle>
@@ -836,12 +888,10 @@ export function RapidQuoteForm({
                 onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
               />
             </Field>
-            <Field label="Válida hasta">
-              <Input
-                type="date"
-                value={validUntil}
-                onChange={(e) => setValidUntil(e.target.value)}
-              />
+            <Field label="Validez">
+              <p className="flex h-10 items-center text-sm text-muted-foreground">
+                15 días hábiles desde la emisión
+              </p>
             </Field>
             <Field label="Descuento ($)">
               <Input

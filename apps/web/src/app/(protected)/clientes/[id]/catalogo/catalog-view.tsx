@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
-import { formatMoney, formatNumber } from '@/lib/format';
+import { formatDateTime, formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -66,7 +66,7 @@ export function CatalogView({ catalog }: { catalog: Catalog }) {
             {TYPE_LABEL[catalog.customerType]}
             {catalog.channelName && ` · Precios para canal ${catalog.channelName}`}
             {' · Generado '}
-            {new Date(catalog.generatedAt).toLocaleString('es-AR')}
+            {formatDateTime(catalog.generatedAt)}
           </p>
         </div>
         <div className="flex gap-2">

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Download, KeyRound, Package, Plus, Zap } from 'lucide-react';
 import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
@@ -189,7 +189,7 @@ export default async function QuotesPage({
                       <StatusBadge status={q.status} />
                     </td>
                     <td className="py-3 pr-4 text-xs text-muted-foreground">
-                      {new Date(q.createdAt).toLocaleDateString('es-AR')}
+                      {formatDate(q.createdAt)}
                     </td>
                     <td className="py-3 text-right">
                       <Button asChild variant="ghost" size="sm">

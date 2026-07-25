@@ -4,9 +4,15 @@ import { requirePermission } from '@/lib/auth';
 import {
   RapidQuoteForm,
   type CustomerOption,
-  type FilamentLite,
-  type MaterialLite,
+  type RapidQuoteInitialState,
 } from './rapid-quote-form';
+import {
+  buildAdhocOptionLists,
+  buildRapidInitialState,
+  referencedMaterialIds,
+  type MaterialFull,
+  type QuoteForPrefill,
+} from '../quote-prefill';
 
 interface ChannelLite {
   id: string;
@@ -15,25 +21,42 @@ interface ChannelLite {
   isActive: boolean;
 }
 
-export default async function NewRapidQuotePage() {
+export default async function NewRapidQuotePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
   const user = await requirePermission('quote:create');
   const canReadCustomers = user.permissions.includes('customer:read');
+  const { from } = await searchParams;
 
-  const [channels, filaments, materials, customers] = await Promise.all([
+  const [channels, materials, customers] = await Promise.all([
     api<ChannelLite[]>('/channels'),
-    api<FilamentLite[]>('/materials?type=FILAMENT&activeOnly=true'),
-    api<MaterialLite[]>('/materials'),
+    api<MaterialFull[]>('/materials'),
     canReadCustomers
       ? api<CustomerOption[]>('/customers?activeOnly=true')
       : Promise.resolve([] as CustomerOption[]),
   ]);
-  const nonFilaments = materials.filter((m) => m.type !== 'FILAMENT' && m.isActive);
 
   const ventaDirecta = channels.find((c) => c.slug === 'directa' && c.isActive);
   const efectivo = channels.find((c) => c.slug === 'efectivo' && c.isActive);
   if (!ventaDirecta || !efectivo) {
     notFound();
   }
+
+  let initialState: RapidQuoteInitialState | undefined;
+  let ref: { filamentIds: string[]; materialIds: string[] } | null = null;
+
+  if (from) {
+    const quote = await api<QuoteForPrefill>(`/quotes/${from}`).catch(() => null);
+    // Solo ADHOC libre (los llaveros usan /nueva-llaveros).
+    if (quote && quote.type === 'ADHOC') {
+      initialState = buildRapidInitialState(quote, false);
+      ref = referencedMaterialIds(quote);
+    }
+  }
+
+  const { filaments, nonFilaments, notice } = buildAdhocOptionLists(materials, ref);
 
   return (
     <div className="space-y-6">
@@ -52,6 +75,8 @@ export default async function NewRapidQuotePage() {
         customers={customers}
         ventaDirectaId={ventaDirecta.id}
         efectivoId={efectivo.id}
+        initialState={initialState}
+        prefillNotice={notice.length > 0 ? notice : undefined}
       />
     </div>
   );

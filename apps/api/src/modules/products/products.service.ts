@@ -40,6 +40,11 @@ export interface ProductDto {
   name: string;
   sku: string | null;
   description: string | null;
+  /**
+   * Notas internas — SOLO se incluyen si el usuario es administrativo (permiso
+   * `parameter:write`). Ausente/omitido para el resto. Nunca va al cliente.
+   */
+  notes?: string | null;
   imageUrl: string | null;
   isActive: boolean;
   /** STANDARD o KEYCHAIN — define el modelo de pricing del producto. */
@@ -107,6 +112,12 @@ export interface ProductChannelInput {
 export interface ProductInput {
   name: string;
   description?: string | null;
+  /**
+   * Notas internas (admin). En `update`, `undefined` = no tocar (preserva las
+   * existentes); `null`/string = setear. El controller lo fuerza a `undefined`
+   * si el usuario no es administrativo.
+   */
+  notes?: string | null;
   imageUrl?: string | null;
   isActive?: boolean;
   kind?: ProductKind;
@@ -154,7 +165,7 @@ export class ProductsService {
     }));
   }
 
-  async get(id: string): Promise<ProductDto> {
+  async get(id: string, includeNotes = false): Promise<ProductDto> {
     const p = await this.prisma.product.findUnique({
       where: { id },
       include: {
@@ -169,7 +180,7 @@ export class ProductsService {
       },
     });
     if (!p) throw new NotFoundException('Producto inexistente');
-    return this.toDto(p);
+    return this.toDto(p, includeNotes);
   }
 
   async create(input: ProductInput): Promise<ProductDto> {
@@ -201,6 +212,7 @@ export class ProductsService {
         sku,
         kind,
         description: input.description ?? null,
+        notes: input.notes ?? null,
         imageUrl: input.imageUrl ?? null,
         isActive: input.isActive ?? true,
         marketingMonthly: input.marketingMonthly,
@@ -235,7 +247,8 @@ export class ProductsService {
         },
       },
     });
-    return this.get(product.id);
+    // El creador (si es admin) recibe las notas de vuelta; si no, quedan null.
+    return this.get(product.id, true);
   }
 
   async update(id: string, input: ProductInput): Promise<ProductDto> {
@@ -275,6 +288,9 @@ export class ProductsService {
           name: input.name,
           // sku ni kind se incluyen: son inmutables, viven desde la creación.
           description: input.description ?? null,
+          // notes: undefined = no tocar (preserva). El controller lo fuerza a
+          // undefined para usuarios no administrativos.
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive ?? true,
           marketingMonthly: input.marketingMonthly,
@@ -329,7 +345,7 @@ export class ProductsService {
         });
       }
     });
-    return this.get(id);
+    return this.get(id, true);
   }
 
   async remove(id: string): Promise<void> {
@@ -443,12 +459,15 @@ export class ProductsService {
         category: { select: { name: true; parentId: true } };
       };
     }>,
+    includeNotes = false,
   ): ProductDto {
     return {
       id: p.id,
       name: p.name,
       sku: p.sku,
       description: p.description,
+      // Notas internas: solo para usuarios administrativos (gate en el controller).
+      ...(includeNotes ? { notes: p.notes } : {}),
       imageUrl: p.imageUrl,
       isActive: p.isActive,
       kind: p.kind,

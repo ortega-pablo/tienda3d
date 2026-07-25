@@ -4,11 +4,17 @@ import { requirePermission } from '@/lib/auth';
 import {
   RapidQuoteForm,
   type CustomerOption,
-  type FilamentLite,
   type KeychainDefaultsLite,
   type KeychainTierLite,
-  type MaterialLite,
+  type RapidQuoteInitialState,
 } from '../nueva-a-medida/rapid-quote-form';
+import {
+  buildAdhocOptionLists,
+  buildRapidInitialState,
+  referencedMaterialIds,
+  type MaterialFull,
+  type QuoteForPrefill,
+} from '../quote-prefill';
 
 interface ChannelLite {
   id: string;
@@ -24,15 +30,19 @@ interface ParamDto {
 
 const DEFAULT_BATCH_SIZE = 5;
 
-export default async function NewKeychainQuotePage() {
+export default async function NewKeychainQuotePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
   const user = await requirePermission('quote:create');
   const canReadCustomers = user.permissions.includes('customer:read');
+  const { from } = await searchParams;
 
-  const [channels, filaments, materials, customers, keychainTiers, params, keychainDefaults] =
+  const [channels, materials, customers, keychainTiers, params, keychainDefaults] =
     await Promise.all([
       api<ChannelLite[]>('/channels'),
-      api<FilamentLite[]>('/materials?type=FILAMENT&activeOnly=true'),
-      api<MaterialLite[]>('/materials'),
+      api<MaterialFull[]>('/materials'),
       canReadCustomers
         ? api<CustomerOption[]>('/customers?activeOnly=true')
         : Promise.resolve([] as CustomerOption[]),
@@ -40,7 +50,6 @@ export default async function NewKeychainQuotePage() {
       api<ParamDto[]>('/parameters'),
       api<KeychainDefaultsLite>('/keychain-defaults'),
     ]);
-  const nonFilaments = materials.filter((m) => m.type !== 'FILAMENT' && m.isActive);
 
   const ventaDirecta = channels.find((c) => c.slug === 'directa' && c.isActive);
   const efectivo = channels.find((c) => c.slug === 'efectivo' && c.isActive);
@@ -52,6 +61,19 @@ export default async function NewKeychainQuotePage() {
   const batchSize = batchSizeParam
     ? Math.max(1, Math.floor(Number(batchSizeParam.value)))
     : DEFAULT_BATCH_SIZE;
+
+  let initialState: RapidQuoteInitialState | undefined;
+  let ref: { filamentIds: string[]; materialIds: string[] } | null = null;
+
+  if (from) {
+    const quote = await api<QuoteForPrefill>(`/quotes/${from}`).catch(() => null);
+    if (quote && quote.type === 'ADHOC') {
+      initialState = buildRapidInitialState(quote, true);
+      ref = referencedMaterialIds(quote);
+    }
+  }
+
+  const { filaments, nonFilaments, notice } = buildAdhocOptionLists(materials, ref);
 
   return (
     <div className="space-y-6">
@@ -87,6 +109,8 @@ export default async function NewKeychainQuotePage() {
         keychainTiers={keychainTiers}
         batchSize={batchSize}
         keychainDefaults={keychainDefaults}
+        initialState={initialState}
+        prefillNotice={notice.length > 0 ? notice : undefined}
       />
     </div>
   );

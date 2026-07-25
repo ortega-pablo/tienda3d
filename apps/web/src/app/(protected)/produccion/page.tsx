@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
-import { formatMoney, formatNumber } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
@@ -73,7 +73,7 @@ export default async function ProductionsPage() {
                     <StatusBadge status={o.status} />
                   </td>
                   <td className="py-3 pr-4 text-xs text-muted-foreground">
-                    {new Date(o.createdAt).toLocaleDateString('es-AR')}
+                    {formatDate(o.createdAt)}
                   </td>
                   <td className="py-3 text-right">
                     <Button asChild variant="ghost" size="sm">

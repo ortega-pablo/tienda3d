@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Plastik 3D · Cotizador y Costeo',
+  title: 'Tienda Plastik · Cotizador y Costeo',
   description: 'Sistema de cotización, costeo y stock para manufactura aditiva.',
 };
 

@@ -130,8 +130,9 @@ export class QuotesController {
 
   @Permissions('quote:read')
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.quotes.get(id);
+  get(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    // El desglose de cálculo solo se expone a admins (permiso parameter:read).
+    return this.quotes.get(id, user.permissions.includes('parameter:read'));
   }
 
   @Permissions('quote:create')

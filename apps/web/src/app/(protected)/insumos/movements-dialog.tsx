@@ -5,7 +5,7 @@ import { Plus, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
-import { formatNumber } from '@/lib/format';
+import { formatDateTime, formatNumber } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -195,7 +195,7 @@ export function MovementsDialog({
                         </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">{m.createdByName}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {new Date(m.createdAt).toLocaleString('es-AR')}
+                          {formatDateTime(m.createdAt)}
                         </td>
                       </tr>
                     ))}

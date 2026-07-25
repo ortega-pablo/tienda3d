@@ -328,7 +328,11 @@ model Product {
   /// Auto-generado por el service con patrón PTK-PROD-NNNNNN[-VYY].
   /// Inmutable después de la creación: una vez asignado, no cambia.
   sku         String      @unique
+  /// Descripción visible para staff Y clientes (catálogo).
   description String?
+  /// Notas internas: SOLO visibles para usuarios administrativos (permiso
+  /// `parameter:write`). Nunca se exponen al cliente (no van al catálogo).
+  notes       String?
   imageUrl    String?
   isActive    Boolean     @default(true)
   /// STANDARD por default. KEYCHAIN activa el modelo de escalas de llavero.
@@ -552,6 +556,11 @@ model QuoteItem {
 
   // For ADHOC items: free-form payload (grams, time, filament, labor)
   adhocPayload Json?
+
+  // Snapshot del desglose de cálculo al crear (costo Logic C v3 + PriceLine
+  // con markup/comisión/régimen + contexto). Se muestra a admins en el detalle
+  // ("por qué este precio"). Null en ítems previos a esta feature.
+  pricingBreakdown Json?
 
   description String
   quantity    Decimal @default(1) @db.Decimal(10, 2)

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
-import { formatNumber } from '@/lib/format';
+import { formatDate, formatNumber } from '@/lib/format';
 import {
   Card,
   CardContent,
@@ -68,7 +68,7 @@ export function CustomerMonthProgress({ customer }: { customer: CustomerWithRela
       <CardHeader>
         <CardTitle>Compromisos del mes</CardTitle>
         <CardDescription>
-          {now.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })} ·{' '}
+          {formatDate(now, { month: 'long', year: 'numeric' })} ·{' '}
           {daysRemaining} día{daysRemaining === 1 ? '' : 's'} restantes en el mes.
         </CardDescription>
       </CardHeader>

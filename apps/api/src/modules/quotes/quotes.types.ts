@@ -1,4 +1,43 @@
 import type { QuoteStatus, QuoteType } from '@prisma/client';
+import type { CostingResult } from '../costing/costing.types';
+import type { PriceLine } from '../pricing/pricing.types';
+
+/**
+ * Contexto del cálculo de un ítem (además del costo y el PriceLine). Se guarda
+ * en el snapshot para que el admin entienda "por qué este precio".
+ */
+export interface QuoteItemPricingContext {
+  /** Base usada para llavero: INDIVIDUAL (escala 1-4) o BATCH (tanda ÷ N, 5+). */
+  pricingBase?: 'INDIVIDUAL' | 'BATCH';
+  /** Label de la escala de llavero aplicada ("5-24", "100+"). */
+  scaleLabel?: string;
+  /** Markup de la escala de llavero aplicada. */
+  scaleMarkupPct?: number;
+  /** Tamaño de la tanda (solo llaveros con base BATCH). */
+  batchSize?: number;
+  /** Cargo de diseño crudo (pre comisión/régimen) — solo ADHOC con diseño. */
+  designRaw?: number;
+  /** Cargo de diseño final al cliente (con comisión/régimen/IVA). */
+  designSurcharge?: number;
+  /** true si el costo se recombinó por flags del cliente (skipMarketing/skipReinvestment). */
+  customerAdjusted?: boolean;
+  /** fabricationPrice efectivamente usado (difiere de cost.fabricationPrice si customerAdjusted). */
+  fabricationPriceUsed?: number;
+  /** Paso de redondeo aplicado al precio final (0 = sin redondeo). Informativo. */
+  roundingStep?: number;
+}
+
+/**
+ * Desglose de cálculo snapshoteado por ítem al crear la cotización. Fiel al
+ * precio congelado (no se recalcula). Solo se expone a admins (permiso
+ * `parameter:read`).
+ */
+export interface QuoteItemPricingBreakdown {
+  cost: CostingResult;
+  /** null si la cotización no tiene canal (precio = costo). */
+  price: PriceLine | null;
+  context: QuoteItemPricingContext;
+}
 
 export interface QuoteItemDto {
   id: string;
@@ -11,6 +50,9 @@ export interface QuoteItemDto {
   unitProfit: number;
   lineTotal: number;
   adhocPayload: AdhocItemPayload | null;
+  /** Desglose de cálculo (admin). Ausente/null si el usuario no tiene permiso
+   *  o si el ítem es previo a esta feature. */
+  pricingBreakdown?: QuoteItemPricingBreakdown | null;
 }
 
 export interface QuoteSummaryDto {

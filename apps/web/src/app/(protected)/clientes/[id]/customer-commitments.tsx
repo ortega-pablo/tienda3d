@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Pause, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
+import { formatDate } from '@/lib/format';
 import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -233,7 +234,7 @@ export function CustomerCommitments({
                       <p className="text-xs text-destructive">
                         Mayoreo suspendido
                         {c.suspendedAt
-                          ? ` desde ${new Date(c.suspendedAt).toLocaleDateString('es-AR')}`
+                          ? ` desde ${formatDate(c.suspendedAt)}`
                           : ''}
                         {c.suspensionReason ? ` (${c.suspensionReason})` : ''}
                       </p>

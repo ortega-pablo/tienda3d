@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
-import { formatMoney, formatNumber } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import {
   Card,
   CardContent,
@@ -190,7 +190,7 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
                       </td>
                       <td className="py-2 pr-4 font-mono">{formatMoney(q.total)}</td>
                       <td className="py-2 pr-4 text-xs text-muted-foreground">
-                        {new Date(q.createdAt).toLocaleDateString('es-AR')}
+                        {formatDate(q.createdAt)}
                       </td>
                       <td className="py-2 text-right">
                         <Link
@@ -222,10 +222,7 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
                     <th className="py-2 pr-4 font-medium">Categoría</th>
                     {volumeMatrix.months.map((m) => (
                       <th key={m} className="py-2 pr-4 font-medium">
-                        {new Date(m).toLocaleDateString('es-AR', {
-                          month: 'short',
-                          year: '2-digit',
-                        })}
+                        {formatDate(m, { month: 'short', year: '2-digit' })}
                       </th>
                     ))}
                   </tr>
