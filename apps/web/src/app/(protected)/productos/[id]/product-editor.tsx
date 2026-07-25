@@ -51,12 +51,16 @@ export interface CategoryLite {
   children?: CategoryLite[];
 }
 
+export type PieceScope = 'INDIVIDUAL' | 'BATCH';
+
 interface PieceState {
   id?: string;
   name: string;
   grams: string;
   printMinutes: string;
   defaultFilamentId: string;
+  /** INDIVIDUAL siempre en estándar; INDIVIDUAL o BATCH en llaveros. */
+  scope: PieceScope;
 }
 interface MaterialState {
   materialId: string;
@@ -71,13 +75,18 @@ interface ChannelState {
   notes: string;
 }
 
+export type ProductKind = 'STANDARD' | 'KEYCHAIN';
+
 export interface ProductDto {
   id: string;
   name: string;
   sku: string | null;
   description: string | null;
+  /** Notas internas (solo presente si el usuario es administrativo). */
+  notes?: string | null;
   imageUrl: string | null;
   isActive: boolean;
+  kind: ProductKind;
   marketingMonthly: number;
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
@@ -95,6 +104,7 @@ export interface ProductDto {
     printMinutes: number;
     defaultFilamentId: string | null;
     sortOrder: number;
+    scope: PieceScope;
   }>;
   materials: Array<{ materialId: string; quantity: number }>;
   channels: Array<{
@@ -160,11 +170,13 @@ const EMPTY_PIECE: PieceState = {
   grams: '',
   printMinutes: '',
   defaultFilamentId: '',
+  scope: 'INDIVIDUAL',
 };
 
 interface FormState {
   name: string;
   description: string;
+  notes: string;
   isActive: boolean;
   marketingMonthly: string;
   estimatedUnitsMonth: string;
@@ -208,6 +220,7 @@ function buildInitialState(
     return {
       name: product.name,
       description: product.description ?? '',
+      notes: product.notes ?? '',
       isActive: product.isActive,
       marketingMonthly: product.marketingMonthly.toString(),
       estimatedUnitsMonth: product.estimatedUnitsMonth.toString(),
@@ -221,6 +234,7 @@ function buildInitialState(
         grams: piece.grams.toString(),
         printMinutes: piece.printMinutes.toString(),
         defaultFilamentId: piece.defaultFilamentId ?? '',
+        scope: piece.scope,
       })),
       materials: product.materials.map((m) => ({
         materialId: m.materialId,
@@ -232,6 +246,7 @@ function buildInitialState(
   return {
     name: '',
     description: '',
+    notes: '',
     isActive: true,
     marketingMonthly: '0',
     estimatedUnitsMonth: '1',
@@ -247,6 +262,12 @@ function buildInitialState(
   };
 }
 
+export interface KeychainCosts {
+  batchSize: number;
+  individual: CostingResult;
+  batchUnit: CostingResult;
+}
+
 interface Props {
   mode: 'create' | 'edit';
   product?: ProductDto;
@@ -255,6 +276,17 @@ interface Props {
   machines: MachineLite[];
   categories: CategoryLite[];
   initialCost?: CostingResult | null;
+  /**
+   * Dos bases de costo (individual + tanda ÷ N) para productos tipo llavero.
+   * Alimenta el panel lateral con ambos desgloses.
+   */
+  keychainCosts?: KeychainCosts | null;
+  /**
+   * 'keychain' activa el modelo de llavero: dos secciones de piezas
+   * (individual + tanda) y grilla global de escalas. En modo edit se deriva
+   * de `product.kind` (ignora esta prop).
+   */
+  variant?: 'standard' | 'keychain';
 }
 
 export function ProductEditor({
@@ -265,10 +297,17 @@ export function ProductEditor({
   machines,
   categories,
   initialCost,
+  keychainCosts,
+  variant = 'standard',
 }: Props) {
   const can = useHasPermission();
   const canWrite = can('product:write');
+  // Notas internas: solo usuarios administrativos las ven/editan (mismo gate
+  // que el backend). El valor solo llega en el DTO si el usuario tiene permiso.
+  const canSeeNotes = can('parameter:write');
   const router = useRouter();
+  // En edit el tipo lo manda el producto persistido; en create, la prop.
+  const isKeychain = mode === 'edit' ? product?.kind === 'KEYCHAIN' : variant === 'keychain';
   const initialFormState = useMemo(
     () => buildInitialState(product, availableChannels),
     [product, availableChannels],
@@ -306,7 +345,8 @@ export function ProductEditor({
     });
   };
 
-  const addPiece = () => setForm((f) => ({ ...f, pieces: [...f.pieces, { ...EMPTY_PIECE }] }));
+  const addPiece = (scope: PieceScope = 'INDIVIDUAL') =>
+    setForm((f) => ({ ...f, pieces: [...f.pieces, { ...EMPTY_PIECE, scope }] }));
   const removePiece = (idx: number) =>
     setForm((f) => ({ ...f, pieces: f.pieces.filter((_, i) => i !== idx) }));
 
@@ -325,10 +365,76 @@ export function ProductEditor({
     }));
   };
 
+  // Render de una fila de pieza. Recibe el índice ABSOLUTO en form.pieces
+  // para que setPiece/removePiece sigan operando por índice aunque haya dos
+  // secciones filtradas por scope (individual / tanda).
+  const renderPieceRow = (piece: PieceState, idx: number) => (
+    <div key={idx} className="grid gap-2 rounded-md border p-3 sm:grid-cols-12">
+      <div className="sm:col-span-5">
+        <Label className="text-xs" required>
+          Nombre
+        </Label>
+        <Input
+          value={piece.name}
+          onChange={(e) => setPiece(idx, { name: e.target.value })}
+          placeholder="Tapa delantera"
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <Label className="text-xs" required>
+          Gramos
+        </Label>
+        <Input
+          type="number"
+          step="any"
+          value={piece.grams}
+          onChange={(e) => setPiece(idx, { grams: e.target.value })}
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <Label className="text-xs" required>
+          Min impr.
+        </Label>
+        <Input
+          type="number"
+          step="any"
+          value={piece.printMinutes}
+          onChange={(e) => setPiece(idx, { printMinutes: e.target.value })}
+        />
+      </div>
+      <div className="sm:col-span-3">
+        <Label className="text-xs" required>
+          Filamento por defecto
+        </Label>
+        <select
+          value={piece.defaultFilamentId}
+          onChange={(e) => setPiece(idx, { defaultFilamentId: e.target.value })}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+        >
+          <option value="">— ninguno —</option>
+          {filaments.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {canWrite && (
+        <div className="flex items-end justify-end sm:col-span-12">
+          <Button variant="ghost" size="sm" onClick={() => removePiece(idx)}>
+            <Trash2 className="h-4 w-4 text-destructive" /> Quitar
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   const buildPayload = () => ({
     name: form.name,
     description: form.description || null,
+    ...(canSeeNotes ? { notes: form.notes || null } : {}),
     isActive: form.isActive,
+    kind: isKeychain ? 'KEYCHAIN' : 'STANDARD',
     marketingMonthly: Number(form.marketingMonthly),
     estimatedUnitsMonth: Number(form.estimatedUnitsMonth),
     assemblyMinutes: Number(form.assemblyMinutes),
@@ -341,6 +447,7 @@ export function ProductEditor({
       printMinutes: Number(p.printMinutes || '0'),
       defaultFilamentId: p.defaultFilamentId,
       sortOrder: idx,
+      scope: p.scope,
     })),
     materials: form.materials
       .filter((m) => m.materialId && m.quantity)
@@ -396,6 +503,13 @@ export function ProductEditor({
     // Al menos pieza o insumo.
     if (form.pieces.length === 0 && form.materials.length === 0) return false;
 
+    // Llavero: necesita ambas secciones de piezas (individual + tanda).
+    if (isKeychain) {
+      const hasIndividual = form.pieces.some((p) => p.scope === 'INDIVIDUAL');
+      const hasBatch = form.pieces.some((p) => p.scope === 'BATCH');
+      if (!hasIndividual || !hasBatch) return false;
+    }
+
     // MARKETPLACE channels enabled need commission filled.
     for (const c of form.channels) {
       if (!c.isEnabled) continue;
@@ -403,7 +517,7 @@ export function ProductEditor({
       if (channel?.kind === 'MARKETPLACE' && !c.commissionPct) return false;
     }
     return true;
-  }, [form, channelsById]);
+  }, [form, channelsById, isKeychain]);
 
   const handleSave = async () => {
     const validation = validateBeforeSave();
@@ -588,8 +702,27 @@ export function ProductEditor({
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Visible para el equipo y para el cliente (catálogo).
+                </p>
               </Field>
             </div>
+            {canSeeNotes && (
+              <div className="sm:col-span-2">
+                <Field label="Notas internas">
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    rows={3}
+                    disabled={readOnly}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    🔒 Solo visible para usuarios administrativos. Nunca se muestra al cliente.
+                  </p>
+                </Field>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -600,94 +733,108 @@ export function ProductEditor({
           </div>
         )}
 
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <div>
-              <CardTitle>Piezas impresas</CardTitle>
-              <CardDescription>
-                Cada pieza usa un filamento por marca; el color se elige al fabricar.
-              </CardDescription>
+        {isKeychain ? (
+          <>
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+              🔑 <strong>Producto tipo llavero.</strong> Cargá las piezas en dos
+              secciones: <strong>individual</strong> (para imprimir 1 unidad, base del
+              precio para 1-4 unidades) y <strong>tanda</strong> (la placa de 5, base
+              del precio para 5 o más). Los <strong>insumos y adicionales son por
+              unidad</strong>. Los markups por escala (1-4 / 5-24 / 25-49 / 50-99 /
+              100+) se editan en{' '}
+              <a className="underline" href="/parametros">Parámetros</a>.
             </div>
-            {canWrite && (
-              <Button variant="outline" size="sm" onClick={addPiece}>
-                <Plus className="h-4 w-4" /> Agregar pieza
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {form.pieces.map((piece, idx) => (
-              <div key={idx} className="grid gap-2 rounded-md border p-3 sm:grid-cols-12">
-                <div className="sm:col-span-5">
-                  <Label className="text-xs" required>
-                    Nombre
-                  </Label>
-                  <Input
-                    value={piece.name}
-                    onChange={(e) => setPiece(idx, { name: e.target.value })}
-                    placeholder="Tapa delantera"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label className="text-xs" required>
-                    Gramos
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={piece.grams}
-                    onChange={(e) => setPiece(idx, { grams: e.target.value })}
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label className="text-xs" required>
-                    Min impr.
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={piece.printMinutes}
-                    onChange={(e) => setPiece(idx, { printMinutes: e.target.value })}
-                  />
-                </div>
-                <div className="sm:col-span-3">
-                  <Label className="text-xs" required>
-                    Filamento por defecto
-                  </Label>
-                  <select
-                    value={piece.defaultFilamentId}
-                    onChange={(e) => setPiece(idx, { defaultFilamentId: e.target.value })}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-                  >
-                    <option value="">— ninguno —</option>
-                    {filaments.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
+
+            <Card>
+              <CardHeader className="flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle>Piezas — producto individual</CardTitle>
+                  <CardDescription>
+                    Todas las piezas para imprimir <strong>un solo llavero</strong>. Base
+                    del precio para cantidades 1-4.
+                  </CardDescription>
                 </div>
                 {canWrite && (
-                  <div className="flex items-end justify-end sm:col-span-12">
-                    <Button variant="ghost" size="sm" onClick={() => removePiece(idx)}>
-                      <Trash2 className="h-4 w-4 text-destructive" /> Quitar
-                    </Button>
-                  </div>
+                  <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
+                    <Plus className="h-4 w-4" /> Agregar pieza
+                  </Button>
                 )}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {form.pieces
+                  .map((piece, idx) => ({ piece, idx }))
+                  .filter(({ piece }) => piece.scope === 'INDIVIDUAL')
+                  .map(({ piece, idx }) => renderPieceRow(piece, idx))}
+                {form.pieces.every((p) => p.scope !== 'INDIVIDUAL') && (
+                  <p className="text-sm text-muted-foreground">
+                    Sin piezas individuales. Agregá al menos una.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle>Piezas — tanda (placa de 5)</CardTitle>
+                  <CardDescription>
+                    Todas las piezas del <strong>mismo producto dispuestas en una placa de
+                    5</strong>. Base del precio para 5 o más unidades (se divide por 5).
+                  </CardDescription>
+                </div>
+                {canWrite && (
+                  <Button variant="outline" size="sm" onClick={() => addPiece('BATCH')}>
+                    <Plus className="h-4 w-4" /> Agregar pieza
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {form.pieces
+                  .map((piece, idx) => ({ piece, idx }))
+                  .filter(({ piece }) => piece.scope === 'BATCH')
+                  .map(({ piece, idx }) => renderPieceRow(piece, idx))}
+                {form.pieces.every((p) => p.scope !== 'BATCH') && (
+                  <p className="text-sm text-muted-foreground">
+                    Sin piezas de tanda. Agregá al menos una.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle>Piezas impresas</CardTitle>
+                <CardDescription>
+                  Cada pieza usa un filamento por marca; el color se elige al fabricar.
+                </CardDescription>
               </div>
-            ))}
-            {form.pieces.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                Sin piezas impresas. Agregá una si el producto se fabrica en la impresora.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+              {canWrite && (
+                <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
+                  <Plus className="h-4 w-4" /> Agregar pieza
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {form.pieces.map((piece, idx) => renderPieceRow(piece, idx))}
+              {form.pieces.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Sin piezas impresas. Agregá una si el producto se fabrica en la impresora.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>Insumos extra</CardTitle>
-              <CardDescription>Hojas, packaging, hardware, etc.</CardDescription>
+              <CardDescription>
+                Hojas, packaging, hardware, etc.
+                {isKeychain ? ' Cantidades por unidad (1 llavero).' : ''}
+              </CardDescription>
             </div>
             {canWrite && (
               <Button variant="outline" size="sm" onClick={addMaterial}>
@@ -854,7 +1001,12 @@ export function ProductEditor({
         </fieldset>
       </div>
 
-      <CostPanel cost={cost} mode={mode} />
+      <CostPanel
+        cost={cost}
+        mode={mode}
+        isKeychain={isKeychain}
+        keychainCosts={keychainCosts ?? null}
+      />
     </div>
   );
 }
@@ -879,17 +1031,72 @@ function Field({
 function CostPanel({
   cost,
   mode,
+  isKeychain,
+  keychainCosts,
 }: {
   cost: CostingResult | null;
   mode: 'create' | 'edit';
+  isKeychain: boolean;
+  keychainCosts: KeychainCosts | null;
 }) {
   if (mode === 'create') {
     return (
       <Card className="lg:sticky lg:top-20">
         <CardHeader>
           <CardTitle>Costo</CardTitle>
-          <CardDescription>El costo se calcula al guardar el producto.</CardDescription>
+          <CardDescription>
+            {isKeychain
+              ? 'Al guardar verás la grilla de precios por escala (1-4 / 5-24 / 25-49 / 50-99 / 100+) debajo del formulario.'
+              : 'El costo se calcula al guardar el producto.'}
+          </CardDescription>
         </CardHeader>
+      </Card>
+    );
+  }
+  if (isKeychain) {
+    // Para llaveros el "costo" no es un único número: hay dos bases. Mostramos
+    // el desglose de ambas — individual (escala 1-4) y por tanda ÷ N (escalas
+    // 5+). El precio final por escala vive en la matriz de precios debajo.
+    if (!keychainCosts) {
+      return (
+        <Card className="lg:sticky lg:top-20">
+          <CardHeader>
+            <CardTitle>Costo unitario por base</CardTitle>
+            <CardDescription>
+              No se pudo calcular. Revisá que ambas secciones de piezas tengan filamento
+              y precios cargados.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      );
+    }
+    const { batchSize, individual, batchUnit } = keychainCosts;
+    return (
+      <Card className="lg:sticky lg:top-20">
+        <CardHeader>
+          <CardTitle>Costo unitario por base</CardTitle>
+          <CardDescription>
+            Logic C v3. La escala 1-4 usa la base <strong>individual</strong>; las escalas
+            5+ usan la base de <strong>tanda ÷ {batchSize}</strong>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <CostBreakdown
+            cost={individual}
+            heading="Individual — escala 1-4"
+            subheading="Piezas para imprimir 1 unidad"
+          />
+          <div className="border-t" />
+          <CostBreakdown
+            cost={batchUnit}
+            heading={`Por tanda ÷ ${batchSize} — escalas 5+`}
+            subheading={`Piezas de la placa de ${batchSize}, por unidad`}
+          />
+          <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            El precio final por escala (markup + comisión + régimen) está en la matriz de
+            precios debajo del formulario.
+          </p>
+        </CardContent>
       </Card>
     );
   }
@@ -904,10 +1111,37 @@ function CostPanel({
     );
   }
 
-  // Logic C v3: el markup es por tier (per canal + qty), así que la ganancia
-  // de bolsillo varía. Acá solo mostramos el costo; los precios y profits
-  // detallados se ven en la matriz de precios debajo, alimentada por las
-  // escalas de la categoría del producto.
+  return (
+    <Card className="lg:sticky lg:top-20">
+      <CardHeader>
+        <CardTitle>Costo unitario</CardTitle>
+        <CardDescription>Logic C v3 — fabricación + reabastecimiento por insumo.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <CostBreakdown cost={cost} />
+        <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+          La ganancia y el precio final dependen del tier y canal. Mirá la
+          matriz de precios debajo — viene de las escalas configuradas en la
+          categoría del producto.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Desglose de una base de costo (Logic C v3). Reutilizable: los productos
+ * estándar muestran uno; los llaveros muestran dos (individual + tanda ÷ N).
+ */
+function CostBreakdown({
+  cost,
+  heading,
+  subheading,
+}: {
+  cost: CostingResult;
+  heading?: string;
+  subheading?: string;
+}) {
   const fabrication = cost.fabricationPrice ?? cost.costWithProvisions;
   const otherWithReab = cost.materials.totalWithReplenishment ?? cost.materials.total;
   const totalCost = cost.totalCost ?? cost.costWithProvisions;
@@ -917,85 +1151,73 @@ function CostPanel({
   const laborMarkup = cost.labor.markupAmount ?? 0;
 
   return (
-    <Card className="lg:sticky lg:top-20">
-      <CardHeader>
-        <CardTitle>Costo unitario</CardTitle>
-        <CardDescription>Logic C v3 — fabricación + reabastecimiento por insumo.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div>
-          <div className="text-3xl font-bold">{formatMoney(totalCost)}</div>
-          <div className="text-xs text-muted-foreground">costo total por unidad</div>
-        </div>
+    <div className="space-y-3">
+      <div>
+        {heading && <div className="text-sm font-semibold">{heading}</div>}
+        {subheading && <div className="text-xs text-muted-foreground">{subheading}</div>}
+        <div className="text-3xl font-bold">{formatMoney(totalCost)}</div>
+        <div className="text-xs text-muted-foreground">costo total por unidad</div>
+      </div>
 
-        <dl className="space-y-1 text-sm">
-          <Row
-            label="Filamento"
-            value={filamentWithReab}
-            sub={
-              filamentReab > 0
-                ? `${formatNumber(cost.filament.totalMinutes, 0)} min · incluye ${formatMoney(filamentReab)} de reab.`
-                : `${formatNumber(cost.filament.totalMinutes, 0)} min`
-            }
-          />
-          <Row
-            label="Hora-máquina"
-            value={cost.machine.total}
-            sub={formatMoney(cost.machine.perHour) + '/h'}
-          />
-          <Row
-            label="Mano de obra"
-            value={cost.labor.total}
-            sub={
-              laborMarkup > 0
-                ? `${formatNumber(cost.labor.minutes, 0)} min · incluye ${formatMoney(laborMarkup)} de recargo`
-                : `${formatNumber(cost.labor.minutes, 0)} min`
-            }
-          />
-          <Row
-            label="Marketing"
-            value={cost.marketing.perUnit}
-            sub={`${formatMoney(cost.marketing.monthly)}/${formatNumber(cost.marketing.units, 0)}`}
-          />
-          <Row label="+ Contingencia" value={cost.contingency} muted />
-          <Row label="+ Reinversión" value={cost.reinvestment} muted />
-          <div className="my-2 border-t" />
-          <Row label="Precio de fabricación" value={fabrication} bold />
+      <dl className="space-y-1 text-sm">
+        <Row
+          label="Filamento"
+          value={filamentWithReab}
+          sub={
+            filamentReab > 0
+              ? `${formatNumber(cost.filament.totalMinutes, 0)} min · incluye ${formatMoney(filamentReab)} de reab.`
+              : `${formatNumber(cost.filament.totalMinutes, 0)} min`
+          }
+        />
+        <Row
+          label="Hora-máquina"
+          value={cost.machine.total}
+          sub={formatMoney(cost.machine.perHour) + '/h'}
+        />
+        <Row
+          label="Mano de obra"
+          value={cost.labor.total}
+          sub={
+            laborMarkup > 0
+              ? `${formatNumber(cost.labor.minutes, 0)} min · incluye ${formatMoney(laborMarkup)} de recargo`
+              : `${formatNumber(cost.labor.minutes, 0)} min`
+          }
+        />
+        <Row
+          label="Marketing"
+          value={cost.marketing.perUnit}
+          sub={`${formatMoney(cost.marketing.monthly)}/${formatNumber(cost.marketing.units, 0)}`}
+        />
+        <Row label="+ Contingencia" value={cost.contingency} muted />
+        <Row label="+ Reinversión" value={cost.reinvestment} muted />
+        <div className="my-2 border-t" />
+        <Row label="Precio de fabricación" value={fabrication} bold />
 
-          {otherWithReab > 0 && (
-            <>
-              <div className="my-2 border-t" />
-              <Row
-                label="Otros insumos (post-profit)"
-                value={otherWithReab}
-                sub={
-                  materialsReab > 0
-                    ? `incluye ${formatMoney(materialsReab)} de reab.`
-                    : undefined
-                }
-              />
-            </>
-          )}
-
-          <div className="my-2 border-t" />
-          <Row label="Costo total" value={totalCost} bold />
-        </dl>
-
-        <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-          La ganancia y el precio final dependen del tier y canal. Mirá la
-          matriz de precios debajo — viene de las escalas configuradas en la
-          categoría del producto.
-        </p>
-
-        {cost.warnings.length > 0 && (
-          <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs">
-            {cost.warnings.map((w, i) => (
-              <p key={i}>⚠ {w}</p>
-            ))}
-          </div>
+        {otherWithReab > 0 && (
+          <>
+            <div className="my-2 border-t" />
+            <Row
+              label="Otros insumos (post-profit)"
+              value={otherWithReab}
+              sub={
+                materialsReab > 0 ? `incluye ${formatMoney(materialsReab)} de reab.` : undefined
+              }
+            />
+          </>
         )}
-      </CardContent>
-    </Card>
+
+        <div className="my-2 border-t" />
+        <Row label="Costo total" value={totalCost} bold />
+      </dl>
+
+      {cost.warnings.length > 0 && (
+        <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs">
+          {cost.warnings.map((w, i) => (
+            <p key={i}>⚠ {w}</p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

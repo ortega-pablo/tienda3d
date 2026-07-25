@@ -35,7 +35,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           P
         </div>
         <div>
-          <div className="text-sm font-semibold">Plastik 3D</div>
+          <div className="text-sm font-semibold">Tienda Plastik</div>
           <div className="text-xs text-muted-foreground">Cotizador & costeo</div>
         </div>
       </div>

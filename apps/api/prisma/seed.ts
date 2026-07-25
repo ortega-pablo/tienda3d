@@ -138,6 +138,7 @@ async function seedGlobalParams() {
     ['reinvestment_pct', '10', 'Reinversión aplicada al costo de producción (%)'],
     ['unified_regime_pct', '4', 'Régimen unificado Mendoza (%) — modelo simple'],
     ['direct_sale_commission_pct', '6.5', 'Comisión global del canal Venta Directa (%)'],
+    ['price_rounding_step', '50', 'Paso de redondeo de los precios finales de venta (ARS). Los precios al cliente se redondean hacia arriba a este múltiplo. 0 = sin redondeo.'],
     ['currency', 'ARS', 'Moneda principal del sistema'],
   ];
   for (const [key, value, description] of params) {
@@ -406,10 +407,12 @@ async function seedDemoProduct(materials: {
   }
 }
 
-async function seedKeychainTiers() {
-  // Estructura inmutable (5 filas). Solo el markupPct se edita después
-  // desde /parametros/llaveros. Los ids son fijos para que el upsert sea
-  // idempotente entre re-seeds y la migración inicial.
+async function seedKeychainScaleTiers() {
+  // Grilla global para productos de catálogo tipo llavero (Product.kind =
+  // KEYCHAIN). Estructura inmutable (5 filas) y CONTIGUA (sin huecos), a
+  // diferencia de KeychainTier (flujo ADHOC, con huecos por múltiplos de 5).
+  // Solo el markupPct se edita después desde /parametros. Ids fijos para que
+  // el upsert sea idempotente entre re-seeds y la migración inicial.
   const rows: Array<{
     id: string;
     minQty: number;
@@ -417,14 +420,14 @@ async function seedKeychainTiers() {
     markupPct: number;
     sortOrder: number;
   }> = [
-    { id: 'kt_1_4', minQty: 1, maxQty: 4, markupPct: 100, sortOrder: 1 },
-    { id: 'kt_5_20', minQty: 5, maxQty: 20, markupPct: 80, sortOrder: 2 },
-    { id: 'kt_25_35', minQty: 25, maxQty: 35, markupPct: 60, sortOrder: 3 },
-    { id: 'kt_40_95', minQty: 40, maxQty: 95, markupPct: 50, sortOrder: 4 },
-    { id: 'kt_100_up', minQty: 100, maxQty: null, markupPct: 35, sortOrder: 5 },
+    { id: 'kst_1_4', minQty: 1, maxQty: 4, markupPct: 100, sortOrder: 1 },
+    { id: 'kst_5_24', minQty: 5, maxQty: 24, markupPct: 80, sortOrder: 2 },
+    { id: 'kst_25_49', minQty: 25, maxQty: 49, markupPct: 60, sortOrder: 3 },
+    { id: 'kst_50_99', minQty: 50, maxQty: 99, markupPct: 50, sortOrder: 4 },
+    { id: 'kst_100_up', minQty: 100, maxQty: null, markupPct: 35, sortOrder: 5 },
   ];
   for (const row of rows) {
-    await prisma.keychainTier.upsert({
+    await prisma.keychainScaleTier.upsert({
       where: { minQty: row.minQty },
       update: {},
       create: row,
@@ -441,8 +444,8 @@ async function main() {
   await seedAdminUser(roles.admin.id);
   await seedGlobalParams();
   console.log('✔ Global parameters (from Excel)');
-  await seedKeychainTiers();
-  console.log('✔ Keychain bulk tiers (1-4 / 5-20 / 25-35 / 40-95 / 100+)');
+  await seedKeychainScaleTiers();
+  console.log('✔ Keychain scale tiers (1-4 / 5-24 / 25-49 / 50-99 / 100+)');
   await seedKeychainDefaults();
   console.log('✔ Keychain defaults singleton');
   await seedUnsortedCategory();

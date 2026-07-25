@@ -46,3 +46,5 @@ docker-data/
 # DB dumps (no se commitean — se transfieren por fuera del repo)
 *.dump
 *.sql.gz
+# dumps sueltos en la raíz (las migraciones viven en apps/api/prisma/migrations)
+/tienda3d_dump_*.sql

@@ -76,10 +76,13 @@ export interface ChannelLite {
 export function ProductPrices({
   prices,
   categoryId,
+  kind = 'STANDARD',
 }: {
   prices: ProductPricesResponse | null;
   categoryId: string;
+  kind?: 'STANDARD' | 'KEYCHAIN';
 }) {
+  const isKeychain = kind === 'KEYCHAIN';
   if (!prices) {
     return (
       <Card>
@@ -104,18 +107,36 @@ export function ProductPrices({
               {prices.fabricationPrice != null && (
                 <> · Fabricación: {formatMoney(prices.fabricationPrice)}</>
               )}{' '}
-              · Markup base de la categoría: {formatNumber(prices.targetMarkupPct)}%
+              {isKeychain ? (
+                <>· Markup escala 1-4: {formatNumber(prices.targetMarkupPct)}%</>
+              ) : (
+                <>· Markup base de la categoría: {formatNumber(prices.targetMarkupPct)}%</>
+              )}
             </CardDescription>
-            <p className="text-xs text-muted-foreground">
-              Las escalas y el markup base vienen de la categoría del producto.{' '}
-              <a
-                href={`/categorias/${categoryId}`}
-                className="inline-flex items-center gap-1 underline"
-              >
-                Editar escalas de la categoría
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </p>
+            {isKeychain ? (
+              <p className="text-xs text-muted-foreground">
+                Escalas fijas de llavero (1-4 con base individual; 5+ con base de tanda
+                ÷ 5). Los markups de cada escala se editan en{' '}
+                <a
+                  href="/parametros"
+                  className="inline-flex items-center gap-1 underline"
+                >
+                  Parámetros
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Las escalas y el markup base vienen de la categoría del producto.{' '}
+                <a
+                  href={`/categorias/${categoryId}`}
+                  className="inline-flex items-center gap-1 underline"
+                >
+                  Editar escalas de la categoría
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </p>
+            )}
           </div>
         </div>
       </CardHeader>

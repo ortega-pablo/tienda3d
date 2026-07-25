@@ -38,7 +38,7 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">Plastik 3D</p>
+        <p className="text-xs uppercase tracking-widest text-muted-foreground">Tienda Plastik</p>
         <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
         <CardDescription>Cotizador, costeo y stock</CardDescription>
       </CardHeader>

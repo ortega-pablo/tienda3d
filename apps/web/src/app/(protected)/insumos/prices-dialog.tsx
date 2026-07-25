@@ -5,7 +5,7 @@ import { Check, Plus, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -375,7 +375,7 @@ export function PricesDialog({
                           )}
                         </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground">
-                          {new Date(p.registeredAt).toLocaleDateString('es-AR')}
+                          {formatDate(p.registeredAt)}
                         </td>
                         <td className="px-3 py-2 text-right">
                           {canWrite && !p.isCurrent && (

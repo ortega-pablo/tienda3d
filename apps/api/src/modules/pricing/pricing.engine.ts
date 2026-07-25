@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { roundPriceUp } from './round-price';
 import type {
   ChannelPricingConfig,
   CustomerPricingProfile,
@@ -78,7 +79,11 @@ export class PricingEngine {
     }
 
     const netPrice = preCommission / denominator;
-    const finalPrice = netPrice * tax.finalMultiplier;
+    // Redondeo del precio de venta: SOLO el finalPrice se redondea hacia arriba
+    // al múltiplo configurado. netPrice, profit y effectiveMarginPct quedan
+    // exactos — el redondeo no afecta márgenes ni datos intermedios (el
+    // excedente ≤ step es una diferencia a favor no contabilizada).
+    const finalPrice = roundPriceUp(netPrice * tax.finalMultiplier, globals.roundingStep ?? 0);
     const effectiveMarginPct = netPrice > 0 ? (profit / netPrice) * 100 : 0;
 
     return {
@@ -126,7 +131,8 @@ export class PricingEngine {
     const tax = this.computeTaxes(channel, globals, customer);
     const denominator = 1 - commissionResult.value / 100 - tax.burdenPct / 100;
     if (denominator <= 0) return 0;
-    return (rawAmount / denominator) * tax.finalMultiplier;
+    // El cargo de diseño también es un precio de venta al cliente → se redondea.
+    return roundPriceUp((rawAmount / denominator) * tax.finalMultiplier, globals.roundingStep ?? 0);
   }
 
   /**

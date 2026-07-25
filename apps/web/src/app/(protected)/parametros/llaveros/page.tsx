@@ -8,7 +8,10 @@ import {
   type KeychainDefaultsDto,
   type MaterialOption,
 } from './keychain-defaults-form';
-import { KeychainTiersForm, type KeychainTierDto } from './keychain-tiers-form';
+import {
+  KeychainScaleTiersForm,
+  type KeychainScaleTierDto,
+} from './keychain-scale-tiers-form';
 
 interface ParamDto {
   key: string;
@@ -20,8 +23,8 @@ const DEFAULT_BATCH_SIZE = 5;
 export default async function KeychainConfigPage() {
   await requirePermission('parameter:read');
 
-  const [tiers, defaults, params, filaments, materials] = await Promise.all([
-    api<KeychainTierDto[]>('/keychain-tiers'),
+  const [scaleTiers, defaults, params, filaments, materials] = await Promise.all([
+    api<KeychainScaleTierDto[]>('/keychain-scale-tiers'),
     api<KeychainDefaultsDto>('/keychain-defaults'),
     api<ParamDto[]>('/parameters'),
     api<FilamentOption[]>('/materials?type=FILAMENT&activeOnly=true'),
@@ -61,12 +64,14 @@ export default async function KeychainConfigPage() {
         <CardHeader>
           <CardTitle>Markups por escala</CardTitle>
           <CardDescription>
-            Escala fija de 5 tiers (1-4, 5-20, 25-35, 40-95, 100+). La estructura no
-            cambia — solo se edita el markup de cada tier.
+            Escala fija y contigua de 5 tramos (1-4, 5-24, 25-49, 50-99, 100+),
+            compartida por los productos de catálogo tipo llavero y el cotizador de
+            llaveros. La escala 1-4 usa la base de piezas individual; el resto la base de
+            tanda ÷ 5. Solo se edita el markup.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <KeychainTiersForm initial={tiers} />
+          <KeychainScaleTiersForm initial={scaleTiers} />
         </CardContent>
       </Card>
 

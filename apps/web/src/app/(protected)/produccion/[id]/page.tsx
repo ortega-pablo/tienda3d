@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
-import { formatMoney, formatNumber } from '@/lib/format';
+import { formatDateTime, formatMoney, formatNumber } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
 import { ProductionActions, type ProductionDto } from './production-actions';
@@ -150,21 +150,12 @@ export default async function ProductionDetailPage({
                 </div>
               </div>
             )}
-            <Row
-              label="Creada"
-              value={new Date(order.createdAt).toLocaleString('es-AR')}
-            />
+            <Row label="Creada" value={formatDateTime(order.createdAt)} />
             {order.startedAt && (
-              <Row
-                label="Iniciada"
-                value={new Date(order.startedAt).toLocaleString('es-AR')}
-              />
+              <Row label="Iniciada" value={formatDateTime(order.startedAt)} />
             )}
             {order.finishedAt && (
-              <Row
-                label="Finalizada"
-                value={new Date(order.finishedAt).toLocaleString('es-AR')}
-              />
+              <Row label="Finalizada" value={formatDateTime(order.finishedAt)} />
             )}
             {order.notes && (
               <div className="border-t pt-2">

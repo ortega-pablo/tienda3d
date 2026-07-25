@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Trash2 } from 'lucide-react';
+import { Copy, Download, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
@@ -10,6 +10,52 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
+
+/**
+ * Desglose de cálculo snapshoteado por ítem (solo admin). Subset de los tipos
+ * del backend (CostingResult + PriceLine + contexto) — solo los campos que la
+ * UI muestra.
+ */
+export interface QuoteItemPricingBreakdown {
+  cost: {
+    filament: {
+      total: number;
+      replenishment: number;
+      totalWithReplenishment: number;
+      totalMinutes: number;
+      /** Gramos y minutos por pieza — para la ficha técnica del ítem (admin). */
+      items?: Array<{ pieceName: string; grams: number; printMinutes: number }>;
+    };
+    materials: { total: number; replenishment: number; totalWithReplenishment: number };
+    machine: { minutes: number; perHour: number; total: number };
+    labor: { minutes: number; markupPct: number; markupAmount: number; total: number };
+    marketing: { monthly: number; units: number; perUnit: number };
+    contingency: number;
+    reinvestment: number;
+    fabricationPrice: number;
+    totalCost: number;
+  };
+  price: {
+    markupPct: number;
+    commissionPct: number;
+    taxBurdenPct: number;
+    netPrice: number;
+    finalPrice: number;
+    profit: number;
+    effectiveMarginPct: number;
+  } | null;
+  context: {
+    pricingBase?: 'INDIVIDUAL' | 'BATCH';
+    scaleLabel?: string;
+    scaleMarkupPct?: number;
+    batchSize?: number;
+    designRaw?: number;
+    designSurcharge?: number;
+    customerAdjusted?: boolean;
+    fabricationPriceUsed?: number;
+    roundingStep?: number;
+  };
+}
 
 export interface QuoteDto {
   id: string;
@@ -68,6 +114,7 @@ export interface QuoteDto {
         materialName?: string;
       }>;
     } | null;
+    pricingBreakdown?: QuoteItemPricingBreakdown | null;
   }>;
 }
 
@@ -138,6 +185,19 @@ export function QuoteActions({ quote }: { quote: QuoteDto }) {
     window.open(`/api/quotes/${quote.id}/pdf`, '_blank');
   };
 
+  // "Usar como base": rutea al form de alta correcto según el formato de la
+  // cotización y precarga sus valores vía `?from`.
+  const reuse = () => {
+    const isKeychain = quote.items.some((i) => i.adhocPayload?.templateKind === 'KEYCHAIN');
+    const base =
+      quote.type === 'PRODUCT'
+        ? '/cotizaciones/nueva-catalogo'
+        : isKeychain
+          ? '/cotizaciones/nueva-llaveros'
+          : '/cotizaciones/nueva-a-medida';
+    router.push(`${base}?from=${quote.id}`);
+  };
+
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="flex flex-wrap gap-2">
@@ -145,6 +205,12 @@ export function QuoteActions({ quote }: { quote: QuoteDto }) {
           <Button variant="outline" onClick={downloadPdf}>
             <Download className="h-4 w-4" />
             PDF
+          </Button>
+        )}
+        {can('quote:create') && (
+          <Button variant="outline" onClick={reuse}>
+            <Copy className="h-4 w-4" />
+            Usar como base
           </Button>
         )}
         {can('quote:read') &&

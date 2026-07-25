@@ -23,15 +23,20 @@ import { CostingService } from '../costing/costing.service';
 import { PdfService } from './pdf.service';
 import { QuotesService } from './quotes.service';
 
+const adhocPieceSchema = z.object({
+  name: z.string().min(1).max(120),
+  grams: z.number().nonnegative(),
+  printMinutes: z.number().nonnegative(),
+  filamentId: z.string().min(1),
+});
+
 const adhocPayloadSchema = z.object({
-  pieces: z.array(
-    z.object({
-      name: z.string().min(1).max(120),
-      grams: z.number().nonnegative(),
-      printMinutes: z.number().nonnegative(),
-      filamentId: z.string().min(1),
-    }),
-  ),
+  pieces: z.array(adhocPieceSchema),
+  /**
+   * Solo llaveros: piezas para 1 unidad (base de la escala 1-4). `pieces` es
+   * la tanda (placa). Si está ausente, 1-4 cae a `pieces` ÷ batchSize.
+   */
+  individualPieces: z.array(adhocPieceSchema).optional(),
   materials: z.array(
     z.object({
       materialId: z.string().min(1),
@@ -42,10 +47,10 @@ const adhocPayloadSchema = z.object({
   managementMinutes: z.number().nonnegative(),
   designMinutes: z.number().nonnegative().optional(),
   /**
-   * Si vale 'KEYCHAIN' el flujo aplica la escala fija de llaveros: valida
-   * que la cantidad respete la grilla (1..4 o múltiplo de 5) y resuelve el
-   * markup desde la tier que cubre la cantidad. Si está ausente, el flujo
-   * ADHOC corre como siempre (sin tier override).
+   * Si vale 'KEYCHAIN' el flujo aplica el modelo de llaveros: acepta cualquier
+   * cantidad entera ≥ 1 y resuelve el markup desde la escala contigua
+   * (`KeychainScaleTier`) que cubre la cantidad. La escala 1-4 usa
+   * `individualPieces`; las escalas 5+ usan `pieces` (tanda) ÷ batchSize.
    */
   templateKind: z.literal('KEYCHAIN').optional(),
 });
@@ -125,8 +130,9 @@ export class QuotesController {
 
   @Permissions('quote:read')
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.quotes.get(id);
+  get(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    // El desglose de cálculo solo se expone a admins (permiso parameter:read).
+    return this.quotes.get(id, user.permissions.includes('parameter:read'));
   }
 
   @Permissions('quote:create')

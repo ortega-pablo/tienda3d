@@ -19,6 +19,7 @@ export interface ProductSummaryDto {
   sku: string | null;
   isActive: boolean;
   imageUrl: string | null;
+  kind: 'STANDARD' | 'KEYCHAIN';
   pieceCount: number;
   materialCount: number;
   totalGrams: number;
@@ -90,12 +91,20 @@ export function ProductsList({
           </p>
         </div>
         {canWrite && (
-          <Button asChild>
-            <Link href="/productos/nuevo">
-              <Plus className="h-4 w-4" />
-              Nuevo producto
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/productos/nuevo-llavero">
+                <Plus className="h-4 w-4" />
+                Nuevo producto tipo llavero
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/productos/nuevo">
+                <Plus className="h-4 w-4" />
+                Nuevo producto
+              </Link>
+            </Button>
+          </div>
         )}
       </header>
 

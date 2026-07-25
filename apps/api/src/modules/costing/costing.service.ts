@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { MaterialUnit } from '@prisma/client';
+import { MaterialUnit, PieceScope } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
 import { MachineHourService } from '../machines/machine-hour.service';
 import { CostingCalculator } from './costing.calculator';
+import { selectPieces } from './select-pieces';
 import type {
   CostingInput,
   CostingResult,
@@ -18,6 +19,19 @@ export interface CostingOptions {
    * ignored by forProduct.
    */
   filamentOverrides?: Record<string, string>;
+  /**
+   * Filtra las piezas del producto por scope. Sin valor → todas las piezas
+   * (comportamiento estándar). Los productos tipo llavero costean dos veces:
+   * `INDIVIDUAL` (base escala 1-4) y `BATCH` (base de tanda para escalas 5+).
+   */
+  pieceScope?: PieceScope;
+  /**
+   * Divide `grams` y `printMinutes` de cada pieza seleccionada por este factor.
+   * Se usa con `pieceScope: 'BATCH'` y `divideBy = keychain_batch_size` para
+   * obtener el costo de impresión por unidad a partir de una placa de N.
+   * Insumos y adicionales NO se dividen (son por unidad).
+   */
+  divideBy?: number;
 }
 
 export interface AdhocPieceInput {
@@ -52,8 +66,9 @@ export class CostingService {
     private readonly machineHour: MachineHourService,
   ) {}
 
-  async forProduct(productId: string, _options: CostingOptions = {}): Promise<CostingResult> {
-    void _options; // filamentOverrides no longer affect cost (price lives on parent).
+  async forProduct(productId: string, options: CostingOptions = {}): Promise<CostingResult> {
+    // filamentOverrides ya no afecta el costo (el precio vive en el padre);
+    // options.pieceScope / options.divideBy sí filtran/dividen las piezas.
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       include: {
@@ -84,32 +99,45 @@ export class CostingService {
       : [];
     const filamentById = new Map(filaments.map((f) => [f.id, f]));
 
-    const pieces: PieceCostInput[] = product.pieces.map((piece) => {
-      const fil = piece.defaultFilamentId ? filamentById.get(piece.defaultFilamentId) : undefined;
-      if (!fil) {
-        throw new BadRequestException(
-          `La pieza "${piece.name}" no tiene filamento asignado. Asigná un default.`,
-        );
-      }
-      // Resolve to the priced node: the parent (or the row itself if it's already a parent / non-hierarchical).
-      const priced = fil.parent ?? fil;
-      if (priced.unit !== MaterialUnit.KG) {
-        throw new BadRequestException(
-          `El filamento "${priced.name}" debe estar en KG para calcular costo por gramo.`,
-        );
-      }
-      const current = priced.suppliers[0];
-      return {
-        pieceId: piece.id,
-        pieceName: piece.name,
-        grams: dec(piece.grams),
-        printMinutes: dec(piece.printMinutes),
-        filamentId: priced.id,
-        filamentName: priced.name,
-        filamentPricePerKg: current ? dec(current.price) : 0,
-        filamentWastePct: dec(priced.wastePct),
-        filamentReplenishmentPct: dec(priced.replenishmentMarkupPct),
-      };
+    const allPieces: Array<PieceCostInput & { scope: PieceScope }> = product.pieces.map(
+      (piece) => {
+        const fil = piece.defaultFilamentId
+          ? filamentById.get(piece.defaultFilamentId)
+          : undefined;
+        if (!fil) {
+          throw new BadRequestException(
+            `La pieza "${piece.name}" no tiene filamento asignado. Asigná un default.`,
+          );
+        }
+        // Resolve to the priced node: the parent (or the row itself if it's already a parent / non-hierarchical).
+        const priced = fil.parent ?? fil;
+        if (priced.unit !== MaterialUnit.KG) {
+          throw new BadRequestException(
+            `El filamento "${priced.name}" debe estar en KG para calcular costo por gramo.`,
+          );
+        }
+        const current = priced.suppliers[0];
+        return {
+          scope: piece.scope,
+          pieceId: piece.id,
+          pieceName: piece.name,
+          grams: dec(piece.grams),
+          printMinutes: dec(piece.printMinutes),
+          filamentId: priced.id,
+          filamentName: priced.name,
+          filamentPricePerKg: current ? dec(current.price) : 0,
+          filamentWastePct: dec(priced.wastePct),
+          filamentReplenishmentPct: dec(priced.replenishmentMarkupPct),
+        };
+      },
+    );
+    // Para productos tipo llavero, filtramos por scope y dividimos la tanda:
+    // - base individual → { pieceScope: 'INDIVIDUAL' }
+    // - base de tanda/unidad → { pieceScope: 'BATCH', divideBy: keychain_batch_size }
+    // Para productos estándar, options viene vacío y se usan todas las piezas.
+    const pieces: PieceCostInput[] = selectPieces(allPieces, {
+      scope: options.pieceScope,
+      divideBy: options.divideBy,
     });
 
     const materialIds = product.materials.map((m) => m.materialId);
@@ -167,6 +195,30 @@ export class CostingService {
     };
 
     return this.calculator.compute(input);
+  }
+
+  /**
+   * Dos bases de costo de un producto tipo llavero: la individual (piezas
+   * INDIVIDUAL, base de la escala 1-4) y la de tanda por unidad (piezas BATCH
+   * ÷ keychain_batch_size, base de las escalas 5+). El panel del editor las
+   * muestra lado a lado.
+   */
+  async forKeychainBases(
+    productId: string,
+  ): Promise<{ batchSize: number; individual: CostingResult; batchUnit: CostingResult }> {
+    const batchSize = await this.loadKeychainBatchSize();
+    const [individual, batchUnit] = await Promise.all([
+      this.forProduct(productId, { pieceScope: PieceScope.INDIVIDUAL }),
+      this.forProduct(productId, { pieceScope: PieceScope.BATCH, divideBy: batchSize }),
+    ]);
+    return { batchSize, individual, batchUnit };
+  }
+
+  private async loadKeychainBatchSize(): Promise<number> {
+    const param = await this.prisma.globalParam.findUnique({
+      where: { key: 'keychain_batch_size' },
+    });
+    return param ? Math.max(1, Math.floor(Number(param.value))) : 5;
   }
 
   /**

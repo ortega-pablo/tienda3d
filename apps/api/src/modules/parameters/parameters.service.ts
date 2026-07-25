@@ -24,10 +24,15 @@ const NUMERIC_KEYS = new Set([
   'keychain_batch_size',
   // Markup default para cotizaciones a medida (ADHOC libre).
   'adhoc_default_markup_pct',
+  // Paso de redondeo de los precios finales de venta (0 = sin redondeo).
+  'price_rounding_step',
 ]);
 
 /** Params que deben ser enteros positivos (≥ 1). */
 const INTEGER_KEYS = new Set(['keychain_batch_size']);
+
+/** Params que deben ser enteros ≥ 0 (permiten 0 para "desactivado"). */
+const NONNEG_INTEGER_KEYS = new Set(['price_rounding_step']);
 
 /** Percentage params with a hard 0..100 ceiling (block typos like "1500"). */
 const PCT_KEYS = new Set([
@@ -74,6 +79,9 @@ export class ParametersService {
         }
         if (INTEGER_KEYS.has(key) && (!Number.isInteger(n) || n < 1)) {
           throw new BadRequestException(`${key} debe ser un entero ≥ 1`);
+        }
+        if (NONNEG_INTEGER_KEYS.has(key) && (!Number.isInteger(n) || n < 0)) {
+          throw new BadRequestException(`${key} debe ser un entero ≥ 0`);
         }
       }
       if (key === 'currency' && !/^[A-Z]{3}$/.test(value)) {

@@ -1,6 +1,27 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
+import { formatDateAr, formatDateTimeAr } from '@/common/utils/date';
 import type { QuoteDto } from './quotes.types';
+
+/** Nombre de marca en documentos exportados. */
+const BRAND_NAME = 'Tienda Plastik';
+
+/**
+ * Resuelve el path del logo de la tienda para embeberlo en los PDFs. Se busca
+ * en `BRAND_LOGO_PATH` (env) o en `assets/brand/logo.(png|jpg)` relativo al cwd
+ * del proceso. Si no existe, el header cae al nombre en texto.
+ */
+function resolveBrandLogo(): string | null {
+  const candidates = [
+    process.env.BRAND_LOGO_PATH,
+    resolve(process.cwd(), 'assets/brand/logo.png'),
+    resolve(process.cwd(), 'assets/brand/logo.jpg'),
+    resolve(__dirname, '../../../assets/brand/logo.png'),
+  ].filter((p): p is string => !!p);
+  return candidates.find((p) => existsSync(p)) ?? null;
+}
 
 const FORMATTER = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -44,6 +65,7 @@ interface AdhocPayloadView {
   designSurcharge?: number;
   templateKind?: string;
   batchSize?: number;
+  pricingBase?: 'INDIVIDUAL' | 'BATCH';
 }
 
 @Injectable()
@@ -73,17 +95,28 @@ export class PdfService {
     const rightColW = 200;
     const rightColX = PAGE_RIGHT - rightColW;
 
-    // Branding (izquierda): nombre + label "PRESUPUESTO" como tipo de documento
+    // Branding (izquierda): logo (si existe) + nombre + label "PRESUPUESTO".
+    let brandX = PAGE_LEFT;
+    const logoPath = resolveBrandLogo();
+    if (logoPath) {
+      const LOGO_H = 38;
+      try {
+        doc.image(logoPath, PAGE_LEFT, top - 4, { height: LOGO_H });
+        brandX = PAGE_LEFT + LOGO_H + 12; // nombre al lado del logo
+      } catch {
+        brandX = PAGE_LEFT; // logo ilegible → solo texto
+      }
+    }
     doc
       .font('Helvetica-Bold')
       .fontSize(22)
       .fillColor(COLOR_TITLE)
-      .text('Plastik 3D', PAGE_LEFT, top, { width: 300, lineBreak: false });
+      .text(BRAND_NAME, brandX, top, { width: 300, lineBreak: false });
     doc
       .font('Helvetica-Bold')
       .fontSize(10)
       .fillColor(COLOR_MUTED)
-      .text('PRESUPUESTO', PAGE_LEFT, top + 30, {
+      .text('PRESUPUESTO', brandX, top + 30, {
         width: 300,
         characterSpacing: 1.5,
         lineBreak: false,
@@ -101,14 +134,14 @@ export class PdfService {
       .font('Helvetica')
       .fontSize(9)
       .fillColor(COLOR_MUTED)
-      .text(`Emitido ${quote.createdAt.toLocaleDateString('es-AR')}`, rightColX, dateY, {
+      .text(`Emitido ${formatDateAr(quote.createdAt)}`, rightColX, dateY, {
         width: rightColW,
         align: 'right',
         lineBreak: false,
       });
     dateY += 12;
     if (quote.validUntil) {
-      doc.text(`Válido hasta ${quote.validUntil.toLocaleDateString('es-AR')}`, rightColX, dateY, {
+      doc.text(`Válido hasta ${formatDateAr(quote.validUntil)}`, rightColX, dateY, {
         width: rightColW,
         align: 'right',
         lineBreak: false,
@@ -212,9 +245,12 @@ export class PdfService {
         ? adhocPayload.designSurcharge
         : 0;
     const productLineTotal = item.lineTotal - designSurcharge;
+    // La nota de tanda solo aplica cuando el precio se calculó con la base de
+    // placa (escalas 5+). Para 1-4 (base individual) no se muestra.
     const batchSize =
       adhocPayload &&
       adhocPayload.templateKind === 'KEYCHAIN' &&
+      adhocPayload.pricingBase === 'BATCH' &&
       typeof adhocPayload.batchSize === 'number' &&
       adhocPayload.batchSize > 1
         ? adhocPayload.batchSize
@@ -272,7 +308,7 @@ export class PdfService {
         .fontSize(8)
         .fillColor(COLOR_SUBTLE)
         .text(
-          `Cotización basada en un batch de ${batchSize} unidades`,
+          `Precio en base a la tanda (placa de ${batchSize} unidades)`,
           PAGE_LEFT + 8,
           doc.y,
           { width: CONTENT_WIDTH - 8, lineBreak: false },
@@ -394,7 +430,7 @@ export class PdfService {
       .fontSize(8)
       .fillColor(COLOR_SUBTLE)
       .text(
-        `Generado por Plastik 3D · ${new Date().toLocaleString('es-AR')}`,
+        `Generado por ${BRAND_NAME} · ${formatDateTimeAr(new Date())}`,
         PAGE_LEFT,
         790,
         { width: CONTENT_WIDTH, align: 'center', lineBreak: false },

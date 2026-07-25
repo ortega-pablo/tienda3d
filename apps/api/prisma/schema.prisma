@@ -302,15 +302,41 @@ model CategoryPriceTier {
   @@map("category_price_tiers")
 }
 
+/// Tipo de producto de catálogo.
+///   - STANDARD: producto normal; markup 100% de la categoría (`CategoryPriceTier`).
+///   - KEYCHAIN: producto tipo llavero; markup de la grilla global fija
+///     `KeychainScaleTier` (escalas 1-4 / 5-24 / 25-49 / 50-99 / 100+). Guarda
+///     dos juegos de piezas (INDIVIDUAL y BATCH) y su precio usa la base
+///     individual para la escala 1-4 y la base de tanda ÷ N para 5+.
+enum ProductKind {
+  STANDARD
+  KEYCHAIN
+}
+
+/// Alcance de una pieza impresa dentro de un producto.
+///   - INDIVIDUAL: piezas para imprimir 1 producto (siempre, todos los productos).
+///   - BATCH: piezas del mismo producto dispuestas en una placa de N unidades.
+///     Solo la usan los productos KEYCHAIN.
+enum PieceScope {
+  INDIVIDUAL
+  BATCH
+}
+
 model Product {
-  id          String  @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   /// Auto-generado por el service con patrón PTK-PROD-NNNNNN[-VYY].
   /// Inmutable después de la creación: una vez asignado, no cambia.
-  sku         String  @unique
+  sku         String      @unique
+  /// Descripción visible para staff Y clientes (catálogo).
   description String?
+  /// Notas internas: SOLO visibles para usuarios administrativos (permiso
+  /// `parameter:write`). Nunca se exponen al cliente (no van al catálogo).
+  notes       String?
   imageUrl    String?
-  isActive    Boolean @default(true)
+  isActive    Boolean     @default(true)
+  /// STANDARD por default. KEYCHAIN activa el modelo de escalas de llavero.
+  kind        ProductKind @default(STANDARD)
 
   // From Excel — moved to per-product as agreed
   marketingMonthly    Decimal @default(0) @db.Decimal(14, 2)
@@ -353,11 +379,14 @@ model ProductPiece {
   productId         String
   product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   name              String
-  grams             Decimal   @db.Decimal(10, 3)
-  printMinutes      Decimal   @db.Decimal(10, 2)
+  grams             Decimal    @db.Decimal(10, 3)
+  printMinutes      Decimal    @db.Decimal(10, 2)
   defaultFilamentId String?
-  defaultFilament   Material? @relation("PieceDefaultFilament", fields: [defaultFilamentId], references: [id])
-  sortOrder         Int       @default(0)
+  defaultFilament   Material?  @relation("PieceDefaultFilament", fields: [defaultFilamentId], references: [id])
+  sortOrder         Int        @default(0)
+  /// INDIVIDUAL en productos STANDARD. En KEYCHAIN conviven piezas INDIVIDUAL
+  /// (base para escala 1-4) y BATCH (base de tanda para escalas 5+).
+  scope             PieceScope @default(INDIVIDUAL)
 
   @@index([productId])
   @@map("product_pieces")
@@ -527,6 +556,11 @@ model QuoteItem {
 
   // For ADHOC items: free-form payload (grams, time, filament, labor)
   adhocPayload Json?
+
+  // Snapshot del desglose de cálculo al crear (costo Logic C v3 + PriceLine
+  // con markup/comisión/régimen + contexto). Se muestra a admins en el detalle
+  // ("por qué este precio"). Null en ítems previos a esta feature.
+  pricingBreakdown Json?
 
   description String
   quantity    Decimal @default(1) @db.Decimal(10, 2)
@@ -775,7 +809,21 @@ model CustomerMonthlyVolume {
 /// El motor de pricing las consume vía el flujo ADHOC con un marker
 /// `templateKind: 'KEYCHAIN'` en el `adhocPayload` y aplica el markup
 /// como `tierOverrides.markupPct`.
-model KeychainTier {
+/// Escala de markup GLOBAL para productos de catálogo tipo llavero
+/// (`Product.kind = KEYCHAIN`). A diferencia de `KeychainTier` (flujo ADHOC,
+/// con huecos por exigir múltiplos de 5), esta grilla es CONTIGUA: cubre
+/// cualquier cantidad entera ≥ 1 sin huecos, porque un producto de catálogo se
+/// puede pedir en cualquier cantidad.
+///
+/// Estructura inmutable (5 filas): 1-4 / 5-24 / 25-49 / 50-99 / 100+. Solo el
+/// `markupPct` de cada fila es editable por admin desde `/parametros`.
+///
+/// La escala 1-4 se cotiza con la base de piezas INDIVIDUAL; las escalas 5+
+/// con la base de piezas BATCH dividida por `keychain_batch_size`. Es la grilla
+/// ÚNICA de llaveros: la comparten el producto de catálogo y el cotizador ADHOC
+/// (`templateKind: 'KEYCHAIN'`). La vieja `KeychainTier` (con huecos) fue
+/// retirada en la unificación.
+model KeychainScaleTier {
   id        String   @id @default(cuid())
   minQty    Int      @unique
   /// null para el tier abierto (100+).
@@ -786,7 +834,7 @@ model KeychainTier {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("keychain_tiers")
+  @@map("keychain_scale_tiers")
 }
 
 /// Valores default que se precargan al abrir el form de cotización de

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ChannelKind, Prisma } from '@prisma/client';
+import { ChannelKind, PieceScope, Prisma, ProductKind } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec, decOrNull } from '@/common/utils/decimal';
 
@@ -12,6 +12,8 @@ export interface ProductPieceDto {
   defaultFilamentName: string | null;
   defaultFilamentColorHex: string | null;
   sortOrder: number;
+  /** INDIVIDUAL para productos estándar; INDIVIDUAL o BATCH en llaveros. */
+  scope: PieceScope;
 }
 
 export interface ProductMaterialDto {
@@ -38,8 +40,15 @@ export interface ProductDto {
   name: string;
   sku: string | null;
   description: string | null;
+  /**
+   * Notas internas — SOLO se incluyen si el usuario es administrativo (permiso
+   * `parameter:write`). Ausente/omitido para el resto. Nunca va al cliente.
+   */
+  notes?: string | null;
   imageUrl: string | null;
   isActive: boolean;
+  /** STANDARD o KEYCHAIN — define el modelo de pricing del producto. */
+  kind: ProductKind;
   marketingMonthly: number;
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
@@ -68,6 +77,7 @@ export interface ProductSummaryDto {
   sku: string | null;
   isActive: boolean;
   imageUrl: string | null;
+  kind: ProductKind;
   pieceCount: number;
   materialCount: number;
   totalGrams: number;
@@ -85,6 +95,8 @@ interface PieceInput {
   printMinutes: number;
   defaultFilamentId: string | null;
   sortOrder?: number;
+  /** INDIVIDUAL por default; BATCH para piezas de tanda en llaveros. */
+  scope?: PieceScope;
 }
 interface MaterialLineInput {
   materialId: string;
@@ -100,8 +112,15 @@ export interface ProductChannelInput {
 export interface ProductInput {
   name: string;
   description?: string | null;
+  /**
+   * Notas internas (admin). En `update`, `undefined` = no tocar (preserva las
+   * existentes); `null`/string = setear. El controller lo fuerza a `undefined`
+   * si el usuario no es administrativo.
+   */
+  notes?: string | null;
   imageUrl?: string | null;
   isActive?: boolean;
+  kind?: ProductKind;
   marketingMonthly: number;
   estimatedUnitsMonth: number;
   assemblyMinutes: number;
@@ -134,6 +153,7 @@ export class ProductsService {
       sku: p.sku,
       isActive: p.isActive,
       imageUrl: p.imageUrl,
+      kind: p.kind,
       pieceCount: p.pieces.length,
       materialCount: p.materials.length,
       totalGrams: p.pieces.reduce((acc, piece) => acc + dec(piece.grams), 0),
@@ -145,7 +165,7 @@ export class ProductsService {
     }));
   }
 
-  async get(id: string): Promise<ProductDto> {
+  async get(id: string, includeNotes = false): Promise<ProductDto> {
     const p = await this.prisma.product.findUnique({
       where: { id },
       include: {
@@ -160,7 +180,7 @@ export class ProductsService {
       },
     });
     if (!p) throw new NotFoundException('Producto inexistente');
-    return this.toDto(p);
+    return this.toDto(p, includeNotes);
   }
 
   async create(input: ProductInput): Promise<ProductDto> {
@@ -176,6 +196,8 @@ export class ProductsService {
         'El producto debe tener al menos una pieza impresa o un insumo',
       );
     }
+    const kind = input.kind ?? ProductKind.STANDARD;
+    this.assertPieceScopes(kind, input.pieces);
 
     const channels = await this.resolveChannels(input.channels);
     await this.validateChannels(channels);
@@ -188,7 +210,9 @@ export class ProductsService {
       data: {
         name: input.name,
         sku,
+        kind,
         description: input.description ?? null,
+        notes: input.notes ?? null,
         imageUrl: input.imageUrl ?? null,
         isActive: input.isActive ?? true,
         marketingMonthly: input.marketingMonthly,
@@ -204,6 +228,7 @@ export class ProductsService {
             printMinutes: piece.printMinutes,
             defaultFilamentId: piece.defaultFilamentId,
             sortOrder: piece.sortOrder ?? idx,
+            scope: piece.scope ?? PieceScope.INDIVIDUAL,
           })),
         },
         materials: {
@@ -222,7 +247,8 @@ export class ProductsService {
         },
       },
     });
-    return this.get(product.id);
+    // El creador (si es admin) recibe las notas de vuelta; si no, quedan null.
+    return this.get(product.id, true);
   }
 
   async update(id: string, input: ProductInput): Promise<ProductDto> {
@@ -247,6 +273,10 @@ export class ProductsService {
         'El producto debe tener al menos una pieza impresa o un insumo',
       );
     }
+    // El kind es inmutable después de crear: un producto no cambia de estándar
+    // a llavero (ni al revés) porque el modelo de pricing y las piezas difieren.
+    const kind = exists.kind;
+    this.assertPieceScopes(kind, input.pieces);
 
     const channelsToPersist = await this.resolveChannels(input.channels);
     await this.validateChannels(channelsToPersist);
@@ -256,8 +286,11 @@ export class ProductsService {
         where: { id },
         data: {
           name: input.name,
-          // sku no se incluye: es inmutable, vive desde la creación.
+          // sku ni kind se incluyen: son inmutables, viven desde la creación.
           description: input.description ?? null,
+          // notes: undefined = no tocar (preserva). El controller lo fuerza a
+          // undefined para usuarios no administrativos.
+          ...(input.notes !== undefined ? { notes: input.notes } : {}),
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive ?? true,
           marketingMonthly: input.marketingMonthly,
@@ -279,6 +312,7 @@ export class ProductsService {
             printMinutes: piece.printMinutes,
             defaultFilamentId: piece.defaultFilamentId,
             sortOrder: piece.sortOrder ?? idx,
+            scope: piece.scope ?? PieceScope.INDIVIDUAL,
           })),
         });
       }
@@ -311,7 +345,7 @@ export class ProductsService {
         });
       }
     });
-    return this.get(id);
+    return this.get(id, true);
   }
 
   async remove(id: string): Promise<void> {
@@ -387,6 +421,24 @@ export class ProductsService {
     return `PTK-PROD-${n.toString().padStart(6, '0')}`;
   }
 
+  /**
+   * Defensa en profundidad (el controller ya valida con Zod): un producto
+   * KEYCHAIN necesita ≥1 pieza INDIVIDUAL y ≥1 BATCH; uno STANDARD no admite
+   * piezas BATCH.
+   */
+  private assertPieceScopes(kind: ProductKind, pieces: PieceInput[]): void {
+    if (kind === ProductKind.KEYCHAIN) {
+      const scopes = pieces.map((p) => p.scope ?? PieceScope.INDIVIDUAL);
+      if (!scopes.includes(PieceScope.INDIVIDUAL) || !scopes.includes(PieceScope.BATCH)) {
+        throw new BadRequestException(
+          'Un producto tipo llavero necesita al menos una pieza individual y una pieza de tanda',
+        );
+      }
+    } else if (pieces.some((p) => (p.scope ?? PieceScope.INDIVIDUAL) === PieceScope.BATCH)) {
+      throw new BadRequestException('Un producto estándar no puede tener piezas de tanda');
+    }
+  }
+
   private async assertMachineExists(machineId: string): Promise<void> {
     const machine = await this.prisma.machine.findUnique({ where: { id: machineId } });
     if (!machine) throw new BadRequestException('Máquina inexistente');
@@ -407,14 +459,18 @@ export class ProductsService {
         category: { select: { name: true; parentId: true } };
       };
     }>,
+    includeNotes = false,
   ): ProductDto {
     return {
       id: p.id,
       name: p.name,
       sku: p.sku,
       description: p.description,
+      // Notas internas: solo para usuarios administrativos (gate en el controller).
+      ...(includeNotes ? { notes: p.notes } : {}),
       imageUrl: p.imageUrl,
       isActive: p.isActive,
+      kind: p.kind,
       marketingMonthly: dec(p.marketingMonthly),
       estimatedUnitsMonth: dec(p.estimatedUnitsMonth),
       assemblyMinutes: dec(p.assemblyMinutes),
@@ -433,6 +489,7 @@ export class ProductsService {
         defaultFilamentName: piece.defaultFilament?.name ?? null,
         defaultFilamentColorHex: piece.defaultFilament?.colorHex ?? null,
         sortOrder: piece.sortOrder,
+        scope: piece.scope,
       })),
       materials: p.materials.map((m) => ({
         id: m.id,

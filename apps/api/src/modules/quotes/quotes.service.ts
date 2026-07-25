@@ -4,19 +4,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, QuoteStatus, QuoteType } from '@prisma/client';
+import { PieceScope, Prisma, QuoteStatus, QuoteType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
+import { addBusinessDays } from '@/common/utils/date';
 import { CostingService } from '../costing/costing.service';
+import type { CostingResult } from '../costing/costing.types';
 import {
   CustomersService,
   type CustomerWithRelations,
 } from '../customers/customers.service';
-import { KeychainTiersService } from '../keychain-tiers/keychain-tiers.service';
+import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scale-tiers.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
-import type { CustomerPricingProfile } from '../pricing/pricing.types';
+import { roundPriceUp } from '../pricing/round-price';
+import type { CustomerPricingProfile, PriceLine } from '../pricing/pricing.types';
 import { CategoryTiersService } from '../categories/category-tiers.service';
 import type {
   AdhocItemPayload,
@@ -24,6 +27,8 @@ import type {
   QuoteDto,
   QuoteItemDto,
   QuoteItemInput,
+  QuoteItemPricingBreakdown,
+  QuoteItemPricingContext,
   QuoteSummaryDto,
 } from './quotes.types';
 
@@ -45,7 +50,7 @@ export class QuotesService {
     private readonly categoryTiers: CategoryTiersService,
     private readonly audit: AuditService,
     private readonly customers: CustomersService,
-    private readonly keychainTiers: KeychainTiersService,
+    private readonly keychainScaleTiers: KeychainScaleTiersService,
   ) {}
 
   async list(
@@ -99,13 +104,13 @@ export class QuotesService {
     }));
   }
 
-  async get(id: string): Promise<QuoteDto> {
+  async get(id: string, includeBreakdown = false): Promise<QuoteDto> {
     const q = await this.prisma.quote.findUnique({
       where: { id },
       include: { items: true, channel: { select: { name: true } } },
     });
     if (!q) throw new NotFoundException('Cotización inexistente');
-    return this.toDto(q);
+    return this.toDto(q, includeBreakdown);
   }
 
   async create(input: QuoteCreateInput, actorId: string): Promise<QuoteDto> {
@@ -138,9 +143,14 @@ export class QuotesService {
     const itemsData = await Promise.all(
       input.items.map((item) => this.buildItemRow(item, channelId, customerCtx)),
     );
+    // Cada lineTotal ya es múltiplo del paso (unitPrice y designSurcharge vienen
+    // redondeados del motor), así que el subtotal también lo es. El descuento
+    // puede romper el múltiplo, por eso el total se redondea hacia arriba tras
+    // restarlo. loadGlobals trae el paso (0 = sin redondeo).
+    const { roundingStep } = await this.pricing.loadGlobals();
     const subtotal = itemsData.reduce((acc, i) => acc + Number(i.lineTotal), 0);
     const discount = input.discount ?? 0;
-    const total = Math.max(subtotal - discount, 0);
+    const total = roundPriceUp(Math.max(subtotal - discount, 0), roundingStep);
 
     // Datos textuales del cliente: si vino customerId, los usamos como fuente
     // de verdad pero el caller puede pisarlos (ej. cliente paga a nombre de
@@ -168,7 +178,10 @@ export class QuotesService {
           : Prisma.JsonNull,
         channelId,
         withInvoice: input.withInvoice ?? false,
-        validUntil: input.validUntil ? new Date(input.validUntil) : null,
+        // Validez del documento: 15 días hábiles (lun-vie) desde la emisión.
+        // Es una regla fija del negocio — si el caller manda validUntil se
+        // respeta, si no se computa el default.
+        validUntil: input.validUntil ? new Date(input.validUntil) : addBusinessDays(new Date(), 15),
         notes: input.notes ?? null,
         subtotal,
         discount,
@@ -389,10 +402,10 @@ export class QuotesService {
   }
 
   /**
-   * Devuelve precio por unidad y total para cada tier de llaveros, con el
-   * mismo payload (materiales/minutos). Se itera la grilla seedeada en
-   * `keychain_tiers` con un qty representativo por tier (el minQty); el
-   * caller pinta la fila y el cliente decide en qué escala cotizar.
+   * Devuelve precio por unidad y total para cada escala de llaveros, con el
+   * mismo payload. Se itera la grilla contigua `KeychainScaleTier` con un qty
+   * representativo por escala (el minQty); el caller pinta la fila y el cliente
+   * decide en qué escala cotizar.
    *
    * Compartimos `buildItemRow` para no duplicar costing/comisión/régimen:
    * cada fila se calcula como si fuese una cotización ADHOC con esa qty,
@@ -404,6 +417,12 @@ export class QuotesService {
     customerId?: string | null;
     payload: {
       pieces: Array<{ name: string; grams: number; printMinutes: number; filamentId: string }>;
+      individualPieces?: Array<{
+        name: string;
+        grams: number;
+        printMinutes: number;
+        filamentId: string;
+      }>;
       materials: Array<{ materialId: string; quantity: number }>;
       assemblyMinutes: number;
       managementMinutes: number;
@@ -422,7 +441,7 @@ export class QuotesService {
       designSurcharge: number;
     }>;
   }> {
-    const tiers = await this.keychainTiers.list();
+    const tiers = await this.keychainScaleTiers.list();
     if (tiers.length === 0) {
       return { tiers: [] };
     }
@@ -433,7 +452,7 @@ export class QuotesService {
 
     const rows = await Promise.all(
       tiers.map(async (tier) => {
-        // Usamos el minQty como cantidad representativa del tier.
+        // Usamos el minQty como cantidad representativa de la escala.
         const item = {
           type: 'ADHOC' as const,
           description: 'Llavero personalizado',
@@ -453,12 +472,7 @@ export class QuotesService {
             : 0;
         return {
           tierId: tier.id,
-          tierLabel:
-            tier.maxQty == null
-              ? `${tier.minQty}+`
-              : tier.minQty === tier.maxQty
-                ? `${tier.minQty}`
-                : `${tier.minQty}-${tier.maxQty}`,
+          tierLabel: KeychainScaleTiersService.tierLabel(tier),
           minQty: tier.minQty,
           maxQty: tier.maxQty,
           markupPct: tier.markupPct,
@@ -483,7 +497,40 @@ export class QuotesService {
       const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
       if (!product) throw new NotFoundException(`Producto ${item.productId} inexistente`);
 
-      const cost = await this.costing.forProduct(item.productId);
+      // Producto tipo llavero: la base de costo y el markup dependen de la
+      // cantidad. Para 1-4 se usa la base de piezas INDIVIDUAL; para 5+ la
+      // base de tanda ÷ keychain_batch_size. El markup viene de la grilla
+      // global de escalas (pisa el target del motor vía override).
+      const isKeychain = product.kind === 'KEYCHAIN';
+      let keychainMarkupOverride: number | null = null;
+      let keychainCtx: Partial<QuoteItemPricingContext> = {};
+      let cost: CostingResult;
+      if (isKeychain) {
+        const scaleTiers = await this.keychainScaleTiers.list();
+        const scaleTier = KeychainScaleTiersService.resolveApplicable(scaleTiers, item.quantity);
+        if (!scaleTier) {
+          throw new BadRequestException(
+            `Sin escala de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros.`,
+          );
+        }
+        keychainMarkupOverride = scaleTier.markupPct;
+        const scope = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
+        const batchSize =
+          scope === PieceScope.BATCH ? await this.loadKeychainBatchSize() : undefined;
+        const costingOpts =
+          scope === PieceScope.INDIVIDUAL
+            ? { pieceScope: PieceScope.INDIVIDUAL }
+            : { pieceScope: PieceScope.BATCH, divideBy: batchSize! };
+        cost = await this.costing.forProduct(item.productId, costingOpts);
+        keychainCtx = {
+          pricingBase: scope,
+          scaleLabel: KeychainScaleTiersService.tierLabel(scaleTier),
+          scaleMarkupPct: scaleTier.markupPct,
+          ...(batchSize ? { batchSize } : {}),
+        };
+      } else {
+        cost = await this.costing.forProduct(item.productId);
+      }
 
       // Si hay cliente, resolvemos su profile para este producto
       // (puede tener custom markup, tier piso por categoría, etc.).
@@ -500,7 +547,7 @@ export class QuotesService {
             otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
           };
 
-      const { unitPrice, unitProfit } = await this.computeUnitPrice(
+      const { unitPrice, unitProfit, line, roundingStep } = await this.computeUnitPrice(
         {
           fabricationPrice: adjustedCost.fabricationPrice,
           otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
@@ -510,8 +557,21 @@ export class QuotesService {
         item.productId,
         item.quantity,
         profile,
+        0,
+        keychainMarkupOverride,
       );
       const lineTotal = unitPrice * item.quantity;
+
+      const breakdown: QuoteItemPricingBreakdown = {
+        cost,
+        price: line,
+        context: {
+          ...keychainCtx,
+          customerAdjusted: adjustedCost.fabricationPrice !== cost.fabricationPrice,
+          fabricationPriceUsed: adjustedCost.fabricationPrice,
+          roundingStep,
+        },
+      };
 
       return {
         productId: item.productId,
@@ -521,61 +581,70 @@ export class QuotesService {
         unitPrice,
         unitProfit,
         lineTotal,
+        pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       };
     }
 
     // ADHOC
     const isKeychain = item.payload.templateKind === 'KEYCHAIN';
-    if (isKeychain) {
-      // Valida que la cantidad respete la grilla fija (1..4 o múltiplo de 5).
-      this.keychainTiers.assertValidQty(item.quantity);
+    if (isKeychain && (!Number.isInteger(item.quantity) || item.quantity < 1)) {
+      throw new BadRequestException('La cantidad de llaveros debe ser un entero ≥ 1');
     }
 
-    // Cargamos los params globales relevantes en paralelo. Para keychain,
-    // los inputs (gramos, minutos, consumos) representan un BATCH de N
-    // llaveros — el batch size es configurable via `keychain_batch_size`.
-    // Hay que dividir antes de costear para que el lineTotal escale como
-    // espera el negocio (qty=5 → unitPrice × 5; qty=1 → unitPrice × 1, etc.).
-    const [designHourCostParam, batchSizeParam, keychainTier] = await Promise.all([
+    const [designHourCostParam, batchSizeParam, scaleTiers] = await Promise.all([
       this.prisma.globalParam.findUnique({ where: { key: 'design_hour_cost' } }),
       isKeychain
         ? this.prisma.globalParam.findUnique({ where: { key: 'keychain_batch_size' } })
         : Promise.resolve(null),
-      isKeychain ? this.keychainTiers.findApplicable(item.quantity) : Promise.resolve(null),
+      isKeychain ? this.keychainScaleTiers.list() : Promise.resolve([]),
     ]);
-    if (isKeychain && !keychainTier) {
-      throw new BadRequestException(
-        `Sin tier de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros/llaveros.`,
-      );
-    }
+
     const batchSize = isKeychain
       ? batchSizeParam
         ? Math.max(1, Math.floor(Number(batchSizeParam.value)))
         : 5
       : 1;
-    const costingInputs = isKeychain
-      ? KeychainTiersService.divideForBatch(
-          {
-            pieces: item.payload.pieces,
-            materials: item.payload.materials,
-            assemblyMinutes: item.payload.assemblyMinutes,
-            managementMinutes: item.payload.managementMinutes,
-          },
-          batchSize,
-        )
-      : {
-          pieces: item.payload.pieces,
-          materials: item.payload.materials,
-          assemblyMinutes: item.payload.assemblyMinutes,
-          managementMinutes: item.payload.managementMinutes,
-        };
+
+    // Modelo de llaveros: la escala (grilla contigua) y la base dependen de la
+    // cantidad. 1-4 usa `individualPieces` (piezas para 1 unidad); 5+ usa la
+    // tanda (`pieces`) ÷ batchSize. Insumos y adicionales NO se dividen: son
+    // por unidad. `designMinutes` es cargo plano aparte.
+    let keychainScale: { markupPct: number; minQty: number; maxQty: number | null } | null =
+      null;
+    let pricingBase: 'INDIVIDUAL' | 'BATCH' | null = null;
+    let costingPieces = item.payload.pieces;
+    if (isKeychain) {
+      keychainScale = KeychainScaleTiersService.resolveApplicable(scaleTiers, item.quantity);
+      if (!keychainScale) {
+        throw new BadRequestException(
+          `Sin escala de llavero para la cantidad ${item.quantity}. Revisá la grilla en /parametros.`,
+        );
+      }
+      pricingBase = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
+      const dividePieces = (pcs: typeof item.payload.pieces) =>
+        pcs.map((p) => ({
+          ...p,
+          grams: p.grams / batchSize,
+          printMinutes: p.printMinutes / batchSize,
+        }));
+      if (pricingBase === PieceScope.INDIVIDUAL) {
+        // Base individual: usamos `individualPieces` si el vendedor las cargó;
+        // si no, caemos a la tanda ÷ batchSize (fallback).
+        costingPieces =
+          item.payload.individualPieces && item.payload.individualPieces.length > 0
+            ? item.payload.individualPieces
+            : dividePieces(item.payload.pieces);
+      } else {
+        costingPieces = dividePieces(item.payload.pieces);
+      }
+    }
 
     const cost = await this.costing.forAdhoc({
       description: item.description,
-      pieces: costingInputs.pieces,
-      materials: costingInputs.materials,
-      assemblyMinutes: costingInputs.assemblyMinutes,
-      managementMinutes: costingInputs.managementMinutes,
+      pieces: costingPieces,
+      materials: item.payload.materials,
+      assemblyMinutes: item.payload.assemblyMinutes,
+      managementMinutes: item.payload.managementMinutes,
     });
     const designMinutes = item.payload.designMinutes ?? 0;
     const designHourCost = designHourCostParam ? Number(designHourCostParam.value) : 0;
@@ -600,19 +669,20 @@ export class QuotesService {
           fabricationPrice: cost.fabricationPrice,
           otherMaterialsWithReplenishment: cost.materials.totalWithReplenishment,
         };
-    const { unitPrice, unitProfit, designSurcharge } = await this.computeUnitPrice(
-      {
-        fabricationPrice: adjustedCost.fabricationPrice,
-        otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
-        totalCost: adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment,
-      },
-      channelId,
-      null,
-      item.quantity,
-      profile,
-      designRaw,
-      keychainTier ? keychainTier.markupPct : null,
-    );
+    const { unitPrice, unitProfit, designSurcharge, line, roundingStep } =
+      await this.computeUnitPrice(
+        {
+          fabricationPrice: adjustedCost.fabricationPrice,
+          otherMaterialsWithReplenishment: adjustedCost.otherMaterialsWithReplenishment,
+          totalCost: adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment,
+        },
+        channelId,
+        null,
+        item.quantity,
+        profile,
+        designRaw,
+        keychainScale ? keychainScale.markupPct : null,
+      );
     // El cargo de diseño es plano por línea (no escala con la cantidad)
     // pero forma parte del lineTotal para que paye comisión + régimen
     // y se incluya en el subtotal / descuento de la cotización.
@@ -624,6 +694,7 @@ export class QuotesService {
     // el snapshot histórico sigue mostrando el nombre que el cliente vio.
     const allIds = new Set<string>();
     for (const p of item.payload.pieces) if (p.filamentId) allIds.add(p.filamentId);
+    for (const p of item.payload.individualPieces ?? []) if (p.filamentId) allIds.add(p.filamentId);
     for (const m of item.payload.materials) if (m.materialId) allIds.add(m.materialId);
     const nameLookup = new Map<string, string>();
     if (allIds.size > 0) {
@@ -634,34 +705,59 @@ export class QuotesService {
       for (const m of materials) nameLookup.set(m.id, m.name);
     }
 
-    // Persistimos designMinutes + designSurcharge en el payload JSON:
-    // así el PDF muestra el desglose exacto que se firmó, aunque el
-    // global param cambie después. Si es keychain, también snapshoteamos
-    // el markup aplicado, el label de la tier ("5-20", "100+") y el
-    // batchSize usado al cotizar (para que cambios futuros del global
-    // param no alteren la lectura histórica del PDF).
-    // El payload original se guarda SIN DIVIDIR — los valores divididos
-    // existen solo en `costingInputs`, no se persisten.
+    // Persistimos designMinutes + designSurcharge en el payload JSON: así el
+    // PDF muestra el desglose exacto que se firmó aunque el global param cambie
+    // después. Para keychain también snapshoteamos el markup aplicado, el label
+    // de la escala ("5-24", "100+"), el batchSize y la base usada. El payload
+    // se guarda SIN DIVIDIR — la división por tanda existe solo en el costeo.
     const persistedPayload: AdhocItemPayload = {
       ...item.payload,
       pieces: item.payload.pieces.map((p) => ({
         ...p,
         filamentName: nameLookup.get(p.filamentId),
       })),
+      ...(item.payload.individualPieces
+        ? {
+            individualPieces: item.payload.individualPieces.map((p) => ({
+              ...p,
+              filamentName: nameLookup.get(p.filamentId),
+            })),
+          }
+        : {}),
       materials: item.payload.materials.map((m) => ({
         ...m,
         materialName: nameLookup.get(m.materialId),
       })),
       designMinutes,
       designSurcharge,
-      ...(keychainTier
+      ...(keychainScale
         ? {
             templateKind: 'KEYCHAIN' as const,
-            appliedMarkupPct: keychainTier.markupPct,
-            tierLabel: KeychainTiersService.tierLabel(keychainTier),
+            appliedMarkupPct: keychainScale.markupPct,
+            tierLabel: KeychainScaleTiersService.tierLabel(keychainScale),
             batchSize,
+            ...(pricingBase ? { pricingBase } : {}),
           }
         : {}),
+    };
+
+    const breakdown: QuoteItemPricingBreakdown = {
+      cost,
+      price: line,
+      context: {
+        ...(keychainScale
+          ? {
+              pricingBase: pricingBase ?? undefined,
+              scaleLabel: KeychainScaleTiersService.tierLabel(keychainScale),
+              scaleMarkupPct: keychainScale.markupPct,
+              ...(pricingBase === 'BATCH' ? { batchSize } : {}),
+            }
+          : {}),
+        ...(designRaw > 0 ? { designRaw, designSurcharge } : {}),
+        customerAdjusted: adjustedCost.fabricationPrice !== cost.fabricationPrice,
+        fabricationPriceUsed: adjustedCost.fabricationPrice,
+        roundingStep,
+      },
     };
 
     return {
@@ -673,7 +769,16 @@ export class QuotesService {
       unitProfit,
       lineTotal,
       adhocPayload: persistedPayload as unknown as Prisma.InputJsonValue,
+      pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
     };
+  }
+
+  /** Lee `keychain_batch_size` (default 5). Tamaño de la placa de llaveros. */
+  private async loadKeychainBatchSize(): Promise<number> {
+    const param = await this.prisma.globalParam.findUnique({
+      where: { key: 'keychain_batch_size' },
+    });
+    return param ? Math.max(1, Math.floor(Number(param.value))) : 5;
   }
 
   private async computeUnitPrice(
@@ -689,12 +794,26 @@ export class QuotesService {
     designRawAmount = 0,
     /** Override explícito de markup (p.ej. tier de llaveros). Pisa el target. */
     markupOverridePct: number | null = null,
-  ): Promise<{ unitPrice: number; unitProfit: number; designSurcharge: number }> {
+  ): Promise<{
+    unitPrice: number;
+    unitProfit: number;
+    designSurcharge: number;
+    /** PriceLine del motor (para el snapshot de desglose). null sin canal. */
+    line: PriceLine | null;
+    /** Paso de redondeo aplicado (0 sin canal / sin redondeo). */
+    roundingStep: number;
+  }> {
     if (!channelId) {
       // Sin canal el precio = costo total (caller puede sobreescribir).
       // El profit no se puede calcular sin markup del producto, queda 0.
       // El surcharge tampoco aplica sin canal: se devuelve crudo (sin gross-up).
-      return { unitPrice: cost.totalCost, unitProfit: 0, designSurcharge: designRawAmount };
+      return {
+        unitPrice: cost.totalCost,
+        unitProfit: 0,
+        designSurcharge: designRawAmount,
+        line: null,
+        roundingStep: 0,
+      };
     }
 
     const channel = await this.prisma.channel.findUnique({ where: { id: channelId } });
@@ -781,7 +900,13 @@ export class QuotesService {
       globals,
       customerProfile ?? {},
     );
-    return { unitPrice: line.finalPrice, unitProfit: line.profit, designSurcharge };
+    return {
+      unitPrice: line.finalPrice,
+      unitProfit: line.profit,
+      designSurcharge,
+      line,
+      roundingStep: globals.roundingStep ?? 0,
+    };
   }
 
   private async nextCode(type: QuoteType): Promise<string> {
@@ -841,8 +966,9 @@ export class QuotesService {
       unitProfit: Prisma.Decimal;
       lineTotal: Prisma.Decimal;
       adhocPayload: Prisma.JsonValue;
+      pricingBreakdown?: Prisma.JsonValue;
     }>;
-  }): QuoteDto {
+  }, includeBreakdown = false): QuoteDto {
     const items: QuoteItemDto[] = q.items.map((i) => ({
       id: i.id,
       productId: i.productId,
@@ -855,6 +981,11 @@ export class QuotesService {
       adhocPayload:
         i.adhocPayload && typeof i.adhocPayload === 'object'
           ? (i.adhocPayload as unknown as AdhocItemPayload)
+          : null,
+      // Solo se expone a usuarios con permiso (gate en el controller).
+      pricingBreakdown:
+        includeBreakdown && i.pricingBreakdown && typeof i.pricingBreakdown === 'object'
+          ? (i.pricingBreakdown as unknown as QuoteItemPricingBreakdown)
           : null,
     }));
     return {

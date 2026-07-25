@@ -1,17 +1,21 @@
 import { notFound } from 'next/navigation';
 import { api, ApiError } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
-import { formatMoney } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/status-badge';
 import { QuoteActions, type QuoteDto } from './quote-actions';
+import { QuoteItemBreakdown } from './quote-item-breakdown';
 
 export default async function QuoteDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission('quote:read');
+  const user = await requirePermission('quote:read');
+  // El desglose de cálculo es solo para admins (mismo permiso que la config
+  // sensible). El backend además lo omite del DTO si no hay permiso.
+  const canSeeBreakdown = user.permissions.includes('parameter:read');
   const { id } = await params;
 
   let quote: QuoteDto;
@@ -145,6 +149,23 @@ export default async function QuoteDetailPage({
                       </tr>,
                     );
                   }
+                  // Desglose de cálculo (solo admin). Snapshot fiel al crear;
+                  // B4: fallback para cotizaciones previas a la feature.
+                  if (canSeeBreakdown) {
+                    rows.push(
+                      <tr key={`${i.id}-bd`}>
+                        <td colSpan={6} className="pb-3 pt-0">
+                          {i.pricingBreakdown ? (
+                            <QuoteItemBreakdown breakdown={i.pricingBreakdown} />
+                          ) : (
+                            <p className="rounded-md border border-dashed bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                              Desglose no disponible — cotización previa a esta función.
+                            </p>
+                          )}
+                        </td>
+                      </tr>,
+                    );
+                  }
                   return rows;
                 })}
               </tbody>
@@ -231,15 +252,9 @@ export default async function QuoteDetailPage({
             {quote.channelName && <Row label="Canal" value={quote.channelName} />}
             <Row label="Factura" value={quote.withInvoice ? 'Sí' : 'No'} />
             {quote.validUntil && (
-              <Row
-                label="Válida hasta"
-                value={new Date(quote.validUntil).toLocaleDateString('es-AR')}
-              />
+              <Row label="Válida hasta" value={formatDate(quote.validUntil)} />
             )}
-            <Row
-              label="Creada"
-              value={new Date(quote.createdAt).toLocaleDateString('es-AR')}
-            />
+            <Row label="Creada" value={formatDate(quote.createdAt)} />
             {!quote.customerId && (
               <p className="rounded-md border border-muted/40 bg-muted/20 p-2 text-xs text-muted-foreground">
                 Cotización walk-in (sin cliente registrado).

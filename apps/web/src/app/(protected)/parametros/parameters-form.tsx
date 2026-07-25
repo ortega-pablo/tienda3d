@@ -60,6 +60,12 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
     type: 'number',
     help: 'Recargo sobre el costo del kWh. Plegado dentro de la hora-máquina.',
   },
+  price_rounding_step: {
+    label: 'Redondeo de precios',
+    suffix: '$',
+    type: 'number',
+    help: 'Los precios finales de venta se redondean hacia arriba a este múltiplo (p.ej. 50 → todo termina en múltiplos de $50). 0 desactiva el redondeo. No afecta costos ni márgenes.',
+  },
   currency: { label: 'Moneda', type: 'text', help: 'Código ISO 4217.' },
 };
 
