@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
 import { addBusinessDays } from '@/common/utils/date';
+import { DocumentCodeService } from '@/common/utils/document-code';
 import { CostingService } from '../costing/costing.service';
 import type { CostingResult } from '../costing/costing.types';
 import {
@@ -51,6 +53,7 @@ export class QuotesService {
     private readonly audit: AuditService,
     private readonly customers: CustomersService,
     private readonly keychainScaleTiers: KeychainScaleTiersService,
+    private readonly codes: DocumentCodeService,
   ) {}
 
   async list(
@@ -250,7 +253,20 @@ export class QuotesService {
     const willBeAccepted = status === QuoteStatus.ACCEPTED;
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.quote.update({ where: { id }, data: { status } });
+      // Update condicional sobre el estado leído: la validación de transición
+      // lee antes de escribir, así que sin esto dos requests concurrentes
+      // pasarían ambos y la imputación de volumen —que es acumulativa— se
+      // aplicaría dos veces. Si otro request ya movió la cotización, afecta 0
+      // filas y abortamos.
+      const claimed = await tx.quote.updateMany({
+        where: { id, status: existing.status },
+        data: { status },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException(
+          'La cotización cambió de estado mientras se procesaba. Recargá la página.',
+        );
+      }
 
       // Tracking del volumen mensual: solo importa cuando hay customerId.
       // Pasamos a ACCEPTED → incrementamos. Salimos de ACCEPTED → decrementamos.
@@ -918,19 +934,13 @@ export class QuotesService {
     };
   }
 
-  private async nextCode(type: QuoteType): Promise<string> {
-    // Q-YYYY-NNNN for catalog products, R-YYYY-NNNN for instant (Rápida).
-    const year = new Date().getFullYear();
+  /**
+   * Q-YYYY-NNNN para productos de catálogo, R-YYYY-NNNN para instantáneas
+   * (Rápida). Reservado atómicamente — ver DocumentCodeService.
+   */
+  private nextCode(type: QuoteType): Promise<string> {
     const letter = type === QuoteType.ADHOC ? 'R' : 'Q';
-    const prefix = `${letter}-${year}-`;
-    const last = await this.prisma.quote.findFirst({
-      where: { code: { startsWith: prefix } },
-      orderBy: { code: 'desc' },
-      select: { code: true },
-    });
-    const lastNum = last ? Number(last.code.slice(prefix.length)) : 0;
-    const next = (lastNum + 1).toString().padStart(4, '0');
-    return `${prefix}${next}`;
+    return this.codes.next('QUOTE', letter);
   }
 
   private isValidTransition(from: QuoteStatus, to: QuoteStatus): boolean {

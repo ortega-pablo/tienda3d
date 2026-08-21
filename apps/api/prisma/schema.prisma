@@ -87,6 +87,25 @@ model RefreshToken {
 }
 
 // ============================================================
+// Contadores de códigos de documento
+// ============================================================
+
+/// Contador atómico por (tipo de documento × año), usado para generar los
+/// códigos `Q-YYYY-NNNN`, `R-YYYY-NNNN` y `OP-YYYY-NNNN` sin carreras.
+///
+/// El `scope` incluye el año (`QUOTE:Q:2026`), así que el reinicio anual es
+/// automático: el primer documento de un año nuevo crea su fila en 1. Se
+/// incrementa con un único `INSERT ... ON CONFLICT DO UPDATE RETURNING`, que
+/// Postgres serializa sobre el row lock.
+model DocumentCounter {
+  scope     String   @id
+  value     Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("document_counters")
+}
+
+// ============================================================
 // Global parameters (key-value, typed in service layer)
 // ============================================================
 
@@ -186,14 +205,14 @@ model Material {
   densityGCm3 Decimal? @db.Decimal(6, 3)
 
   // Shared
-  wastePct      Decimal @default(5.0) @db.Decimal(5, 2)
+  wastePct               Decimal @default(5.0) @db.Decimal(5, 2)
   // Per-insumo replenishment markup (Logic C v3): % aplicado sobre el costo
   // bruto para cubrir reposición de stock. NO es ganancia; alimenta el costo
   // total del insumo y queda fuera del cálculo de profit.
   replenishmentMarkupPct Decimal @default(15) @db.Decimal(6, 2)
-  currentStock  Decimal @default(0) @db.Decimal(14, 3)
-  minStock      Decimal @default(0) @db.Decimal(14, 3)
-  lowStockAlert Boolean @default(true)
+  currentStock           Decimal @default(0) @db.Decimal(14, 3)
+  minStock               Decimal @default(0) @db.Decimal(14, 3)
+  lowStockAlert          Boolean @default(true)
 
   notes     String?
   imageUrl  String?
@@ -201,11 +220,11 @@ model Material {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  suppliers        SupplierMaterial[]
-  productMaterials ProductMaterial[]
-  defaultForPieces ProductPiece[]     @relation("PieceDefaultFilament")
-  stockMovements   StockMovement[]
-  keychainDefaultFilament KeychainDefaults[]        @relation("KeychainDefaultFilament")
+  suppliers                SupplierMaterial[]
+  productMaterials         ProductMaterial[]
+  defaultForPieces         ProductPiece[]            @relation("PieceDefaultFilament")
+  stockMovements           StockMovement[]
+  keychainDefaultFilament  KeychainDefaults[]        @relation("KeychainDefaultFilament")
   keychainDefaultMaterials KeychainDefaultMaterial[]
 
   @@index([type])
@@ -222,8 +241,8 @@ model SupplierMaterial {
   material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   // Per-unit price — source of truth for cost calculations. Always populated.
-  price    Decimal @db.Decimal(14, 4)
-  currency String  @default("ARS")
+  price     Decimal  @db.Decimal(14, 4)
+  currency  String   @default("ARS")
   // Optional pack inputs: when present, `price` was derived from packPrice / packSize
   // (ej. resma de 500 hojas a $17.844 → packSize=500, packPrice=17844, price=35.688).
   packSize  Decimal? @db.Decimal(14, 3)
@@ -248,16 +267,16 @@ model SupplierMaterial {
 // subcategorías con parentId apuntando al padre. Una subcategoría no
 // puede tener hijos (validado en service layer).
 model Category {
-  id        String     @id @default(cuid())
-  name      String
-  slug      String     @unique
-  icon      String?
-  parentId  String?
-  parent    Category?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Restrict)
-  children  Category[] @relation("CategoryParent")
-  isActive  Boolean    @default(true)
-  sortOrder Int        @default(0)
-  notes     String?
+  id            String     @id @default(cuid())
+  name          String
+  slug          String     @unique
+  icon          String?
+  parentId      String?
+  parent        Category?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: Restrict)
+  children      Category[] @relation("CategoryParent")
+  isActive      Boolean    @default(true)
+  sortOrder     Int        @default(0)
+  notes         String?
   /// Markup fallback de la categoría cuando ninguna `CategoryPriceTier` cubre
   /// la cantidad cotizada (típicamente qty=1, antes del primer tier). Una
   /// subcategoría sin tiers propios hereda los tiers del padre, pero el
@@ -265,14 +284,14 @@ model Category {
   /// producto está en la subcategoría, se usa el baseMarkupPct de la
   /// subcategoría; cae al padre solo si la subcategoría no lo tiene
   /// (representado con NULL en DB).
-  baseMarkupPct Decimal? @db.Decimal(6, 2)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  baseMarkupPct Decimal?   @db.Decimal(6, 2)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  products              Product[]
-  customerCommitments   CustomerCategoryCommitment[]
+  products               Product[]
+  customerCommitments    CustomerCategoryCommitment[]
   customerMonthlyVolumes CustomerMonthlyVolume[]
-  priceTiers            CategoryPriceTier[]
+  priceTiers             CategoryPriceTier[]
 
   @@index([parentId])
   @@index([isActive, sortOrder])
@@ -375,9 +394,9 @@ model Product {
 }
 
 model ProductPiece {
-  id                String    @id @default(cuid())
+  id                String     @id @default(cuid())
   productId         String
-  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product           Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   name              String
   grams             Decimal    @db.Decimal(10, 3)
   printMinutes      Decimal    @db.Decimal(10, 2)
@@ -421,10 +440,10 @@ enum InvoiceType {
 }
 
 enum ChannelKind {
-  DIRECT_SALE  // commission read from global param, regime applies
-  CASH         // commission always 0, regime toggleable for admins
-  MARKETPLACE  // commission required per product (e.g. MercadoLibre)
-  CUSTOM       // user-defined channel, all fields free
+  DIRECT_SALE // commission read from global param, regime applies
+  CASH // commission always 0, regime toggleable for admins
+  MARKETPLACE // commission required per product (e.g. MercadoLibre)
+  CUSTOM // user-defined channel, all fields free
 }
 
 model Channel {
@@ -663,7 +682,7 @@ model AuditLog {
 // trato persistente: WHOLESALE, CONSIGNMENT, SPECIAL.
 
 enum CustomerType {
-  STANDARD     // existe en el enum por flexibilidad pero no se usa en MVP
+  STANDARD // existe en el enum por flexibilidad pero no se usa en MVP
   WHOLESALE
   CONSIGNMENT
   SPECIAL
@@ -675,14 +694,14 @@ enum CustomerSuspensionReason {
 }
 
 model Customer {
-  id        String       @id @default(cuid())
-  name      String
-  type      CustomerType @default(WHOLESALE)
-  email     String?      @unique
-  phone     String?
-  taxId     String?
-  notes     String?
-  isActive  Boolean      @default(true)
+  id       String       @id @default(cuid())
+  name     String
+  type     CustomerType @default(WHOLESALE)
+  email    String?      @unique
+  phone    String?
+  taxId    String?
+  notes    String?
+  isActive Boolean      @default(true)
 
   // Pricing flags. El preset (type) sugiere defaults al crear desde la UI;
   // los flags son la fuente de verdad y son sobrescribibles.
@@ -754,7 +773,7 @@ model CustomerCategoryCommitment {
   monthlyCommitmentQty Int?
 
   /// Estado de mayoreo en esta categoría.
-  isWholesaleSuspended Boolean                    @default(false)
+  isWholesaleSuspended Boolean                   @default(false)
   suspensionReason     CustomerSuspensionReason?
   suspendedAt          DateTime?
 
@@ -848,25 +867,25 @@ model KeychainScaleTier {
 /// cargan como totales para producir `keychain_batch_size` llaveros (no
 /// per-unidad). El backend divide internamente al costear.
 model KeychainDefaults {
-  id                String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Pieza default (siempre 1 pieza al precargar — se puede sumar más).
-  pieceName         String   @default("Llavero")
-  pieceGrams        Decimal  @default(0) @db.Decimal(10, 3)
-  piecePrintMinutes Decimal  @default(0) @db.Decimal(10, 2)
+  pieceName         String    @default("Llavero")
+  pieceGrams        Decimal   @default(0) @db.Decimal(10, 3)
+  piecePrintMinutes Decimal   @default(0) @db.Decimal(10, 2)
   /// Filamento default. Si es null, el form arranca con el primero del
   /// catálogo (mismo fallback que el form ADHOC).
   pieceFilamentId   String?
   pieceFilament     Material? @relation("KeychainDefaultFilament", fields: [pieceFilamentId], references: [id], onDelete: SetNull)
 
   // Tiempos default (totales para el batch).
-  assemblyMinutes   Decimal  @default(0) @db.Decimal(10, 2)
-  managementMinutes Decimal  @default(0) @db.Decimal(10, 2)
+  assemblyMinutes   Decimal @default(0) @db.Decimal(10, 2)
+  managementMinutes Decimal @default(0) @db.Decimal(10, 2)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  materials         KeychainDefaultMaterial[]
+  materials KeychainDefaultMaterial[]
 
   @@map("keychain_defaults")
 }
@@ -875,15 +894,15 @@ model KeychainDefaults {
 /// cantidad sigue la convención de batch (totales para producir
 /// `keychain_batch_size` llaveros).
 model KeychainDefaultMaterial {
-  id           String           @id @default(cuid())
-  defaultsId   String
-  defaults     KeychainDefaults @relation(fields: [defaultsId], references: [id], onDelete: Cascade)
-  materialId   String
-  material     Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  quantity     Decimal          @db.Decimal(10, 3)
-  sortOrder    Int              @default(0)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id         String           @id @default(cuid())
+  defaultsId String
+  defaults   KeychainDefaults @relation(fields: [defaultsId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity   Decimal          @db.Decimal(10, 3)
+  sortOrder  Int              @default(0)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   @@unique([defaultsId, materialId])
   @@index([defaultsId])

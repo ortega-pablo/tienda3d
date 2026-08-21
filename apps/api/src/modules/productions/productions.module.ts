@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DocumentCodeService } from '@/common/utils/document-code';
 import { CostingModule } from '../costing/costing.module';
 import { ProductionsController } from './productions.controller';
 import { ProductionsService } from './productions.service';
@@ -8,7 +9,7 @@ import { StockMovementsService } from './stock-movements.service';
 @Module({
   imports: [CostingModule],
   controllers: [ProductionsController, StockMovementsController],
-  providers: [ProductionsService, StockMovementsService],
+  providers: [ProductionsService, StockMovementsService, DocumentCodeService],
   exports: [ProductionsService, StockMovementsService],
 })
 export class ProductionsModule {}
