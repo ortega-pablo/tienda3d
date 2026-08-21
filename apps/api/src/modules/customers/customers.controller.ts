@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -147,7 +148,8 @@ export class CustomersController {
   runMonthlyClose(@Query('asOf') asOf?: string) {
     const referenceDate = asOf ? new Date(asOf) : new Date();
     if (Number.isNaN(referenceDate.getTime())) {
-      throw new Error('asOf debe ser una fecha válida (YYYY-MM-DD).');
+      // Error pelado ⇒ el filtro global lo normalizaba a 500; es un 400.
+      throw new BadRequestException('asOf debe ser una fecha válida (YYYY-MM-DD).');
     }
     return this.cron.runMonthlyClose(referenceDate);
   }

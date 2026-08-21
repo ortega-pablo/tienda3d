@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
+import { PricingWarnings } from '@/components/pricing-warnings';
 import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -114,6 +115,8 @@ interface Preview {
   unitProfit: number;
   lineTotal: number;
   designSurcharge: number;
+  /** Avisos del motor: filamento sin precio, comisión faltante, etc. */
+  warnings?: string[];
 }
 
 /**
@@ -154,6 +157,7 @@ interface KeychainMatrixRow {
   unitProfit: number;
   lineTotal: number;
   designSurcharge: number;
+  warnings?: string[];
 }
 
 /**
@@ -1264,6 +1268,7 @@ export function RapidQuoteForm({
           {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}
           {preview && typeof preview === 'object' && (
             <>
+              <PricingWarnings warnings={preview.warnings} className="mb-1" />
               {groupPreviews && groupPreviews.length > 1 ? (
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

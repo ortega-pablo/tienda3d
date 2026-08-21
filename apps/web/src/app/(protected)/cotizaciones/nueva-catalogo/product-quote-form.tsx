@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
+import { PricingWarnings } from '@/components/pricing-warnings';
 import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,8 @@ interface ItemPreview {
   unitPrice: number;
   unitProfit: number;
   lineTotal: number;
+  /** Avisos del motor: filamento sin precio, comisión faltante, etc. */
+  warnings?: string[];
 }
 
 const newItem = (productId = ''): ItemDraft => ({
@@ -523,6 +526,7 @@ function PreviewLine({ result }: { result: ItemPreview | 'loading' | 'error' | u
       >
         ganancia {formatMoney(result.unitProfit)}
       </div>
+      <PricingWarnings warnings={result.warnings} className="mt-1 text-left" />
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { PieceScope, Prisma, QuoteStatus, QuoteType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
-import { addBusinessDays } from '@/common/utils/date';
+import { addBusinessDays, startOfBusinessMonth } from '@/common/utils/date';
 import { DocumentCodeService } from '@/common/utils/document-code';
 import { CostingService } from '../costing/costing.service';
 import type { CostingResult } from '../costing/costing.types';
@@ -35,6 +35,17 @@ import type {
 } from './quotes.types';
 
 type CustomerSnapshot = CustomerWithRelations & { capturedAt: string };
+
+/**
+ * Resultado de `buildItemRow`: la fila a persistir más las piezas del cálculo
+ * que la produjeron, para que el preview pueda mostrar advertencias sin
+ * recalcular nada.
+ */
+type BuiltItemRow = {
+  row: Prisma.QuoteItemUncheckedCreateWithoutQuoteInput;
+  cost: CostingResult;
+  line: PriceLine | null;
+};
 
 type ResolvedCustomerContext = {
   customer: CustomerWithRelations;
@@ -143,9 +154,10 @@ export class QuotesService {
     const channelId = input.channelId ?? null;
 
     const code = await this.nextCode(quoteType);
-    const itemsData = await Promise.all(
+    const built = await Promise.all(
       input.items.map((item) => this.buildItemRow(item, channelId, customerCtx)),
     );
+    const itemsData = built.map((b) => b.row);
     // Cada lineTotal ya es múltiplo del paso (unitPrice y designSurcharge vienen
     // redondeados del motor), así que el subtotal también lo es. El descuento
     // puede romper el múltiplo, por eso el total se redondea hacia arriba tras
@@ -315,7 +327,7 @@ export class QuotesService {
     referenceDate: Date,
     sign: 1 | -1,
   ): Promise<void> {
-    const monthStart = startOfMonthUtc(referenceDate);
+    const monthStart = startOfBusinessMonth(referenceDate);
     const commitments = await tx.customerCategoryCommitment.findMany({
       where: { customerId },
       select: { categoryId: true, monthlyCommitmentQty: true },
@@ -408,7 +420,7 @@ export class QuotesService {
       : null;
     // El cliente ya no lleva canal default — el form siempre manda channelId.
     const effectiveChannel = channelId ?? null;
-    const row = await this.buildItemRow(item, effectiveChannel, customerCtx);
+    const { row, cost, line } = await this.buildItemRow(item, effectiveChannel, customerCtx);
     const designSurcharge =
       row.adhocPayload &&
       typeof row.adhocPayload === 'object' &&
@@ -422,7 +434,7 @@ export class QuotesService {
       unitProfit: Number(row.unitProfit ?? 0),
       lineTotal: Number(row.lineTotal),
       designSurcharge,
-      warnings: [],
+      warnings: collectWarnings(cost, line),
     };
   }
 
@@ -464,6 +476,7 @@ export class QuotesService {
       unitProfit: number;
       lineTotal: number;
       designSurcharge: number;
+      warnings: string[];
     }>;
   }> {
     const tiers = await this.keychainScaleTiers.list();
@@ -487,7 +500,7 @@ export class QuotesService {
             templateKind: 'KEYCHAIN' as const,
           },
         };
-        const row = await this.buildItemRow(item, input.channelId, customerCtx);
+        const { row, cost, line } = await this.buildItemRow(item, input.channelId, customerCtx);
         const adhocPayload = row.adhocPayload as
           | { designSurcharge?: number; appliedMarkupPct?: number }
           | null;
@@ -505,6 +518,7 @@ export class QuotesService {
           unitProfit: Number(row.unitProfit ?? 0),
           lineTotal: Number(row.lineTotal),
           designSurcharge,
+          warnings: collectWarnings(cost, line),
         };
       }),
     );
@@ -513,11 +527,19 @@ export class QuotesService {
 
   // ----- internals -----
 
+  /**
+   * Construye la fila de ítem lista para persistir y devuelve, aparte, el
+   * desglose que la produjo. El desglose se necesita en el preview: hasta ahora
+   * `previewItem` devolvía `warnings: []` literal y las advertencias del motor
+   * (filamento sin precio vigente, comisión de marketplace faltante, comisión +
+   * impuestos ≥ 100%) se descartaban justo en la pantalla donde el vendedor
+   * arma la cotización.
+   */
   private async buildItemRow(
     item: QuoteItemInput,
     channelId: string | null,
     customerCtx: ResolvedCustomerContext | null,
-  ): Promise<Prisma.QuoteItemUncheckedCreateWithoutQuoteInput> {
+  ): Promise<BuiltItemRow> {
     if (item.type === 'PRODUCT') {
       const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
       if (!product) throw new NotFoundException(`Producto ${item.productId} inexistente`);
@@ -599,14 +621,18 @@ export class QuotesService {
       };
 
       return {
-        productId: item.productId,
-        description: item.description ?? product.name,
-        quantity: item.quantity,
-        unitCost: cost.totalCost,
-        unitPrice,
-        unitProfit,
-        lineTotal,
-        pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
+        row: {
+          productId: item.productId,
+          description: item.description ?? product.name,
+          quantity: item.quantity,
+          unitCost: cost.totalCost,
+          unitPrice,
+          unitProfit,
+          lineTotal,
+          pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
+        },
+        cost,
+        line,
       };
     }
 
@@ -786,15 +812,19 @@ export class QuotesService {
     };
 
     return {
-      productId: null,
-      description: item.description,
-      quantity: item.quantity,
-      unitCost: cost.totalCost,
-      unitPrice,
-      unitProfit,
-      lineTotal,
-      adhocPayload: persistedPayload as unknown as Prisma.InputJsonValue,
-      pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
+      row: {
+        productId: null,
+        description: item.description,
+        quantity: item.quantity,
+        unitCost: cost.totalCost,
+        unitPrice,
+        unitProfit,
+        lineTotal,
+        adhocPayload: persistedPayload as unknown as Prisma.InputJsonValue,
+        pricingBreakdown: breakdown as unknown as Prisma.InputJsonValue,
+      },
+      cost,
+      line,
     };
   }
 
@@ -1040,7 +1070,12 @@ export class QuotesService {
   }
 }
 
-/** Devuelve el primer día del mes (UTC) de la fecha dada. */
-function startOfMonthUtc(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
+/**
+ * Une las advertencias del costeo y las del motor de precios, sin duplicados.
+ * Son los avisos que el vendedor necesita ver junto al número: filamento sin
+ * precio vigente (se costea en 0), comisión de marketplace sin cargar, o
+ * comisión + impuestos ≥ 100%.
+ */
+function collectWarnings(cost: CostingResult, line: PriceLine | null): string[] {
+  return [...new Set([...cost.warnings, ...(line?.warnings ?? [])])];
 }

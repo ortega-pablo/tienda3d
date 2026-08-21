@@ -3,6 +3,11 @@ import { Cron } from '@nestjs/schedule';
 import { CustomerSuspensionReason } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import {
+  AR_TIMEZONE,
+  addBusinessMonths,
+  startOfBusinessMonth,
+} from '@/common/utils/date';
 
 export interface MonthlyCloseSummary {
   /** Mes que se cerró (primer día UTC). */
@@ -57,7 +62,7 @@ export class CustomerCronService {
    * Cron del día 1 de cada mes a las 03:00 ART.
    * Si tu zona horaria del server difiere, configurar TZ via env.
    */
-  @Cron('0 3 1 * *', { timeZone: 'America/Argentina/Buenos_Aires' })
+  @Cron('0 3 1 * *', { timeZone: AR_TIMEZONE })
   async runScheduled(): Promise<void> {
     this.logger.log('Iniciando cierre mensual programado');
     try {
@@ -75,8 +80,8 @@ export class CustomerCronService {
    * Cierra el mes anterior al de la fecha y crea los volúmenes del actual.
    */
   async runMonthlyClose(referenceDate: Date): Promise<MonthlyCloseSummary> {
-    const closedMonth = startOfMonthUtc(addMonths(referenceDate, -1));
-    const newMonth = startOfMonthUtc(referenceDate);
+    const newMonth = startOfBusinessMonth(referenceDate);
+    const closedMonth = addBusinessMonths(newMonth, -1);
 
     const commitments = await this.prisma.customerCategoryCommitment.findMany({
       where: {
@@ -195,14 +200,4 @@ export class CustomerCronService {
 
     return summary;
   }
-}
-
-function startOfMonthUtc(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
-}
-
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date.getTime());
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d;
 }
