@@ -23,14 +23,14 @@ export class MeliService {
   }
 
   /** Sync ML listings — currently a stub. */
-  async syncListings(): Promise<{ synced: number }> {
+  syncListings(): Promise<{ synced: number }> {
     if (!this.isEnabled()) throw new IntegrationDisabledError('MercadoLibre');
     this.logger.warn('MeliService.syncListings called but integration is not implemented yet');
     throw new NotImplementedException('Integración MELI pendiente');
   }
 
   /** Push price updates to ML for a product. */
-  async pushPrice(_productId: string, _price: number): Promise<void> {
+  pushPrice(_productId: string, _price: number): Promise<void> {
     if (!this.isEnabled()) throw new IntegrationDisabledError('MercadoLibre');
     throw new NotImplementedException('Integración MELI pendiente');
   }

@@ -7,10 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { StatusBadge } from '@/components/status-badge';
 import { ProductionActions, type ProductionDto } from './production-actions';
 
-interface CostShape {
-  fabricationPrice?: number;
-}
-
 interface PricesShape {
   /** baseMarkupPct efectivo de la categoría del producto. */
   targetMarkupPct: number;
@@ -39,11 +35,11 @@ export default async function ProductionDetailPage({
   // `profitPerUnit = fabricationPrice × baseMarkup%`. Snapshot histórico
   // del momento de la cotización vive en `QuoteItem.unitProfit`; acá
   // mostramos un estimado live para la planificación.
-  const [cost, prices] = await Promise.all([
-    api<CostShape>(`/products/${order.productId}/cost`).catch(() => null),
-    api<PricesShape>(`/products/${order.productId}/prices`).catch(() => null),
-  ]);
-  const fabricationPrice = cost?.fabricationPrice ?? null;
+  // Sólo se usan datos de /prices: el fetch de /cost quedó muerto al dejar de
+  // mostrarse el precio de fabricación, y costaba un request por render.
+  const prices = await api<PricesShape>(`/products/${order.productId}/prices`).catch(
+    () => null,
+  );
   const markupPct = prices?.targetMarkupPct ?? null;
   const profitPerUnit = prices?.profitPerUnit ?? null;
   const profitTotal = profitPerUnit != null ? profitPerUnit * order.quantity : null;

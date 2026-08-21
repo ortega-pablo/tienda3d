@@ -1036,7 +1036,7 @@ export function RapidQuoteForm({
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Las piezas e insumos huérfanos (asignados a un grupo que ya no existe) caen
-                  en un "Grupo adicional" automático al guardar.
+                  en un &ldquo;Grupo adicional&rdquo; automático al guardar.
                 </p>
               </div>
             )}
@@ -1231,7 +1231,7 @@ export function RapidQuoteForm({
             {Number(designMinutes || '0') > 0 && (
               <p className="text-xs text-muted-foreground">
                 El cargo de diseño se suma una sola vez a la línea (no escala con la
-                cantidad). Tarifa configurable en Parámetros → "Hora de diseño 3D".
+                cantidad). Tarifa configurable en Parámetros → &ldquo;Hora de diseño 3D&rdquo;.
               </p>
             )}
           </CardContent>
@@ -1258,7 +1258,7 @@ export function RapidQuoteForm({
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {preview === null && (
-            <p className="text-muted-foreground">Click en "Calcular precio" para previsualizar.</p>
+            <p className="text-muted-foreground">Click en &ldquo;Calcular precio&rdquo; para previsualizar.</p>
           )}
           {preview === 'loading' && <p className="text-muted-foreground">Calculando…</p>}
           {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}

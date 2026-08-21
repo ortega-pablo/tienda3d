@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';

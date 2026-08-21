@@ -29,7 +29,7 @@ export class WhatsappService {
     };
   }
 
-  async sendMessage(_message: WhatsAppMessage): Promise<{ messageId: string }> {
+  sendMessage(_message: WhatsAppMessage): Promise<{ messageId: string }> {
     if (!this.isEnabled()) throw new IntegrationDisabledError('WhatsApp');
     this.logger.warn('WhatsappService.sendMessage called but integration is not implemented yet');
     throw new NotImplementedException('Integración WhatsApp pendiente');

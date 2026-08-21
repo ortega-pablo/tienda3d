@@ -86,7 +86,7 @@ export default async function NewProductQuotePage({
         <p className="text-muted-foreground">
           Seleccioná uno o varios productos y la cantidad. El precio aplica las escalas de la
           categoría del producto — y los flags del cliente si elegís uno. Por default cotizás{' '}
-          <strong>con factura</strong> (Venta Directa); tildá "Operación sin factura" para
+          <strong>con factura</strong> (Venta Directa); tildá &ldquo;Operación sin factura&rdquo; para
           cambiar a Efectivo.
         </p>
       </header>

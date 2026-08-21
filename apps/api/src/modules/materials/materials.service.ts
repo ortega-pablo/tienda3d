@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { MaterialType, MaterialUnit, Prisma } from '@prisma/client';
+import { Material, MaterialType, MaterialUnit, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec, decOrNull } from '@/common/utils/decimal';
 
@@ -334,7 +334,7 @@ export class MaterialsService {
  * Loose row shape we accept in toDto — supports both top-level rows (with
  * children + suppliers) and nested children (with suppliers only).
  */
-type MaterialWithRelations = Prisma.MaterialGetPayload<{}> & {
+type MaterialWithRelations = Material & {
   suppliers?: Array<
     Prisma.SupplierMaterialGetPayload<{ include: { supplier: { select: { name: true } } } }>
   >;

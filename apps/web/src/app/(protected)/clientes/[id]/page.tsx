@@ -13,7 +13,6 @@ import { CustomerHistory } from './customer-history';
 import {
   TYPE_LABEL,
   type CategoryNode,
-  type ChannelLite,
   type CustomerWithRelations,
   type ProductSummaryDto,
 } from '../types';
@@ -34,8 +33,7 @@ export default async function CustomerDetailPage({
     throw err;
   }
 
-  const [channels, categories, products] = await Promise.all([
-    api<ChannelLite[]>('/channels'),
+  const [categories, products] = await Promise.all([
     api<CategoryNode[]>('/categories'),
     api<ProductSummaryDto[]>('/products'),
   ]);

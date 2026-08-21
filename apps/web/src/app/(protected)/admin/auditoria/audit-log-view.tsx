@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { api } from '@/lib/api-client';
 import { formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 
 export interface AuditLog {
   id: string;

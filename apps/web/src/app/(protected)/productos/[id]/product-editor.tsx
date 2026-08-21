@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -692,7 +693,7 @@ export function ProductEditor({
                 <p className="mt-1 text-xs text-muted-foreground">
                   El <strong>markup y las escalas vienen de la categoría</strong> (con herencia
                   subcategoría → padre). Configuralas en{' '}
-                  <a className="underline" href="/categorias">Gestionar categorías</a>.
+                  <Link className="underline" href="/categorias">Gestionar categorías</Link>.
                 </p>
               </Field>
             </div>

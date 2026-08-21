@@ -29,7 +29,7 @@ export class ArcaService {
   }
 
   /** Issue an electronic invoice — currently a stub. */
-  async issueInvoice(_payload: InvoiceRequest): Promise<{ cae: string; expiresAt: Date }> {
+  issueInvoice(_payload: InvoiceRequest): Promise<{ cae: string; expiresAt: Date }> {
     if (!this.isEnabled()) throw new IntegrationDisabledError('ARCA');
     this.logger.warn('ArcaService.issueInvoice called but integration is not implemented yet');
     throw new NotImplementedException('Integración ARCA pendiente');

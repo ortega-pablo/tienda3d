@@ -27,7 +27,7 @@ export class DatabaseBackupController {
 
   @Permissions('parameter:write')
   @Post()
-  async create(@CurrentUser() user: AccessPayload, @Res() res: Response): Promise<void> {
+  create(@CurrentUser() user: AccessPayload, @Res() res: Response): void {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
       throw new InternalServerErrorException('DATABASE_URL no configurada');
