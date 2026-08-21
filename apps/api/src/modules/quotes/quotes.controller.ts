@@ -172,7 +172,10 @@ export class QuotesController {
     return this.quotes.keychainMatrix(body);
   }
 
-  @Permissions('quote:read')
+  // Cambiar el estado NO es una lectura: pasar a ACCEPTED dispara la imputación
+  // de volúmenes mensuales, que alimenta las suspensiones automáticas del cierre
+  // de mes. Con `quote:read` el rol viewer podía cerrar ventas.
+  @Permissions('quote:create')
   @Patch(':id/status')
   setStatus(
     @Param('id') id: string,
@@ -185,8 +188,8 @@ export class QuotesController {
   @Permissions('quote:create')
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.quotes.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: AccessPayload): Promise<void> {
+    await this.quotes.remove(id, user.sub);
   }
 
   @Permissions('quote:export')

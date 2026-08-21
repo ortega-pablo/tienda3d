@@ -213,7 +213,9 @@ export function QuoteActions({ quote }: { quote: QuoteDto }) {
             Usar como base
           </Button>
         )}
-        {can('quote:read') &&
+        {/* Cambiar el estado exige `quote:create` en el backend: mover a ACCEPTED
+            imputa volúmenes mensuales. Un rol de solo lectura no ve estos botones. */}
+        {can('quote:create') &&
           transitions.map((t) => (
             <Button
               key={t.to}

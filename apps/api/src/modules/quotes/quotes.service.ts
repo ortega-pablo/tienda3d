@@ -355,13 +355,22 @@ export class QuotesService {
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, actorId: string): Promise<void> {
     const q = await this.prisma.quote.findUnique({ where: { id } });
     if (!q) throw new NotFoundException('Cotización inexistente');
     if (q.status !== QuoteStatus.DRAFT) {
       throw new BadRequestException('Solo se pueden eliminar cotizaciones en borrador');
     }
     await this.prisma.quote.delete({ where: { id } });
+    // El borrado es la única mutación de cotización que no dejaba rastro.
+    await this.audit.record({
+      actorId,
+      entity: 'Quote',
+      entityId: id,
+      action: 'delete',
+      before: { code: q.code, status: q.status, total: dec(q.total) },
+      after: null,
+    });
   }
 
   /** Compute (cost, price, profit) for an arbitrary item without persisting — used by the live preview. */
