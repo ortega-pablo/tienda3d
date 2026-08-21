@@ -34,6 +34,12 @@ import { UsersModule } from './modules/users/users.module';
     // estrictos contra brute-force se ponen route-by-route con @Throttle()
     // (login: 10/min, refresh: 30/min). Así /auth/me, que se llama por cada
     // navegación a una ruta protegida, no se trabaja por el límite de auth.
+    //
+    // Los límites son altos a propósito: como el tráfico llega por el proxy de
+    // Next, TODOS los usuarios comparten la IP del contenedor `web`, así que
+    // este contador es un cupo compartido del taller entero y no una defensa
+    // por usuario. La defensa contra fuerza bruta es el bloqueo por cuenta de
+    // AuthService, que no depende de la IP.
     ThrottlerModule.forRoot([
       { name: 'default', ttl: 60_000, limit: 120 },
       { name: 'auth', ttl: 60_000, limit: 120 },

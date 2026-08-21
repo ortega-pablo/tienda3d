@@ -17,15 +17,22 @@ datasource db {
 // ============================================================
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String  @id @default(cuid())
+  email        String  @unique
   name         String
   passwordHash String
-  isActive     Boolean  @default(true)
-  roleId       String
-  role         Role     @relation(fields: [roleId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean @default(true)
+
+  /// Intentos de login fallidos consecutivos. Se resetea en cada login exitoso.
+  /// Defensa contra fuerza bruta que NO depende de la IP (ver AuthService).
+  failedLoginAttempts Int       @default(0)
+  /// Mientras esté en el futuro, el login se rechaza aunque la clave sea correcta.
+  lockedUntil         DateTime?
+
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   /// Cuando está poblado, este User es la cuenta de portal de un Customer
   /// (no es staff). Mutuamente excluyente con uso interno.

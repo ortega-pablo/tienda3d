@@ -14,13 +14,35 @@ const HOP_BY_HOP = new Set([
   'content-length',
 ]);
 
+/**
+ * Cabeceras de reenvío que NUNCA se propagan desde el cliente.
+ *
+ * `fetch` de Node no agrega su propio `x-forwarded-for`, así que el valor que
+ * mandaba el navegador llegaba tal cual a Express — que corre con
+ * `trust proxy: 1` y lo toma como `req.ip`. Resultado: rotando esta cabecera se
+ * evadía el límite de 10 intentos/minuto de /auth/login.
+ *
+ * Si algún día se pone un nginx o un ALB delante, es ESE proxy el que debe
+ * setearlas, y recién ahí `trust proxy` vuelve a tener sentido.
+ */
+const CLIENT_SPOOFABLE = new Set([
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-forwarded-port',
+  'x-real-ip',
+  'forwarded',
+]);
+
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
   const target = `${API_BASE}/api/${path.join('/')}${req.nextUrl.search}`;
 
   const headers = new Headers();
   req.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) headers.set(key, value);
+    const name = key.toLowerCase();
+    if (HOP_BY_HOP.has(name) || CLIENT_SPOOFABLE.has(name)) return;
+    headers.set(key, value);
   });
 
   const init: RequestInit = {

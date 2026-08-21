@@ -7,6 +7,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { assertSecrets } from './common/config/validate-secrets';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
@@ -17,8 +18,22 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const isProd = config.get<string>('NODE_ENV') === 'production';
 
-  // Trust the proxy in front of the API (nginx/ALB) so client IPs are correct
-  // for rate limiting and pino logs.
+  // Falla temprano si los secretos de firma son los del .env.example o son
+  // demasiado cortos. Antes sólo se verificaba que existieran.
+  assertSecrets(process.env, isProd);
+
+  // Confía en 1 hop de proxy para resolver la IP del cliente (rate limit, logs).
+  //
+  // OJO: esto sólo es seguro si el proxy inmediato SETEA `x-forwarded-for`. Hoy
+  // el proxy de Next (apps/web/src/app/api/[...path]/route.ts) borra las
+  // cabeceras `x-forwarded-*` que manda el navegador justamente para que no se
+  // pueda falsificar `req.ip`; el efecto es que todos los usuarios comparten la
+  // IP del contenedor `web`, que es por qué la defensa real contra fuerza bruta
+  // es el bloqueo por cuenta de AuthService y no este límite.
+  //
+  // Cuando se agregue un nginx o un ALB adelante (ver migración a AWS en el
+  // README), ese proxy debe setear `x-forwarded-for` con la IP real y entonces
+  // el límite por IP vuelve a ser significativo.
   app.set('trust proxy', 1);
 
   app.use(helmet({ contentSecurityPolicy: false }));

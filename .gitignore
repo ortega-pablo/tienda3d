@@ -10,9 +10,9 @@ out/
 *.tsbuildinfo
 
 # Environment
-.env
-.env.local
-.env.*.local
+# Patrón amplio a propósito: un `.env.backup` o `.env.prod` no matcheaba las
+# reglas viejas y podía commitearse con secretos adentro.
+.env*
 !.env.example
 
 # Logs

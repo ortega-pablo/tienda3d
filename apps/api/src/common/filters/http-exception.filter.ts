@@ -36,6 +36,19 @@ interface NormalizedException {
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
+  /**
+   * En producción los 500 no exponen el mensaje real de la excepción: los
+   * errores de Prisma, del filesystem o de red suelen incluir nombres de tabla
+   * y columna, fragmentos de query, rutas del contenedor o cadenas de conexión.
+   * El detalle completo (con stack) ya queda en el log de pino.
+   * En desarrollo sí se devuelve, que es donde ayuda a depurar.
+   */
+  private readonly isProd = process.env.NODE_ENV === 'production';
+
+  private safeMessage(message: string, fallback: string): string {
+    return this.isProd ? fallback : message || fallback;
+  }
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -92,7 +105,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         code: ErrorCode.INTERNAL,
-        message: exception.message || 'Error interno',
+        message: this.safeMessage(exception.message, 'Error interno'),
       };
     }
     return {
@@ -139,10 +152,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
           details: { prisma: exception.code, target: exception.meta?.field_name },
         };
       default:
+        // El mensaje de Prisma puede traer SQL y nombres de columna: mismo
+        // criterio que arriba, se oculta en producción.
         return {
           status: HttpStatus.BAD_REQUEST,
           code: ErrorCode.BAD_REQUEST,
-          message: exception.message.split('\n').pop() ?? 'Error de base de datos',
+          message: this.safeMessage(
+            exception.message.split('\n').pop() ?? '',
+            'Error de base de datos',
+          ),
           details: { prisma: exception.code },
         };
     }

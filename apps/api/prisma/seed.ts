@@ -151,7 +151,9 @@ async function seedAdminUser(roleId: string) {
       roleId,
     },
   });
-  console.log(`✔ Admin user → ${email} / ${password}`);
+  // La contraseña NO se imprime: en producción el stdout del seed va derecho a
+  // los logs del contenedor.
+  console.log(`✔ Admin user → ${email}`);
 }
 
 async function seedGlobalParams() {
