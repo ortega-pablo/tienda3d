@@ -19,6 +19,9 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY tsconfig.base.json package.json pnpm-workspace.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
+# shared se consume compilado (la API lo requiere en runtime), así que hay que
+# construirlo antes que web.
+RUN pnpm --filter @tienda3d/shared build
 RUN pnpm --filter @tienda3d/web build
 
 # ----- runner -----

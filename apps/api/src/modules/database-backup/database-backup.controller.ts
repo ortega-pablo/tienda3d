@@ -23,6 +23,38 @@ import type { AccessPayload } from '../auth/auth.service';
 /** Tiempo máximo que puede tardar un dump antes de cortarlo. */
 const DUMP_TIMEOUT_MS = 10 * 60 * 1000;
 
+/**
+ * Parámetros de query que entiende Prisma pero NO libpq. Pasarle
+ * `?schema=public` a pg_dump lo hace abortar con "invalid URI query parameter",
+ * así que el endpoint de backup fallaba siempre — y el `.env.example` trae ese
+ * parámetro, o sea que fallaba en toda instalación.
+ */
+const PRISMA_ONLY_PARAMS = [
+  'schema',
+  'connection_limit',
+  'connect_timeout',
+  'pool_timeout',
+  'pgbouncer',
+  'socket_timeout',
+  'sslidentity',
+  'sslpassword',
+  'sslcert',
+];
+
+/** Deja la connection string en algo que libpq acepte. */
+export function toLibpqUrl(databaseUrl: string): string {
+  try {
+    const url = new URL(databaseUrl);
+    for (const param of PRISMA_ONLY_PARAMS) url.searchParams.delete(param);
+    // Sin params no dejamos el '?' colgando.
+    if ([...url.searchParams].length === 0) url.search = '';
+    return url.toString();
+  } catch {
+    // Si no parsea como URL, cortamos la query a mano antes que romper.
+    return databaseUrl.split('?')[0] ?? databaseUrl;
+  }
+}
+
 @UseGuards(PermissionsGuard)
 @Controller('admin/backup')
 export class DatabaseBackupController {
@@ -45,7 +77,7 @@ export class DatabaseBackupController {
     // `pg_dump -Fc` produce el formato custom (comprimido + restore selectivo).
     // Pasamos DATABASE_URL como argumento posicional — pg_dump acepta connection
     // strings desde la versión 9.6+, lo cual está cubierto por nuestra imagen.
-    const proc = spawn('pg_dump', ['--no-owner', '--no-privileges', '-Fc', databaseUrl], {
+    const proc = spawn('pg_dump', ['--no-owner', '--no-privileges', '-Fc', toLibpqUrl(databaseUrl)], {
       // Si las env vars del proceso tienen PGPASSWORD/etc no las pasamos al
       // child para evitar override accidental — DATABASE_URL ya tiene las
       // credenciales embebidas.

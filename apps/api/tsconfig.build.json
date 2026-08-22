@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // El tsconfig base fija `rootDir: "./"` porque su `include` abarca también
+    // prisma/. Eso hacía que el build emitiera `dist/src/main.js` mientras el
+    // CMD de la imagen busca `dist/main.js`: la imagen de producción nunca
+    // pudo arrancar (MODULE_NOT_FOUND). Acá el root es src/ y el layout queda
+    // como espera Nest.
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "prisma",
+    "**/*.spec.ts",
+    "**/*.int-spec.ts"
+  ]
+}

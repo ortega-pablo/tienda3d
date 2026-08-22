@@ -15,7 +15,7 @@ services:
     # (refleja cambios del schema montado por volumen) y aplica migraciones
     # pendientes. `migrate deploy` es idempotente: si todo está al día, no
     # hace nada.
-    command: sh -c "cd apps/api && pnpm prisma:generate && pnpm prisma migrate deploy && pnpm dev"
+    command: sh -c "pnpm --filter @tienda3d/shared build && cd apps/api && pnpm prisma:generate && pnpm prisma migrate deploy && pnpm dev"
 
   web:
     build:
@@ -30,4 +30,4 @@ services:
       - /app/apps/web/node_modules
       - /app/apps/web/.next
       - /app/packages/shared/node_modules
-    command: pnpm --filter @tienda3d/web dev
+    command: sh -c "pnpm --filter @tienda3d/shared build && pnpm --filter @tienda3d/web dev"
