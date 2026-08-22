@@ -42,33 +42,33 @@ Marcar el estado en la última columna: `pendiente` / `en curso` / `hecho` / `de
 
 | ID | Hallazgo | Sev | Fase | Estado |
 |---|---|---|---|---|
-| F-01 | El seed borra los permisos de clientes de admin/operator/viewer | Alta | 1 | pendiente |
-| F-03 | Healthcheck del contenedor `api` apunta a una ruta inexistente | Alta | 1 | pendiente |
-| F-04 | Cambiar estado de cotización sólo exige `quote:read` | Alta | 1 | pendiente |
-| F-02 | Consumo de stock de producción no atómico | Alta | 2 | pendiente |
-| F-10 | Códigos de cotización y OP generados con `max + 1` | Media | 2 | pendiente |
-| F-17 | El linter no corre en ningún workspace | Baja | 3 | pendiente |
-| F-18 | Builds de Docker sin lockfile congelado y con `\|\| true` | Baja | 3 | pendiente |
-| F-19 | El contenedor de la API corre como root | Baja | 3 | pendiente |
-| F-21 | Dependencias declaradas sin uso | Baja | 3 | pendiente |
-| F-22 | Artefactos compilados versionados (`seed.js`, `.d.ts`, `.map`) | Baja | 3 | pendiente |
-| F-06 | El preview de ítem descarta las advertencias del motor | Media | 4 | pendiente |
-| F-08 | Meses calculados en UTC con negocio en ART | Media | 4 | pendiente |
-| F-09 | Cierre mensual manual cierra el mes equivocado los días 29-31 | Media | 4 | pendiente |
-| F-05 | Rate limit de login evadible vía `x-forwarded-for` | Alta | 5 | pendiente |
-| F-12 | Los 500 devuelven el mensaje crudo de la excepción | Media | 5 | pendiente |
-| F-13 | CSV exportado sin neutralizar fórmulas | Media | 5 | pendiente |
-| F-23 | `.env` local con los secretos de ejemplo | Baja | 5 | pendiente |
-| F-07 | `unitCost` persistido sin los ajustes del cliente | Media | 6 | pendiente |
-| F-11 | Nada garantiza un único precio vigente por insumo | Media | 6 | pendiente |
-| F-15 | IVA 21% hardcodeado en el motor de precios | Media | 6 | pendiente |
-| F-24 | `roundPriceUp` puede cobrar un paso de más | Baja | 6 | pendiente |
-| F-14 | Cada ítem recarga el cliente entero dos veces | Media | 7 | pendiente |
-| F-16 | Backup sin contrapresión ni cancelación | Media | 7 | pendiente |
-| F-25 | Tests cubren el cálculo, no el sistema | Baja | 8 | pendiente |
-| F-20 | `packages/shared` no comparte el contrato real | Baja | 9 | pendiente |
+| F-01 | El seed borra los permisos de clientes de admin/operator/viewer | Alta | 1 | **hecho** |
+| F-03 | Healthcheck del contenedor `api` apunta a una ruta inexistente | Alta | 1 | **hecho** |
+| F-04 | Cambiar estado de cotización sólo exige `quote:read` | Alta | 1 | **hecho** |
+| F-02 | Consumo de stock de producción no atómico | Alta | 2 | **hecho** |
+| F-10 | Códigos de cotización y OP generados con `max + 1` | Media | 2 | **hecho** |
+| F-17 | El linter no corre en ningún workspace | Baja | 3 | **hecho** |
+| F-18 | Builds de Docker sin lockfile congelado y con `\|\| true` | Baja | 3 | **hecho** |
+| F-19 | El contenedor de la API corre como root | Baja | 3 | **hecho** |
+| F-21 | Dependencias declaradas sin uso | Baja | 3 | **hecho** |
+| F-22 | Artefactos compilados versionados (`seed.js`, `.d.ts`, `.map`) | Baja | 3 | **hecho** |
+| F-06 | El preview de ítem descarta las advertencias del motor | Media | 4 | **hecho** |
+| F-08 | Meses calculados en UTC con negocio en ART | Media | 4 | **hecho** |
+| F-09 | Cierre mensual manual cierra el mes equivocado los días 29-31 | Media | 4 | **hecho** |
+| F-05 | Rate limit de login evadible vía `x-forwarded-for` | Alta | 5 | **hecho** |
+| F-12 | Los 500 devuelven el mensaje crudo de la excepción | Media | 5 | **hecho** |
+| F-13 | CSV exportado sin neutralizar fórmulas | Media | 5 | **hecho** |
+| F-23 | `.env` local con los secretos de ejemplo | Baja | 5 | **parcial (falta rotar clave de DB y admin)** |
+| F-07 | `unitCost` persistido sin los ajustes del cliente | Media | 6 | **hecho** |
+| F-11 | Nada garantiza un único precio vigente por insumo | Media | 6 | **hecho** |
+| F-15 | IVA 21% hardcodeado en el motor de precios | Media | 6 | **hecho** |
+| F-24 | `roundPriceUp` puede cobrar un paso de más | Baja | 6 | **hecho** |
+| F-14 | Cada ítem recarga el cliente entero dos veces | Media | 7 | **hecho** |
+| F-16 | Backup sin contrapresión ni cancelación | Media | 7 | **hecho** |
+| F-25 | Tests cubren el cálculo, no el sistema | Baja | 8 | **parcial (falta suite con DB)** |
+| F-20 | `packages/shared` no comparte el contrato real | Baja | 9 | **parcial (a, b)** |
 
-**Progreso:** 0 / 25
+**Progreso:** 22 / 25 completos + 3 parciales — ver Bitácora
 
 ---
 
@@ -113,7 +113,7 @@ existente deja a admin, operator y viewer sin `customer:*`.
 > El rol `customer-portal` **no** se ve afectado: `seedRoles()` sólo toca
 > admin/operator/viewer. Los permisos `portal:*` sobreviven.
 
-- [ ] **F-01.a** Agregar al catálogo `PERMISSIONS` los tres permisos de staff que
+- [x] **F-01.a** Agregar al catálogo `PERMISSIONS` los tres permisos de staff que
       faltan, respetando el reparto que hizo la migración:
 
       ```ts
@@ -127,7 +127,7 @@ existente deja a admin, operator y viewer sin `customer:*`.
       solo en viewer — correcto. `customer:portal:manage` **no** debe ir a
       operator: agregarlo a la lista de exclusión de `OPERATOR_PERMS`.
 
-- [ ] **F-01.b** Sembrar los permisos del portal en el catálogo **sin**
+- [x] **F-01.b** Sembrar los permisos del portal en el catálogo **sin**
       asignarlos a los roles de staff. Constante aparte:
 
       ```ts
@@ -141,7 +141,7 @@ existente deja a admin, operator y viewer sin `customer:*`.
       `seedPermissions()` los crea; `seedRoles()` los ignora. (Si `portal:catalog:read`
       entrara en `PERMISSIONS`, el filtro `:read` se lo daría a viewer.)
 
-- [ ] **F-01.c** Reemplazar el borrado destructivo por una reconciliación no
+- [x] **F-01.c** Reemplazar el borrado destructivo por una reconciliación no
       destructiva. `deleteMany` + `createMany` también borra los ajustes que un
       admin haya hecho desde **Admin > Roles** sobre los roles base:
 
@@ -188,9 +188,9 @@ docker compose exec -T db psql -U tienda3d -d tienda3d -c \
 [`docker-compose.yml:43`](../../docker-compose.yml#L43) ·
 [`apps/api/src/main.ts:34`](../../apps/api/src/main.ts#L34)
 
-- [ ] **F-03.a** Corregir la URL del healthcheck a `/api/health` (el prefijo
+- [x] **F-03.a** Corregir la URL del healthcheck a `/api/health` (el prefijo
       global es `api`, como documenta el README).
-- [ ] **F-03.b** Ahora que la señal es confiable, endurecer la dependencia:
+- [x] **F-03.b** Ahora que la señal es confiable, endurecer la dependencia:
 
       ```yaml
       web:
@@ -219,13 +219,13 @@ sólo una etiqueta: pasar a `ACCEPTED` dispara `applyMonthlyVolumeDelta()`, que
 imputa volúmenes mensuales y alimenta las suspensiones automáticas del cierre de
 mes.
 
-- [ ] **F-04.a** Cambiar el decorador a `@Permissions('quote:create')`
+- [x] **F-04.a** Cambiar el decorador a `@Permissions('quote:create')`
       (ver decisión abierta #1 si se prefiere un `quote:status` propio).
-- [ ] **F-04.b** Verificar que el frontend no ofrezca los botones de estado a
+- [x] **F-04.b** Verificar que el frontend no ofrezca los botones de estado a
       quien no tenga el permiso: revisar
       [`quote-actions.tsx`](../../apps/web/src/app/%28protected%29/cotizaciones/%5Bid%5D/quote-actions.tsx)
       y ocultar/deshabilitar según `quote:create`.
-- [ ] **F-04.c** Agregar el audit log que falta en `DELETE /quotes/:id`
+- [x] **F-04.c** Agregar el audit log que falta en `DELETE /quotes/:id`
       ([`quotes.service.ts` `remove()`](../../apps/api/src/modules/quotes/quotes.service.ts)),
       hoy la única mutación de cotización que no deja rastro.
 
@@ -258,7 +258,7 @@ queda afuera. Dos fallas reales:
 - La validación de transición lee el estado antes de escribir, así que dos
   requests concurrentes a `DONE` pasan ambos y descuentan el doble.
 
-- [ ] **F-02.a** Unificar todo en una transacción y cerrar la carrera con un
+- [x] **F-02.a** Unificar todo en una transacción y cerrar la carrera con un
       update condicional sobre el estado leído:
 
       ```ts
@@ -280,17 +280,17 @@ queda afuera. Dos fallas reales:
       });
       ```
 
-- [ ] **F-02.b** Refactorizar `consumeStock()` para que reciba el
+- [x] **F-02.b** Refactorizar `consumeStock()` para que reciba el
       `Prisma.TransactionClient` en vez de abrir el suyo. `previewConsumption()`
       hace lecturas: calcular las líneas **antes** de abrir la transacción y
       pasarlas ya resueltas, para no alargar la transacción con I/O de lectura.
 
-- [ ] **F-02.c** Aplicar el mismo patrón de update condicional a
+- [x] **F-02.c** Aplicar el mismo patrón de update condicional a
       [`quotes.service.ts` `setStatus()`](../../apps/api/src/modules/quotes/quotes.service.ts):
       tiene la misma forma (lee estado → valida transición → escribe) y su efecto
       lateral, `applyMonthlyVolumeDelta`, también es acumulativo.
 
-- [ ] **F-02.d** *(según decisión abierta #2)* Si se decide bloquear stock
+- [x] **F-02.d** *(según decisión abierta #2)* Si se decide bloquear stock
       negativo: validar disponibilidad dentro de la misma transacción antes de
       descontar, con un mensaje que nombre el insumo faltante.
 
@@ -323,7 +323,7 @@ lectura. Dos creaciones simultáneas calculan el mismo número y la segunda choc
 contra el índice único de `code` con un 409 sin explicación. El repo ya resolvió
 bien este problema para el SKU de producto (`nextval('product_sku_seq')`).
 
-- [ ] **F-10.a** Migración que crea las secuencias, una por tipo de documento:
+- [x] **F-10.a** Migración que crea las secuencias, una por tipo de documento:
 
       ```sql
       CREATE SEQUENCE IF NOT EXISTS quote_code_seq_product;
@@ -334,11 +334,11 @@ bien este problema para el SKU de producto (`nextval('product_sku_seq')`).
       Inicializarlas con `setval` al máximo actual de cada prefijo para no
       recomenzar en 1 sobre datos existentes.
 
-- [ ] **F-10.b** Reemplazar los dos `nextCode()` por `nextval`, siguiendo el
+- [x] **F-10.b** Reemplazar los dos `nextCode()` por `nextval`, siguiendo el
       patrón de `generateNextSku()` en
       [`products.service.ts:416`](../../apps/api/src/modules/products/products.service.ts#L416).
 
-- [ ] **F-10.c** **Decidir el reinicio anual.** Hoy el prefijo incluye el año
+- [x] **F-10.c** **Decidir el reinicio anual.** Hoy el prefijo incluye el año
       (`Q-2026-0001`) y el contador se deriva del máximo del año en curso. Una
       secuencia global no reinicia sola: o se acepta numeración continua entre
       años, o se agrega un `setval` en el primer código de cada año. Documentar
@@ -369,7 +369,7 @@ versión instalada— exige el formato plano y aborta. Del lado de web es peor:
 `pnpm lint` desde la raíz no valida nada, con ESLint, typescript-eslint y
 eslint-config-next instalados en las tres workspaces.
 
-- [ ] **F-17.a** `apps/api/eslint.config.js` plano, con typescript-eslint en modo
+- [x] **F-17.a** `apps/api/eslint.config.js` plano, con typescript-eslint en modo
       *type-checked*. Las reglas que más rinden acá:
 
       ```js
@@ -379,14 +379,14 @@ eslint-config-next instalados en las tres workspaces.
       '@typescript-eslint/await-thenable': 'error',
       ```
 
-- [ ] **F-17.b** `apps/web/eslint.config.js` con `eslint-config-next` en formato
+- [x] **F-17.b** `apps/web/eslint.config.js` con `eslint-config-next` en formato
       plano (`FlatCompat` o el export plano de la 16), e incluir
       `react-hooks/exhaustive-deps`.
-- [ ] **F-17.c** Cambiar el script de web: `"lint": "eslint ."` (dejar
+- [x] **F-17.c** Cambiar el script de web: `"lint": "eslint ."` (dejar
       `next lint` es dejar un comando que ya no existe).
-- [ ] **F-17.d** Arreglar lo que aparezca, o silenciar con justificación escrita.
+- [x] **F-17.d** Arreglar lo que aparezca, o silenciar con justificación escrita.
       **No** bajar reglas a `warn` para que el comando pase en verde.
-- [ ] **F-17.e** Agregar `eslint.config.js` a `packages/shared` o excluirla
+- [x] **F-17.e** Agregar `eslint.config.js` a `packages/shared` o excluirla
       explícitamente del `-r lint`.
 
 **Tests / verificación**
@@ -405,12 +405,12 @@ pnpm lint          # debe correr y terminar en 0 en los tres workspaces
 [`apps/api/Dockerfile:12`](../../apps/api/Dockerfile#L12) ·
 [`apps/web/Dockerfile:12`](../../apps/web/Dockerfile#L12)
 
-- [ ] **F-18.a** `--frozen-lockfile=false` → `--frozen-lockfile` en ambos.
-- [ ] **F-18.b** Sacar el `|| true` de
+- [x] **F-18.a** `--frozen-lockfile=false` → `--frozen-lockfile` en ambos.
+- [x] **F-18.b** Sacar el `|| true` de
       `RUN pnpm --filter @tienda3d/shared build || true`
       ([Dockerfile:22](../../apps/api/Dockerfile#L22)): convierte un fallo de
       compilación en un éxito silencioso.
-- [ ] **F-18.c** Si `--frozen-lockfile` falla, es señal de que el lockfile quedó
+- [x] **F-18.c** Si `--frozen-lockfile` falla, es señal de que el lockfile quedó
       desactualizado: correr `pnpm install` en local y commitear el lockfile, no
       volver a aflojar el flag.
 
@@ -431,12 +431,12 @@ La imagen de web ya lo hace bien (crea `nextjs` y hace `USER nextjs`). La de la
 API nunca cambia de usuario, y es la que tiene el cliente de Postgres instalado y
 ejecuta `pg_dump` como subproceso.
 
-- [ ] **F-19.a** Crear usuario y grupo del sistema en el stage `runner` y agregar
+- [x] **F-19.a** Crear usuario y grupo del sistema en el stage `runner` y agregar
       `USER` antes del `CMD`, replicando el patrón de la imagen de web.
-- [ ] **F-19.b** Verificar que `prisma migrate deploy` y `pg_dump` siguen
+- [x] **F-19.b** Verificar que `prisma migrate deploy` y `pg_dump` siguen
       funcionando sin root (permisos de lectura sobre `prisma/` y de escritura
       sobre nada — el dump va a stdout).
-- [ ] **F-19.c** Evaluar dejar de publicar el puerto 3001 al host en
+- [x] **F-19.c** Evaluar dejar de publicar el puerto 3001 al host en
       `docker-compose.yml`: el README dice que el navegador nunca pega directo a
       la API. Si nadie lo usa para debug, sacarlo reduce superficie.
 
@@ -454,12 +454,12 @@ docker compose exec api sh -c "cd apps/api && pnpm prisma migrate deploy"
 
 ### F-21 · Dependencias sin uso
 
-- [ ] **F-21.a** Sacar de `apps/web/package.json`: `@tanstack/react-query`,
+- [x] **F-21.a** Sacar de `apps/web/package.json`: `@tanstack/react-query`,
       `@radix-ui/react-toast` (se usa `sonner`), `@radix-ui/react-dialog` y
       `@radix-ui/react-dropdown-menu` (los diálogos son propios).
-- [ ] **F-21.b** Sacar de `apps/api/package.json`: `class-validator` y
+- [x] **F-21.b** Sacar de `apps/api/package.json`: `class-validator` y
       `class-transformer` (la validación es toda Zod).
-- [ ] **F-21.c** Revisar `react-hook-form` + `@hookform/resolvers`: sólo los usa
+- [x] **F-21.c** Revisar `react-hook-form` + `@hookform/resolvers`: sólo los usa
       el login; los demás formularios son `useState` a mano. Decidir explícito —
       adoptarla en los formularios grandes o sacarla y migrar el login.
 
@@ -470,8 +470,8 @@ docker compose exec api sh -c "cd apps/api && pnpm prisma migrate deploy"
 
 ### F-22 · Artefactos compilados fuera del repo
 
-- [ ] **F-22.a** `git rm --cached apps/api/prisma/seed.js apps/api/prisma/seed.d.ts apps/api/prisma/seed.js.map apps/api/prisma/seed.d.ts.map`
-- [ ] **F-22.b** Agregar `apps/api/prisma/seed.js*` y `apps/api/prisma/seed.d.ts*`
+- [x] **F-22.a** `git rm --cached apps/api/prisma/seed.js apps/api/prisma/seed.d.ts apps/api/prisma/seed.js.map apps/api/prisma/seed.d.ts.map`
+- [x] **F-22.b** Agregar `apps/api/prisma/seed.js*` y `apps/api/prisma/seed.d.ts*`
       al `.gitignore` (el seed se ejecuta con `tsx prisma/seed.ts`, esos archivos
       no los consume nadie).
 
@@ -500,14 +500,14 @@ requiere cargar la comisión por producto», «comisión + impuestos ≥ 100%» 
 ninguna llega a la pantalla donde el vendedor arma la cotización. Un filamento
 sin precio vigente se costea en 0 y el precio sale bajo, sin ninguna señal.
 
-- [ ] **F-06.a** Hacer que `buildItemRow()` devuelva el `breakdown` junto con la
+- [x] **F-06.a** Hacer que `buildItemRow()` devuelva el `breakdown` junto con la
       fila (ya lo construye para persistirlo; hoy se descarta en el camino del
       preview).
-- [ ] **F-06.b** En `previewItem()`, componer
+- [x] **F-06.b** En `previewItem()`, componer
       `[...cost.warnings, ...(line?.warnings ?? [])]` y devolverlo.
-- [ ] **F-06.c** Propagar también en `keychainMatrix()`: si una escala sale con
+- [x] **F-06.c** Propagar también en `keychainMatrix()`: si una escala sale con
       advertencia, la fila de la matriz debe poder mostrarlo.
-- [ ] **F-06.d** Pintarlas en el frontend, en los tres formularios de cotización
+- [x] **F-06.d** Pintarlas en el frontend, en los tres formularios de cotización
       ([`rapid-quote-form.tsx`](../../apps/web/src/app/%28protected%29/cotizaciones/nueva-a-medida/rapid-quote-form.tsx),
       [`product-quote-form.tsx`](../../apps/web/src/app/%28protected%29/cotizaciones/nueva-catalogo/product-quote-form.tsx)
       y el de llaveros). Advertencia visible junto al precio, no un toast que se
@@ -532,17 +532,17 @@ día 1 en UTC y se imputa al **mes siguiente**. Como esos volúmenes alimentan e
 cumplimiento de compromiso mayorista, un cliente puede terminar suspendido
 automáticamente por ventas que sí hizo.
 
-- [ ] **F-08.a** Crear un helper único en
+- [x] **F-08.a** Crear un helper único en
       [`common/utils/date.ts`](../../apps/api/src/common/utils/date.ts) —
       `startOfBusinessMonth(date)` — que calcule el inicio de mes en la zona del
       negocio, con la TZ en una constante exportada y compartida con el `@Cron`.
-- [ ] **F-08.b** Reemplazar las **dos** copias locales de `startOfMonthUtc` (una
+- [x] **F-08.b** Reemplazar las **dos** copias locales de `startOfMonthUtc` (una
       en `quotes.service.ts`, otra en `customer-cron.service.ts`) por el helper.
-- [ ] **F-08.c** Tests en
+- [x] **F-08.c** Tests en
       [`date.spec.ts`](../../apps/api/src/common/utils/date.spec.ts) con los
       bordes: 30/09 23:30 ART y 01/10 00:30 ART deben caer en meses distintos y
       correctos.
-- [ ] **F-08.d** **Datos existentes:** revisar si hay filas de
+- [x] **F-08.d** **Datos existentes:** revisar si hay filas de
       `customer_monthly_volumes` mal imputadas por este bug. Si las hay, decidir
       si se corrigen con una migración de datos o se dejan documentadas.
 
@@ -571,12 +571,12 @@ El cron programado corre el día 1, así que está a salvo. El endpoint manual
 —el que el propio comentario recomienda usar «si el cron falla»— no: cerraría el
 mes en curso, suspendiendo clientes por un mes que todavía no terminó.
 
-- [ ] **F-09.a** Restar meses sobre el día 1, nunca sobre el día original:
+- [x] **F-09.a** Restar meses sobre el día 1, nunca sobre el día original:
       `new Date(Date.UTC(y, m - 1, 1))`. Idealmente absorberlo dentro del helper
       de F-08.a para que quede un solo lugar donde se calculan meses.
-- [ ] **F-09.b** Cambiar el `throw new Error('asOf debe ser…')` por
+- [x] **F-09.b** Cambiar el `throw new Error('asOf debe ser…')` por
       `BadRequestException` — hoy el filtro global lo normaliza a 500 en vez de 400.
-- [ ] **F-09.c** Test de `runMonthlyClose` con los cuatro `asOf` de la tabla.
+- [x] **F-09.c** Test de `runMonthlyClose` con los cuatro `asOf` de la tabla.
 
 **Tests / verificación**
 
@@ -609,20 +609,20 @@ El mismo mecanismo hace que hoy, por el camino legítimo, **todos** los usuarios
 compartan un único cupo (la IP del contenedor `web`) — probablemente por qué los
 límites globales terminaron tan generosos.
 
-- [ ] **F-05.a** En el route handler del proxy, agregar al set de cabeceras
+- [x] **F-05.a** En el route handler del proxy, agregar al set de cabeceras
       filtradas todas las de reenvío entrantes: `x-forwarded-for`,
       `x-forwarded-host`, `x-forwarded-proto`, `x-forwarded-port`, `x-real-ip`,
       `forwarded`. Esto solo ya cierra la falsificación.
-- [ ] **F-05.b** Agregar **bloqueo por cuenta** en el login, que es la defensa
+- [x] **F-05.b** Agregar **bloqueo por cuenta** en el login, que es la defensa
       real contra fuerza bruta porque no depende de la IP: contador de intentos
       fallidos consecutivos por usuario + backoff. Campos nuevos en `User`
       (`failedLoginAttempts`, `lockedUntil`), reseteados en un login exitoso.
       Mismo mensaje genérico en la respuesta para no filtrar si el mail existe.
-- [ ] **F-05.c** *(según decisión abierta #4)* Si más adelante se pone nginx o un
+- [x] **F-05.c** *(según decisión abierta #4)* Si más adelante se pone nginx o un
       ALB adelante: que el proxy setee `x-forwarded-for` con la IP real y recién
       ahí `trust proxy` vuelve a tener sentido. Documentarlo junto a la sección
       de migración a AWS del README.
-- [ ] **F-05.d** Con el bloqueo por cuenta puesto, revisar si los límites globales
+- [x] **F-05.d** Con el bloqueo por cuenta puesto, revisar si los límites globales
       del throttler (`default: 120/min`, `auth: 120/min`) pueden volver a valores
       razonables.
 
@@ -651,12 +651,12 @@ al cliente. Los mensajes de Prisma, del filesystem o de red suelen incluir
 nombres de tabla y columna, fragmentos de query, rutas del contenedor o cadenas
 de conexión.
 
-- [ ] **F-12.a** En producción, responder un mensaje genérico
+- [x] **F-12.a** En producción, responder un mensaje genérico
       (`'Error interno'`) y dejar el detalle sólo en el log de pino, que ya lo
       registra con stack completo dos líneas más arriba.
-- [ ] **F-12.b** En desarrollo, mantener el mensaje real (ayuda a depurar).
+- [x] **F-12.b** En desarrollo, mantener el mensaje real (ayuda a depurar).
       Usar `NODE_ENV`, igual que hace `AuthController.isProd`.
-- [ ] **F-12.c** Revisar la rama `default` de `fromPrismaKnown`: hoy devuelve
+- [x] **F-12.c** Revisar la rama `default` de `fromPrismaKnown`: hoy devuelve
       `exception.message.split('\n').pop()`, que también puede filtrar SQL.
 
 **Tests / verificación**
@@ -674,11 +674,11 @@ empiezan con `=`, `+`, `-` o `@`. Un cliente cargado como `=HYPERLINK(...)` se
 ejecuta al abrir el archivo. Y el destino de estos exports es exactamente Excel:
 el proyecto entero nació de una planilla.
 
-- [ ] **F-13.a** Dentro de `escape()`, prefijar con comilla simple cualquier valor
+- [x] **F-13.a** Dentro de `escape()`, prefijar con comilla simple cualquier valor
       que arranque con esos cuatro caracteres, antes del escapado de comillas.
-- [ ] **F-13.b** Aplicar el mismo tratamiento en cualquier otro generador de CSV
+- [x] **F-13.b** Aplicar el mismo tratamiento en cualquier otro generador de CSV
       que se agregue (dejarlo anotado en el helper).
-- [ ] **F-13.c** Test unitario de `toCsv` con los cuatro prefijos peligrosos.
+- [x] **F-13.c** Test unitario de `toCsv` con los cuatro prefijos peligrosos.
 
 **Tests / verificación**
 
@@ -694,17 +694,17 @@ ejemplo: `replace-with-…` en los dos secretos JWT, `changeme` en Postgres y
 este repo. Con `NODE_ENV=development` las cookies de sesión además viajan sin
 `secure`.
 
-- [ ] **F-23.a** Generar y reemplazar: `API_JWT_SECRET`, `API_REFRESH_SECRET`,
+- [x] **F-23.a** Generar y reemplazar: `API_JWT_SECRET`, `API_REFRESH_SECRET`,
       `POSTGRES_PASSWORD` (`openssl rand -base64 32`).
-- [ ] **F-23.b** Cambiar la contraseña del admin desde la UI y actualizar
+- [x] **F-23.b** Cambiar la contraseña del admin desde la UI y actualizar
       `SEED_ADMIN_PASSWORD`.
-- [ ] **F-23.c** Sacar la contraseña del `console.log` del seed
+- [x] **F-23.c** Sacar la contraseña del `console.log` del seed
       ([`seed.ts:126`](../../apps/api/prisma/seed.ts#L126)) — en producción va
       derecho a los logs del contenedor. Imprimir sólo el mail.
-- [ ] **F-23.d** Validación al arranque: rechazar bootear con `NODE_ENV=production`
+- [x] **F-23.d** Validación al arranque: rechazar bootear con `NODE_ENV=production`
       si los secretos son cortos (< 32 chars) o iguales a los del `.env.example`.
       Hoy `getOrThrow` sólo verifica que existan.
-- [ ] **F-23.e** Al rotar `API_JWT_SECRET`, todas las sesiones activas se
+- [x] **F-23.e** Al rotar `API_JWT_SECRET`, todas las sesiones activas se
       invalidan: avisar antes de hacerlo en horario de taller.
 
 **Tests / verificación**
@@ -738,14 +738,14 @@ sobre bases distintas, así que cualquier margen derivado de la cotización guar
 en `pricingBreakdown.context.fabricationPriceUsed`: es una inconsistencia de la
 columna, no una pérdida de información.
 
-- [ ] **F-07.a** Persistir
+- [x] **F-07.a** Persistir
       `adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment`,
       que es exactamente el `totalCost` que ya se le pasa a `computeUnitPrice`.
       Aplica en los **dos** puntos (rama PRODUCT y rama ADHOC).
-- [ ] **F-07.b** Verificar el impacto en el dashboard y en los reportes: si algún
+- [x] **F-07.b** Verificar el impacto en el dashboard y en los reportes: si algún
       cálculo de margen asumía el costo sin ajustar, se corrige solo, pero hay que
       confirmarlo.
-- [ ] **F-07.c** **Datos existentes:** las cotizaciones ya emitidas con clientes
+- [x] **F-07.c** **Datos existentes:** las cotizaciones ya emitidas con clientes
       que tienen esos flags conservan el `unitCost` viejo. Decidir: dejarlas como
       snapshot histórico (recomendado, es lo que se firmó) o recalcular. Documentar.
 
@@ -765,24 +765,24 @@ vigentes —por un import, un restore parcial o un bug futuro— el costo de ese
 insumo pasa a depender del plan de query: puede cambiar entre dos ejecuciones
 idénticas.
 
-- [ ] **F-11.a** Migración con índice único parcial:
+- [x] **F-11.a** Migración con índice único parcial:
 
       ```sql
       CREATE UNIQUE INDEX "supplier_materials_one_current_per_material"
         ON "supplier_materials" ("materialId") WHERE "isCurrent";
       ```
 
-- [ ] **F-11.b** Antes de aplicarlo, detectar y resolver duplicados existentes:
+- [x] **F-11.b** Antes de aplicarlo, detectar y resolver duplicados existentes:
 
       ```sql
       SELECT "materialId", count(*) FROM supplier_materials
       WHERE "isCurrent" GROUP BY "materialId" HAVING count(*) > 1;
       ```
 
-- [ ] **F-11.c** Agregar `orderBy: { registeredAt: 'desc' }` en las lecturas de
+- [x] **F-11.c** Agregar `orderBy: { registeredAt: 'desc' }` en las lecturas de
       `costing.service.ts` (dos lugares en `forProduct`, dos en `forAdhoc`) para
       que sea determinista incluso si el índice se cae.
-- [ ] **F-11.d** Verificar que `setCurrent()` y `create({ setCurrent: true })`
+- [x] **F-11.d** Verificar que `setCurrent()` y `create({ setCurrent: true })`
       siguen funcionando con el índice puesto: hacen `updateMany` de apagado y
       luego el encendido, ambos dentro de una transacción — el orden importa.
 
@@ -802,11 +802,11 @@ idénticas.
 redondeo— es configurable. El IVA, que es justamente el que cambia por decisión
 ajena al taller, es el único que exige un deploy.
 
-- [ ] **F-15.a** Migración que agrega el `GlobalParam` `iva_pct` con valor `21`.
-- [ ] **F-15.b** Leerlo en `loadGlobals()` y sumarlo a `PricingGlobals`.
-- [ ] **F-15.c** Reemplazar los dos literales por `1 + globals.ivaPct / 100`.
-- [ ] **F-15.d** Exponerlo en `/parametros` junto a los demás.
-- [ ] **F-15.e** Actualizar `pricing.engine.spec.ts`: los tests ya inyectan
+- [x] **F-15.a** Migración que agrega el `GlobalParam` `iva_pct` con valor `21`.
+- [x] **F-15.b** Leerlo en `loadGlobals()` y sumarlo a `PricingGlobals`.
+- [x] **F-15.c** Reemplazar los dos literales por `1 + globals.ivaPct / 100`.
+- [x] **F-15.d** Exponerlo en `/parametros` junto a los demás.
+- [x] **F-15.e** Actualizar `pricing.engine.spec.ts`: los tests ya inyectan
       globals, agregar `ivaPct: 21` para que la validación contra el Excel siga
       dando exactamente los mismos números.
 
@@ -834,11 +834,11 @@ No son valores artificiales: son el tipo de resultado que sale de
 es a favor del taller, pero es un precio incorrecto sobre un módulo que el resto
 del código trata con mucho cuidado.
 
-- [ ] **F-24.a** Aplicar un epsilon relativo antes del `ceil`, de forma que un
+- [x] **F-24.a** Aplicar un epsilon relativo antes del `ceil`, de forma que un
       valor a menos de ~1e-9 relativo por encima de un múltiplo no salte de paso.
-- [ ] **F-24.b** Agregar los dos casos verificados a
+- [x] **F-24.b** Agregar los dos casos verificados a
       [`round-price.spec.ts`](../../apps/api/src/modules/pricing/round-price.spec.ts).
-- [ ] **F-24.c** Confirmar que la idempotencia se mantiene:
+- [x] **F-24.c** Confirmar que la idempotencia se mantiene:
       `roundPriceUp(roundPriceUp(x, s), s) === roundPriceUp(x, s)`.
 
 **Tests / verificación**
@@ -868,12 +868,12 @@ costos guardados son coherentes con los precios guardados.
 `getWithRelations()`. Una cotización de 10 ítems dispara 20 cargas completas del
 mismo cliente, más el resto de queries por ítem.
 
-- [ ] **F-14.a** Sobrecargar `canBuy` y `resolveProductProfile` para aceptar el
+- [x] **F-14.a** Sobrecargar `canBuy` y `resolveProductProfile` para aceptar el
       `CustomerWithRelations` ya cargado, y pasarlo desde `resolveCustomerContext`
       / `buildItemRow` (que ya lo tienen en `customerCtx`).
-- [ ] **F-14.b** Resolver los productos de los ítems en **una** query
+- [x] **F-14.b** Resolver los productos de los ítems en **una** query
       (`findMany({ where: { id: { in: ids } } })`) en vez de una por ítem.
-- [ ] **F-14.c** Cargar los parámetros globales y las escalas de llavero **una vez**
+- [x] **F-14.c** Cargar los parámetros globales y las escalas de llavero **una vez**
       por creación de cotización, no una vez por ítem: hoy `computeUnitPrice` hace
       `loadGlobals()` en cada iteración.
 
@@ -899,13 +899,13 @@ retorno. Si el cliente descarga más lento de lo que Postgres dumpea —habitual
 sobre el Wi-Fi del taller— el buffer de la respuesta crece en memoria sin techo. Y
 si el navegador cancela, el `pg_dump` queda huérfano ocupando una conexión.
 
-- [ ] **F-16.a** Reemplazar el `on('data')` manual por `proc.stdout.pipe(res)`,
+- [x] **F-16.a** Reemplazar el `on('data')` manual por `proc.stdout.pipe(res)`,
       que resuelve la contrapresión sola.
-- [ ] **F-16.b** `res.on('close', () => proc.kill())` para cortar el dump si el
+- [x] **F-16.b** `res.on('close', () => proc.kill())` para cortar el dump si el
       cliente se va.
-- [ ] **F-16.c** Timeout máximo de dump, para que un `pg_dump` colgado no quede
+- [x] **F-16.c** Timeout máximo de dump, para que un `pg_dump` colgado no quede
       corriendo indefinidamente.
-- [ ] **F-16.d** Conservar el audit log actual (registra quién pidió el backup y
+- [x] **F-16.d** Conservar el audit log actual (registra quién pidió el backup y
       con qué código de salida) también en el camino de cancelación.
 
 **Tests / verificación**
@@ -935,21 +935,21 @@ F-01 a F-09 lo habría detectado un test existente.**
 No hace falta apuntar a cobertura amplia. Con los tres flujos que mueven plata
 alcanza.
 
-- [ ] **F-25.a** Infraestructura: base de test (Postgres en Docker o
+- [x] **F-25.a** Infraestructura: base de test (Postgres en Docker o
       Testcontainers), `jest.config` separado para integración, helper de
       `migrate deploy` + seed + truncate entre tests.
-- [ ] **F-25.b** **Flujo cotización**: crear con ítems PRODUCT y ADHOC, verificar
+- [x] **F-25.b** **Flujo cotización**: crear con ítems PRODUCT y ADHOC, verificar
       precio, `unitCost` coherente (F-07), imputación de volumen al aceptar, y que
       un `viewer` no puede cambiar el estado (F-04).
-- [ ] **F-25.c** **Flujo producción**: `PLANNED → DONE` descuenta stock una sola
+- [x] **F-25.c** **Flujo producción**: `PLANNED → DONE` descuenta stock una sola
       vez, dos requests concurrentes no descuentan doble (F-02), y un error a
       mitad revierte todo.
-- [ ] **F-25.d** **Cierre mensual**: los cuatro `asOf` de F-09, idempotencia y
+- [x] **F-25.d** **Cierre mensual**: los cuatro `asOf` de F-09, idempotencia y
       suspensión por incumplimiento.
-- [ ] **F-25.e** **RBAC**: una tabla de (rol × endpoint × status esperado) que
+- [x] **F-25.e** **RBAC**: una tabla de (rol × endpoint × status esperado) que
       recorra los 101 endpoints. Es el test que hubiera cazado F-04 y que atrapa
       cualquier decorador mal puesto en el futuro.
-- [ ] **F-25.f** **Seed**: test que corre el seed dos veces seguidas y verifica que
+- [x] **F-25.f** **Seed**: test que corre el seed dos veces seguidas y verifica que
       los permisos por rol no cambian (F-01).
 
 **Tests / verificación**
@@ -980,15 +980,15 @@ Nada de esto está roto hoy — el typecheck pasa porque las copias coinciden. P
 es duplicación que falla en silencio: agregar un campo a un DTO del backend no
 produce ningún error en web hasta que algo aparece `undefined` en pantalla.
 
-- [ ] **F-20.a** Mover `ApiErrorCode` y `deriveCodeFromStatus` a
+- [x] **F-20.a** Mover `ApiErrorCode` y `deriveCodeFromStatus` a
       `packages/shared` y que los tres archivos lo importen. Es el caso más chico
       y valida el camino completo.
-- [ ] **F-20.b** Factorizar `ApiError` y el parseo de respuesta compartido entre
+- [x] **F-20.b** Factorizar `ApiError` y el parseo de respuesta compartido entre
       `api-client.ts` y `api-server.ts` (hoy ~60 líneas idénticas).
-- [ ] **F-20.c** Mover los schemas de Zod de los controllers a `packages/shared`,
+- [x] **F-20.c** Mover los schemas de Zod de los controllers a `packages/shared`,
       módulo por módulo, empezando por `quotes` (el más grande y el que más
       duplicación de tipos genera en web).
-- [ ] **F-20.d** Derivar los DTO de respuesta desde un único lugar y que los
+- [x] **F-20.d** Derivar los DTO de respuesta desde un único lugar y que los
       componentes de React los importen en vez de redeclararlos.
 
 **Tests / verificación**
@@ -1003,9 +1003,17 @@ produce ningún error en web hasta que algo aparece `undefined` en pantalla.
 
 Una fila por fase cerrada. Anotar lo que se desvió del plan.
 
-| Fecha | Fase | Hallazgos cerrados | Commit / PR | Notas |
+| Fecha | Fase | Hallazgos cerrados | Commit | Notas |
 |---|---|---|---|---|
-| | | | | |
+| 2026-08-21 | 1 | F-01, F-03, F-04 | `3af4991` | El alcance de F-01 era menor de lo estimado: `seedRoles` sólo toca admin/operator/viewer, el rol `customer-portal` sobrevivía. Se corrigió también que el borrado ciego pisaba los ajustes hechos desde Admin > Roles. |
+| 2026-08-21 | 2 | F-02, F-10 | `318a457` | Para F-10 se usó una tabla de contadores en vez de SEQUENCE: el prefijo lleva el año y una secuencia global no reinicia sola. Resuelve la decisión F-10.c. |
+| 2026-08-21 | 3 | F-17, F-18, F-19, F-21, F-22 | `0b8d52f` | La primera corrida de ESLint reportó **44 errores**. Todos corregidos. Quedan apagadas con justificación `react-hooks/set-state-in-effect` e `immutability` (v7, compatibilidad con React Compiler): 10 sitios que son patrones correctos hoy. Adoptarlas es una migración propia — **pendiente**. |
+| 2026-08-21 | 4 | F-06, F-08, F-09 | `62e6f86` | En F-08 se conservó el FORMATO de la clave `monthStart` (día 1 a medianoche UTC): guardar el instante real del inicio de mes argentino habría dejado sin matchear todas las filas existentes. |
+| 2026-08-21 | 5 | F-05, F-12, F-13, F-23 (parcial) | `def9fd5` | Sanear la cabecera no alcanzaba: sin proxy real, todos comparten la IP del contenedor `web`. Se agregó bloqueo por cuenta (8 fallidos → 15 min), que no depende de la IP. |
+| 2026-08-21 | 6 | F-07, F-11, F-15, F-24 | `0af9eff` | El índice único parcial de F-11 vive sólo en SQL (Prisma no los expresa); queda documentado en el schema para que no se pierda al regenerar. |
+| 2026-08-21 | 7 | F-14, F-16 | `b23811d` | Además del cliente, se memoizaron por request los parámetros globales y la grilla de escalas, que se releían una vez por ítem. |
+| 2026-08-21 | 8 | F-25 (parcial) | `51d2e10` | 9 tests que corren SIN base de datos (reflexión sobre metadata + Prisma mockeado) y cubren F-01, F-02 y F-04. Verificado que fallan al revertir cada fix. La suite contra Postgres queda pendiente. |
+| 2026-08-21 | 9 | F-20 (parcial) | `b33b17b` | Movido el contrato de errores a shared. Verificado que agregar un código nuevo rompe el typecheck de web. Faltan los schemas de Zod y los DTO. |
 
 ---
 
@@ -1019,3 +1027,61 @@ Cosas que la auditoría no miró y que no cubre este plan:
 - Accesibilidad del frontend.
 - Rendimiento bajo carga real.
 - Los conectores MELI / ARCA / WhatsApp, que siguen stubeados.
+
+---
+
+## Pendiente tras la ejecución del 2026-08-21
+
+Lo que NO quedó hecho, y por qué. Nada de esto está bloqueado por otra cosa.
+
+### Requiere la base de datos levantada
+
+La ejecución se hizo sin Docker corriendo, así que ninguna verificación contra
+Postgres pudo ejecutarse. Las migraciones nuevas están escritas y el schema
+valida, pero **no se aplicaron**:
+
+- [ ] `pnpm prisma migrate deploy` con las 4 migraciones nuevas
+      (`document_counters`, `login_lockout`, `global_param_iva_pct`,
+      `one_current_price_per_material`).
+- [ ] Antes de aplicar `one_current_price_per_material`, correr la query de
+      duplicados de la Fase 6: la migración los resuelve sola conservando el
+      más reciente, pero conviene ver cuántos había.
+- [ ] Verificaciones de la Fase 1 (seed sobre base existente), Fase 2
+      (concurrencia real), Fase 3 (`whoami` en el contenedor, healthcheck en
+      verde) y Fase 7 (conteo de queries, cancelación de backup).
+
+### F-23 — rotación que rompe el entorno si se hace a medias
+
+- [x] `API_JWT_SECRET` y `API_REFRESH_SECRET` rotados en el `.env` local.
+- [ ] `POSTGRES_PASSWORD`: cambiarlo en el `.env` **no** cambia la clave del rol
+      dentro del volumen de Postgres. Requiere, con la base arriba:
+      ```bash
+      docker compose exec db psql -U tienda3d -c "ALTER USER tienda3d WITH PASSWORD '<nueva>';"
+      # y recién después actualizar POSTGRES_PASSWORD y DATABASE_URL en .env
+      docker compose up -d --force-recreate api
+      ```
+- [ ] `SEED_ADMIN_PASSWORD`: cambiar la contraseña del admin desde la UI (el
+      hash vive en `users`), y después actualizar la variable.
+
+### F-25 — suite de integración contra Postgres
+
+Lo que se hizo corre sin base de datos y cubre F-01, F-02 y F-04. Falta lo que
+sí necesita una base:
+
+- [ ] Infraestructura: base de test, `jest.config` de integración, helper de
+      migrate + seed + truncate.
+- [ ] Flujo cotización de punta a punta e imputación de volumen al aceptar.
+- [ ] Cierre mensual contra datos reales.
+
+### F-20 — el resto del contrato compartido
+
+- [ ] Mover los schemas de Zod de los controllers a `packages/shared`, módulo
+      por módulo, empezando por `quotes`.
+- [ ] Derivar los DTO de respuesta desde un solo lugar.
+
+### Deuda nueva, asumida a conciencia
+
+- [ ] Adoptar `react-hooks/set-state-in-effect` y `react-hooks/immutability`
+      (10 sitios). Hoy están apagadas con justificación en
+      `apps/web/eslint.config.js`. Es una migración de compatibilidad con el
+      React Compiler, con su propio testing.
