@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
+import type { QuoteItemInputDto } from '@tienda3d/shared';
 import { PricingWarnings } from '@/components/pricing-warnings';
 import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
@@ -396,30 +397,10 @@ export function RapidQuoteForm({
   const [matrix, setMatrix] = useState<KeychainMatrixRow[] | 'loading' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  type AdhocItemPayload = {
-    type: 'ADHOC';
-    description: string;
-    quantity: number;
-    payload: {
-      pieces: Array<{
-        name: string;
-        grams: number;
-        printMinutes: number;
-        filamentId: string;
-      }>;
-      individualPieces?: Array<{
-        name: string;
-        grams: number;
-        printMinutes: number;
-        filamentId: string;
-      }>;
-      materials: Array<{ materialId: string; quantity: number }>;
-      assemblyMinutes: number;
-      managementMinutes: number;
-      designMinutes: number;
-      templateKind?: 'KEYCHAIN';
-    };
-  };
+  // El payload que se manda al backend es el MISMO tipo que valida el
+  // controller (@tienda3d/shared). Antes se re-declaraba a mano acá: si el
+  // backend agregaba un campo, esto seguía compilando y el campo nunca llegaba.
+  type AdhocItemPayload = Extract<QuoteItemInputDto, { type: 'ADHOC' }>;
 
   /**
    * Particiona el state del form en N items ADHOC, uno por grupo.

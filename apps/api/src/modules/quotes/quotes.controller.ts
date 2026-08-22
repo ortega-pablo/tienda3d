@@ -14,6 +14,16 @@ import {
 import { QuoteStatus, QuoteType } from '@prisma/client';
 import type { Response } from 'express';
 import { z } from 'zod';
+import {
+  adhocCostSchema,
+  keychainMatrixSchema,
+  quoteCreateSchema as createSchema,
+  quoteListQuerySchema as listQuerySchema,
+  quotePreviewSchema as previewSchema,
+  quoteStatusUpdateSchema as statusSchema,
+  type QuoteStatusValue,
+  type QuoteTypeValue,
+} from '@tienda3d/shared';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
@@ -23,95 +33,25 @@ import { CostingService } from '../costing/costing.service';
 import { PdfService } from './pdf.service';
 import { QuotesService } from './quotes.service';
 
-const adhocPieceSchema = z.object({
-  name: z.string().min(1).max(120),
-  grams: z.number().nonnegative(),
-  printMinutes: z.number().nonnegative(),
-  filamentId: z.string().min(1),
-});
+/**
+ * Los schemas de request viven en `@tienda3d/shared` para que la API y los
+ * formularios de web validen el MISMO contrato. Antes estaban acá y web
+ * re-declaraba a mano la forma de cada payload: agregar un campo no producía
+ * ningún error del otro lado.
+ */
 
-const adhocPayloadSchema = z.object({
-  pieces: z.array(adhocPieceSchema),
-  /**
-   * Solo llaveros: piezas para 1 unidad (base de la escala 1-4). `pieces` es
-   * la tanda (placa). Si está ausente, 1-4 cae a `pieces` ÷ batchSize.
-   */
-  individualPieces: z.array(adhocPieceSchema).optional(),
-  materials: z.array(
-    z.object({
-      materialId: z.string().min(1),
-      quantity: z.number().positive(),
-    }),
-  ),
-  assemblyMinutes: z.number().nonnegative(),
-  managementMinutes: z.number().nonnegative(),
-  designMinutes: z.number().nonnegative().optional(),
-  /**
-   * Si vale 'KEYCHAIN' el flujo aplica el modelo de llaveros: acepta cualquier
-   * cantidad entera ≥ 1 y resuelve el markup desde la escala contigua
-   * (`KeychainScaleTier`) que cubre la cantidad. La escala 1-4 usa
-   * `individualPieces`; las escalas 5+ usan `pieces` (tanda) ÷ batchSize.
-   */
-  templateKind: z.literal('KEYCHAIN').optional(),
-});
-
-const productItemSchema = z.object({
-  type: z.literal('PRODUCT'),
-  productId: z.string().min(1),
-  quantity: z.number().positive(),
-  description: z.string().max(240).optional(),
-});
-const adhocItemSchema = z.object({
-  type: z.literal('ADHOC'),
-  description: z.string().min(1).max(240),
-  quantity: z.number().positive(),
-  payload: adhocPayloadSchema,
-});
-
-const itemSchema = z.discriminatedUnion('type', [productItemSchema, adhocItemSchema]);
-
-const createSchema = z.object({
-  customerId: z.string().min(1).nullable().optional(),
-  customerName: z.string().max(160).optional(),
-  customerEmail: z.string().email().nullable().optional(),
-  customerPhone: z.string().max(40).nullable().optional(),
-  customerNotes: z.string().max(2000).nullable().optional(),
-  channelId: z.string().min(1).nullable(),
-  withInvoice: z.boolean().optional(),
-  validUntil: z.string().datetime().nullable().optional(),
-  notes: z.string().max(4000).nullable().optional(),
-  discount: z.number().min(0).optional(),
-  items: z.array(itemSchema).min(1),
-});
-
-const previewSchema = z.object({
-  channelId: z.string().nullable(),
-  customerId: z.string().min(1).nullable().optional(),
-  item: itemSchema,
-});
-
-const statusSchema = z.object({
-  status: z.nativeEnum(QuoteStatus),
-});
-
-const listQuerySchema = z.object({
-  type: z.nativeEnum(QuoteType).optional(),
-  /** Filtra cotizaciones cuyos items tienen `templateKind: 'KEYCHAIN'` en el payload. */
-  templateKind: z.literal('KEYCHAIN').optional(),
-});
-
-const adhocCostSchema = z.object({
-  channelId: z.string().nullable().optional(),
-  payload: adhocPayloadSchema,
-});
-
-const keychainMatrixSchema = z.object({
-  channelId: z.string().min(1),
-  customerId: z.string().min(1).nullable().optional(),
-  // Payload sin templateKind ni designMinutes/Surcharge: el endpoint los
-  // computa para cada tier de la grilla y devuelve filas comparativas.
-  payload: adhocPayloadSchema,
-});
+/**
+ * Verificación en tiempo de compilación: los literales del schema compartido
+ * tienen que cubrir exactamente los enums de Prisma. `shared` no puede importar
+ * `@prisma/client` (lo consume también el bundle del navegador), así que ésta
+ * es la costura donde se comprueba que no se separaron. Si alguien agrega un
+ * QuoteStatus en el schema y no en shared —o al revés— esto no compila.
+ */
+type AssertEqual<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+const _statusMatchesPrisma: AssertEqual<QuoteStatusValue, QuoteStatus> = true;
+const _typeMatchesPrisma: AssertEqual<QuoteTypeValue, QuoteType> = true;
+void _statusMatchesPrisma;
+void _typeMatchesPrisma;
 
 @UseGuards(PermissionsGuard)
 @Controller('quotes')

@@ -10,7 +10,10 @@
     ".": "./src/index.ts",
     "./schemas": "./src/schemas/index.ts",
     "./types": "./src/types/index.ts",
-    "./errors": "./src/errors.ts"
+    "./errors": "./src/errors.ts",
+    "./types/costing": "./src/types/costing.ts",
+    "./types/pricing": "./src/types/pricing.ts",
+    "./types/quotes": "./src/types/quotes.ts"
   },
   "scripts": {
     "build": "tsc -b",
