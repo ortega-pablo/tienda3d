@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DocumentCodeService } from '@/common/utils/document-code';
 import { CategoriesModule } from '../categories/categories.module';
 import { ChannelsModule } from '../channels/channels.module';
 import { CostingModule } from '../costing/costing.module';
@@ -19,7 +20,7 @@ import { QuotesService } from './quotes.service';
     KeychainScaleTiersModule,
   ],
   controllers: [QuotesController],
-  providers: [QuotesService, PdfService],
+  providers: [QuotesService, PdfService, DocumentCodeService],
   exports: [QuotesService],
 })
 export class QuotesModule {}

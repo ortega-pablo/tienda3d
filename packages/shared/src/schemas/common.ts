@@ -15,5 +15,7 @@ export const apiErrorSchema = z.object({
   timestamp: z.string(),
 });
 
-export type ApiError = z.infer<typeof apiErrorSchema>;
+/** Forma del envelope de error que emite la API (validación en runtime).
+ *  El error tipado que lanzan los fetchers es la clase `ApiError` de ./errors. */
+export type ApiErrorEnvelope = z.infer<typeof apiErrorSchema>;
 export type Pagination = z.infer<typeof paginationSchema>;

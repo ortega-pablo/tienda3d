@@ -91,11 +91,22 @@ export class CsvService {
   }
 }
 
-function toCsv(rows: Array<Record<string, string | number>>): string {
+/**
+ * Caracteres con los que Excel y LibreOffice interpretan una celda como
+ * fórmula. Un cliente cargado como `=HYPERLINK(...)` se ejecutaría al abrir el
+ * archivo — y el destino de estos exports es exactamente Excel: el proyecto
+ * entero nació de una planilla.
+ */
+const FORMULA_PREFIXES = ['=', '+', '-', '@'];
+
+export function toCsv(rows: Array<Record<string, string | number>>): string {
   if (rows.length === 0) return '';
   const headers = Object.keys(rows[0]!);
   const escape = (v: unknown): string => {
-    const s = v == null ? '' : String(v);
+    let s = v == null ? '' : String(v);
+    // Neutralizar fórmulas ANTES de escapar comillas: la comilla simple hace
+    // que la planilla trate el contenido como texto literal.
+    if (s.length > 0 && FORMULA_PREFIXES.includes(s[0]!)) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [headers.join(',')];

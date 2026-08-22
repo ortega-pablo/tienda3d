@@ -1,4 +1,4 @@
-import { addBusinessDays } from './date';
+import { addBusinessDays, addBusinessMonths, startOfBusinessMonth } from './date';
 
 /** Día de la semana (0=dom..6=sáb) en hora de pared argentina. */
 function arDow(d: Date): number {
@@ -39,5 +39,49 @@ describe('addBusinessDays', () => {
     const result = addBusinessDays(new Date(Date.UTC(2026, 0, 1, 8, 30, 0)), 5);
     expect(result.getUTCHours()).toBe(15);
     expect(result.getUTCMinutes()).toBe(0);
+  });
+});
+
+describe('startOfBusinessMonth', () => {
+  const iso = (d: Date) => d.toISOString();
+
+  it('usa el mes de la pared argentina, no el de UTC', () => {
+    // 30/09 23:30 ART = 01/10 02:30 UTC. Pertenece a SEPTIEMBRE.
+    const lateSeptember = new Date(Date.UTC(2026, 9, 1, 2, 30, 0));
+    expect(iso(startOfBusinessMonth(lateSeptember))).toBe('2026-09-01T00:00:00.000Z');
+
+    // 01/10 00:30 ART = 01/10 03:30 UTC. Pertenece a OCTUBRE.
+    const earlyOctober = new Date(Date.UTC(2026, 9, 1, 3, 30, 0));
+    expect(iso(startOfBusinessMonth(earlyOctober))).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  it('mantiene el formato de clave YYYY-MM-01T00:00:00Z', () => {
+    const mid = new Date(Date.UTC(2026, 2, 15, 12, 0, 0));
+    expect(iso(startOfBusinessMonth(mid))).toBe('2026-03-01T00:00:00.000Z');
+  });
+
+  it('cruza el año correctamente', () => {
+    // 31/12 22:00 ART = 01/01 01:00 UTC del año siguiente → sigue siendo diciembre.
+    const newYearEve = new Date(Date.UTC(2027, 0, 1, 1, 0, 0));
+    expect(iso(startOfBusinessMonth(newYearEve))).toBe('2026-12-01T00:00:00.000Z');
+  });
+});
+
+describe('addBusinessMonths', () => {
+  const closedMonthFor = (isoDate: string) =>
+    addBusinessMonths(startOfBusinessMonth(new Date(isoDate)), -1).toISOString().slice(0, 10);
+
+  it('no desborda el día en meses cortos', () => {
+    // Estos cuatro casos daban el mes EN CURSO con el cálculo viejo.
+    expect(closedMonthFor('2026-03-31T12:00:00Z')).toBe('2026-02-01');
+    expect(closedMonthFor('2026-05-31T12:00:00Z')).toBe('2026-04-01');
+    expect(closedMonthFor('2026-07-31T12:00:00Z')).toBe('2026-06-01');
+    expect(closedMonthFor('2026-03-15T12:00:00Z')).toBe('2026-02-01');
+  });
+
+  it('cruza el año hacia atrás y hacia adelante', () => {
+    const jan = startOfBusinessMonth(new Date(Date.UTC(2026, 0, 10, 12)));
+    expect(addBusinessMonths(jan, -1).toISOString()).toBe('2025-12-01T00:00:00.000Z');
+    expect(addBusinessMonths(jan, 12).toISOString()).toBe('2027-01-01T00:00:00.000Z');
   });
 });

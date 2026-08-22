@@ -1,8 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma, ProductionStatus, StockMovementType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
+import { DocumentCodeService } from '@/common/utils/document-code';
 import { CostingService } from '../costing/costing.service';
 
 export interface ProductionConsumptionLine {
@@ -40,6 +46,7 @@ export class ProductionsService {
     private readonly prisma: PrismaService,
     private readonly costing: CostingService,
     private readonly audit: AuditService,
+    private readonly codes: DocumentCodeService,
   ) {}
 
   async list(): Promise<ProductionDto[]> {
@@ -147,23 +154,55 @@ export class ProductionsService {
     }
   }
 
+  /**
+   * Cambia el estado de la orden y, si pasa a DONE, descuenta el stock.
+   *
+   * Ambas cosas ocurren en UNA transacción con un update condicional sobre el
+   * estado leído. Antes el descuento corría en su propia transacción y el
+   * cambio de estado quedaba afuera, lo que abría dos agujeros:
+   *   - si el update fallaba después del descuento, el stock quedaba consumido
+   *     con la orden todavía en IN_PROGRESS, y el reintento descontaba de nuevo;
+   *   - dos requests concurrentes a DONE pasaban ambos la validación de
+   *     transición (que lee antes de escribir) y descontaban el doble.
+   *
+   * El `updateMany` con `status: order.status` en el where es el que cierra la
+   * carrera: si otro request ya movió la orden, afecta 0 filas y abortamos.
+   */
   async setStatus(id: string, status: ProductionStatus, actorId: string): Promise<ProductionDetailDto> {
     const order = await this.prisma.productionOrder.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Orden inexistente');
     if (!this.isValidTransition(order.status, status)) {
       throw new BadRequestException(`Transición no válida ${order.status} → ${status}`);
     }
-    if (status === ProductionStatus.DONE) {
-      await this.consumeStock(order.id, actorId);
-    }
-    await this.prisma.productionOrder.update({
-      where: { id },
-      data: {
-        status,
-        ...(status === ProductionStatus.IN_PROGRESS && !order.startedAt && { startedAt: new Date() }),
-        ...(status === ProductionStatus.DONE && { finishedAt: new Date() }),
-      },
+
+    // Las líneas de consumo son sólo lecturas: se resuelven ANTES de abrir la
+    // transacción para no alargarla con I/O que no necesita el lock.
+    const lines =
+      status === ProductionStatus.DONE
+        ? await this.previewConsumption(order.productId, dec(order.quantity), {
+            filamentOverrides: this.parseOverrides(order.filamentOverrides),
+          })
+        : [];
+
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.productionOrder.updateMany({
+        where: { id, status: order.status },
+        data: {
+          status,
+          ...(status === ProductionStatus.IN_PROGRESS && !order.startedAt && { startedAt: new Date() }),
+          ...(status === ProductionStatus.DONE && { finishedAt: new Date() }),
+        },
+      });
+      if (claimed.count === 0) {
+        throw new ConflictException(
+          'La orden cambió de estado mientras se procesaba. Recargá la página.',
+        );
+      }
+      if (status === ProductionStatus.DONE) {
+        await this.consumeStock(tx, order, lines, actorId);
+      }
     });
+
     await this.audit.record({
       actorId,
       entity: 'ProductionOrder',
@@ -251,45 +290,38 @@ export class ProductionsService {
 
   // ----- internals -----
 
-  private async consumeStock(orderId: string, actorId: string): Promise<void> {
-    const order = await this.prisma.productionOrder.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException();
-    const lines = await this.previewConsumption(order.productId, dec(order.quantity), {
-      filamentOverrides: this.parseOverrides(order.filamentOverrides),
-    });
-    if (lines.length === 0) return;
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const line of lines) {
-        await tx.material.update({
-          where: { id: line.materialId },
-          data: { currentStock: { decrement: line.totalQty } },
-        });
-        await tx.stockMovement.create({
-          data: {
-            materialId: line.materialId,
-            type: StockMovementType.OUT,
-            quantity: line.totalQty,
-            productionId: orderId,
-            createdById: actorId,
-            notes: `Consumo OP ${order.code}`,
-          },
-        });
-      }
-    });
+  /**
+   * Descuenta el stock de las líneas dadas dentro de la transacción del caller.
+   * No abre transacción propia a propósito: el descuento y el cambio de estado
+   * de la orden tienen que confirmarse o revertirse juntos.
+   */
+  private async consumeStock(
+    tx: Prisma.TransactionClient,
+    order: { id: string; code: string },
+    lines: ProductionConsumptionLine[],
+    actorId: string,
+  ): Promise<void> {
+    for (const line of lines) {
+      await tx.material.update({
+        where: { id: line.materialId },
+        data: { currentStock: { decrement: line.totalQty } },
+      });
+      await tx.stockMovement.create({
+        data: {
+          materialId: line.materialId,
+          type: StockMovementType.OUT,
+          quantity: line.totalQty,
+          productionId: order.id,
+          createdById: actorId,
+          notes: `Consumo OP ${order.code}`,
+        },
+      });
+    }
   }
 
-  private async nextCode(): Promise<string> {
-    const year = new Date().getFullYear();
-    const prefix = `OP-${year}-`;
-    const last = await this.prisma.productionOrder.findFirst({
-      where: { code: { startsWith: prefix } },
-      orderBy: { code: 'desc' },
-      select: { code: true },
-    });
-    const lastNum = last ? Number(last.code.slice(prefix.length)) : 0;
-    const next = (lastNum + 1).toString().padStart(4, '0');
-    return `${prefix}${next}`;
+  /** OP-YYYY-NNNN, reservado atómicamente (ver DocumentCodeService). */
+  private nextCode(): Promise<string> {
+    return this.codes.next('PRODUCTION', 'OP');
   }
 
   private isValidTransition(from: ProductionStatus, to: ProductionStatus): boolean {

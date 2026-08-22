@@ -84,8 +84,8 @@ export function DatabaseBackupCard() {
         ) : (
           <>
             <p className="text-xs text-muted-foreground">
-              Tip: configurá Chrome con <em>"Preguntar dónde guardar cada archivo antes de
-              descargar"</em> y la primera vez apuntá a tu carpeta de iCloud
+              Tip: configurá Chrome con <em>&ldquo;Preguntar dónde guardar cada archivo antes de
+              descargar&rdquo;</em> y la primera vez apuntá a tu carpeta de iCloud
               (<span className="font-mono">~/iCloud Drive/Plastik3D/Backups</span>). Las
               descargas siguientes recuerdan esa ubicación.
             </p>

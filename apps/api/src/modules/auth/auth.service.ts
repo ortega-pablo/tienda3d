@@ -9,6 +9,13 @@ import * as argon2 from 'argon2';
 import * as crypto from 'node:crypto';
 import { PrismaService } from '@/common/prisma/prisma.service';
 
+/** Mensaje único para todos los fallos de login: no filtra si el mail existe. */
+const INVALID_CREDENTIALS = 'Credenciales inválidas';
+/** Fallidos consecutivos antes de bloquear la cuenta. */
+const MAX_FAILED_ATTEMPTS = 8;
+/** Duración del bloqueo, en minutos. */
+const LOCKOUT_MINUTES = 15;
+
 export interface AccessPayload {
   sub: string;
   email: string;
@@ -37,6 +44,19 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * Login con bloqueo por cuenta.
+   *
+   * El rate limit del throttler es por IP, y la IP es débil como clave: todos
+   * los usuarios entran por la del contenedor `web`, y detrás de NAT comparten
+   * la de la oficina. El contador por cuenta no depende de la red — tras
+   * MAX_FAILED_ATTEMPTS fallidos consecutivos el usuario queda bloqueado
+   * LOCKOUT_MINUTES, cambie de IP quien lo intente.
+   *
+   * Todas las salidas de error devuelven el MISMO mensaje: si el bloqueo
+   * dijera "cuenta bloqueada" y el usuario inexistente dijera otra cosa, el
+   * endpoint serviría para enumerar mails registrados.
+   */
   async login(email: string, password: string): Promise<{
     user: AuthenticatedUser;
     accessToken: string;
@@ -48,9 +68,25 @@ export class AuthService {
       where: { email },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
-    if (!user || !user.isActive) throw new UnauthorizedException('Credenciales inválidas');
+    if (!user || !user.isActive) throw new UnauthorizedException(INVALID_CREDENTIALS);
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+
     const valid = await argon2.verify(user.passwordHash, password);
-    if (!valid) throw new UnauthorizedException('Credenciales inválidas');
+    if (!valid) {
+      await this.registerFailedAttempt(user.id, user.failedLoginAttempts);
+      throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+
+    // Login correcto: se limpia el contador y cualquier bloqueo vencido.
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+    }
 
     const permissions = user.role.permissions.map((rp) => rp.permission.key);
     const authUser: AuthenticatedUser = {
@@ -177,6 +213,24 @@ export class AuthService {
       data: { tokenHash: this.hash(token) },
     });
     return { token, expiresIn };
+  }
+
+  /**
+   * Suma un intento fallido y bloquea la cuenta al llegar al máximo.
+   * Best-effort: si la escritura falla no se convierte un 401 en un 500.
+   */
+  private async registerFailedAttempt(userId: string, current: number): Promise<void> {
+    const attempts = current + 1;
+    const locked = attempts >= MAX_FAILED_ATTEMPTS;
+    await this.prisma.user
+      .update({
+        where: { id: userId },
+        data: {
+          failedLoginAttempts: locked ? 0 : attempts,
+          lockedUntil: locked ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000) : null,
+        },
+      })
+      .catch(() => undefined);
   }
 
   private hash(token: string): string {

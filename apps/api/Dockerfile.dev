@@ -18,6 +18,9 @@ COPY tsconfig.base.json ./
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
+# shared se consume compilado (la API lo requiere en runtime)
+RUN pnpm --filter @tienda3d/shared build
+
 # Generate Prisma client (re-runs on dev start via entrypoint script if schema changes)
 RUN cd apps/api && pnpm prisma:generate
 

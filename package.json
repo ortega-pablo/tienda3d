@@ -23,7 +23,8 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yml,yaml}\"",
+    "build:shared": "pnpm --filter @tienda3d/shared build"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

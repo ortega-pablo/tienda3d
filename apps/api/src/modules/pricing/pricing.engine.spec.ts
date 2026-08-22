@@ -35,6 +35,7 @@ describe('PricingEngine — Logic C v3', () => {
     directSaleCommissionPct: 6.5,
     unifiedRegimePct: 4,
     roundingStep: 0, // redondeo desactivado por default en la mayoría de los tests
+    ivaPct: 21, // alícuota con la que se validó contra el Excel
   };
   const product: ProductPricingInputs = { targetMarkupPct: 60 };
 
@@ -318,6 +319,45 @@ describe('PricingEngine — Logic C v3', () => {
       const s = engine.surcharge(1234, directa, { ...globals, roundingStep: 50 });
       expect(s % 50).toBe(0);
       expect(s).toBeGreaterThanOrEqual(1234);
+    });
+  });
+
+  describe('IVA configurable (F-15)', () => {
+    const detailedWithIva = make({
+      name: 'Canal con IVA',
+      slug: 'con-iva',
+      kind: 'CUSTOM',
+      taxMode: 'DETAILED',
+      iibbPct: 0,
+      appliesIva: true,
+    });
+
+    it('con 21% da exactamente lo que daba el literal hardcodeado', () => {
+      const r = engine.price(cost, detailedWithIva, product, globals);
+      expect(r.finalPrice).toBeCloseTo(r.netPrice * 1.21, 6);
+    });
+
+    it('cambiar la alícuota mueve el precio final en la proporción esperada', () => {
+      const at21 = engine.price(cost, detailedWithIva, product, globals);
+      const at10 = engine.price(cost, detailedWithIva, product, { ...globals, ivaPct: 10.5 });
+      expect(at10.finalPrice).toBeCloseTo(at10.netPrice * 1.105, 6);
+      // El neto no cambia: el IVA se aplica sobre él, no lo altera.
+      expect(at10.netPrice).toBeCloseTo(at21.netPrice, 6);
+    });
+
+    it('un canal sin appliesIva no se ve afectado por la alícuota', () => {
+      const noIva = make({
+        name: 'Canal sin IVA',
+        slug: 'sin-iva',
+        kind: 'CUSTOM',
+        taxMode: 'DETAILED',
+        iibbPct: 0,
+        appliesIva: false,
+      });
+      const at21 = engine.price(cost, noIva, product, globals);
+      const at10 = engine.price(cost, noIva, product, { ...globals, ivaPct: 10.5 });
+      expect(at21.finalPrice).toBe(at10.finalPrice);
+      expect(at21.finalPrice).toBeCloseTo(at21.netPrice, 6);
     });
   });
 });

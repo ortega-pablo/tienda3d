@@ -343,15 +343,23 @@ export class PricingService {
     const params = await this.prisma.globalParam.findMany({
       where: {
         key: {
-          in: ['direct_sale_commission_pct', 'unified_regime_pct', 'price_rounding_step'],
+          in: [
+            'direct_sale_commission_pct',
+            'unified_regime_pct',
+            'price_rounding_step',
+            'iva_pct',
+          ],
         },
       },
     });
     const map = new Map(params.map((p) => [p.key, Number(p.value)]));
     const rounding = map.get('price_rounding_step');
+    const iva = map.get('iva_pct');
     return {
       directSaleCommissionPct: map.get('direct_sale_commission_pct') ?? 0,
       unifiedRegimePct: map.get('unified_regime_pct') ?? 0,
+      // 21 si la fila no existe: es el valor con el que se venía calculando.
+      ivaPct: iva != null && Number.isFinite(iva) && iva >= 0 ? iva : 21,
       // Default 50 si la fila no existe (defensive); 0 desactiva el redondeo.
       roundingStep:
         rounding != null && Number.isFinite(rounding) && rounding > 0

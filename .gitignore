@@ -10,9 +10,9 @@ out/
 *.tsbuildinfo
 
 # Environment
-.env
-.env.local
-.env.*.local
+# Patrón amplio a propósito: un `.env.backup` o `.env.prod` no matcheaba las
+# reglas viejas y podía commitearse con secretos adentro.
+.env*
 !.env.example
 
 # Logs
@@ -35,6 +35,11 @@ test-results/
 
 # Prisma
 apps/api/prisma/migrations/dev.db*
+# El seed se ejecuta con `tsx prisma/seed.ts`; los compilados no los usa nadie.
+apps/api/prisma/seed.js
+apps/api/prisma/seed.js.map
+apps/api/prisma/seed.d.ts
+apps/api/prisma/seed.d.ts.map
 
 # Docker
 docker-data/

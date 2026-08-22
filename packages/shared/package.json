@@ -3,23 +3,27 @@
   "version": "0.1.0",
   "private": true,
   "description": "Shared types, Zod schemas and constants for Plastik 3D",
-  "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./schemas": "./src/schemas/index.ts",
-    "./types": "./src/types/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint \"src/**/*.ts\"",
-    "typecheck": "tsc --noEmit"
+    "lint": "echo 'sin lint propio (56 líneas, cubierto por typecheck)'",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }

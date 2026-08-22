@@ -65,7 +65,7 @@ export default async function NewRapidQuotePage({
         <p className="text-muted-foreground">
           Para piezas personalizadas que no están en el catálogo. Cargás material, gramaje,
           tiempo de impresión y mano de obra de cada componente para obtener un precio. Por
-          default cotiza con factura (Venta Directa); tildá "Operación sin factura" para
+          default cotiza con factura (Venta Directa); tildá &ldquo;Operación sin factura&rdquo; para
           Efectivo.
         </p>
       </header>

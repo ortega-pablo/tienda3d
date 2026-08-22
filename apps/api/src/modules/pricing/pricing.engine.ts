@@ -194,9 +194,11 @@ export class PricingEngine {
     // Generaliza la regla de CASH: si el cliente está exento, régimen = 0
     // sin importar el canal. Útil para mayoristas/consignación con régimen
     // distinto al unificado.
+    const ivaMultiplier = 1 + (globals.ivaPct ?? 21) / 100;
+
     if (customer.skipRegime) {
       const finalMultiplier =
-        channel.taxMode === 'DETAILED' && channel.appliesIva ? 1.21 : 1;
+        channel.taxMode === 'DETAILED' && channel.appliesIva ? ivaMultiplier : 1;
       return { burdenPct: 0, finalMultiplier };
     }
 
@@ -208,7 +210,7 @@ export class PricingEngine {
         (channel.retentionIncomePct ?? 0);
       return {
         burdenPct: iibb + retentions,
-        finalMultiplier: channel.appliesIva ? 1.21 : 1,
+        finalMultiplier: channel.appliesIva ? ivaMultiplier : 1,
       };
     }
     // SIMPLE: régimen unificado aplica a todo canal SIMPLE excepto CASH.

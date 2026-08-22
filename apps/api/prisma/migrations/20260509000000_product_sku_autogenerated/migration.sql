@@ -26,10 +26,17 @@ WHERE p.id = o.id;
 
 -- 3. Avanzar la secuencia para que el próximo nextval() salga después del
 --    último producto existente. Si hay 10 productos, próximo será 000011.
+--
+--    OJO con la tabla vacía: `setval(seq, 0)` es un error de Postgres
+--    ("value 0 is out of bounds"), así que sobre una base NUEVA —donde products
+--    todavía no tiene filas— esta migración abortaba y la instalación limpia no
+--    llegaba a levantar. Se usa el tercer argumento `is_called`: con 0
+--    productos se deja la secuencia en 1 sin marcarla como usada, y el primer
+--    nextval() devuelve 1.
 SELECT setval(
   'product_sku_seq',
-  (SELECT COUNT(*) FROM products),
-  true
+  GREATEST((SELECT COUNT(*) FROM products), 1),
+  (SELECT COUNT(*) FROM products) > 0
 );
 
 -- 4. Volver el campo NOT NULL (antes era opcional). El UNIQUE ya existe.

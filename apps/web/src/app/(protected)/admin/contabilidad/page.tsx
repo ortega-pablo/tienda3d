@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Calculator, ClipboardList, Coins, Factory, Receipt, ShieldCheck } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
 import { api } from '@/lib/api-server';
@@ -34,7 +35,7 @@ export default async function AccountingPage() {
       >
         <p className="mb-3">
           La diferencia respecto a la lógica anterior: <strong>la ganancia ya no se calcula
-          sobre todo el costo</strong>. Se calcula solo sobre el "precio de fabricación"
+          sobre todo el costo</strong>. Se calcula solo sobre el &ldquo;precio de fabricación&rdquo;
           (filamento, máquina, mano de obra, marketing y provisiones). Los <em>otros insumos</em>
           {' '}quedan afuera del profit y se suman después, recompuestos por su propio% de
           reabastecimiento. La ganancia que ves <strong>es lo que entra al bolsillo</strong>; los
@@ -216,9 +217,9 @@ export default async function AccountingPage() {
           </ol>
           <p className="mt-2 text-[11px]">
             Las escalas se editan en{' '}
-            <a className="underline" href="/categorias">
+            <Link className="underline" href="/categorias">
               /categorias/:id
-            </a>{' '}
+            </Link>{' '}
             (tabs por canal). El producto solo lleva costo y categoría — el markup se deriva.
           </p>
         </Block>

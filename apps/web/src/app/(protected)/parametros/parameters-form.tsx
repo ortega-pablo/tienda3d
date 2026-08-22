@@ -60,6 +60,12 @@ const META: Record<string, { label: string; suffix?: string; type?: 'number' | '
     type: 'number',
     help: 'Recargo sobre el costo del kWh. Plegado dentro de la hora-máquina.',
   },
+  iva_pct: {
+    label: 'IVA',
+    suffix: '%',
+    type: 'number',
+    help: 'Alícuota aplicada al precio neto en los canales con modo de impuestos DETALLADO y "aplica IVA" tildado. Los canales SIMPLE no se ven afectados.',
+  },
   price_rounding_step: {
     label: 'Redondeo de precios',
     suffix: '$',

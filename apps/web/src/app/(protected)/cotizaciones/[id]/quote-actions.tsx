@@ -10,113 +10,23 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useConfirm } from '@/components/confirm-provider';
 import { useHasPermission } from '@/components/user-provider';
+import type { QuoteDto } from '@tienda3d/shared';
 
 /**
- * Desglose de cálculo snapshoteado por ítem (solo admin). Subset de los tipos
- * del backend (CostingResult + PriceLine + contexto) — solo los campos que la
- * UI muestra.
+ * Los DTO de cotización vienen de `@tienda3d/shared`, la MISMA definición que
+ * usa la API. Antes este archivo re-declaraba a mano ~90 líneas de tipos
+ * (QuoteDto, QuoteItemDto y un subset del desglose): agregar un campo en el
+ * backend seguía compilando acá y el campo simplemente no se pintaba.
+ *
+ * El parámetro de fecha queda en su default (`string`): por JSON las fechas
+ * llegan como ISO, no como objetos Date.
  */
-export interface QuoteItemPricingBreakdown {
-  cost: {
-    filament: {
-      total: number;
-      replenishment: number;
-      totalWithReplenishment: number;
-      totalMinutes: number;
-      /** Gramos y minutos por pieza — para la ficha técnica del ítem (admin). */
-      items?: Array<{ pieceName: string; grams: number; printMinutes: number }>;
-    };
-    materials: { total: number; replenishment: number; totalWithReplenishment: number };
-    machine: { minutes: number; perHour: number; total: number };
-    labor: { minutes: number; markupPct: number; markupAmount: number; total: number };
-    marketing: { monthly: number; units: number; perUnit: number };
-    contingency: number;
-    reinvestment: number;
-    fabricationPrice: number;
-    totalCost: number;
-  };
-  price: {
-    markupPct: number;
-    commissionPct: number;
-    taxBurdenPct: number;
-    netPrice: number;
-    finalPrice: number;
-    profit: number;
-    effectiveMarginPct: number;
-  } | null;
-  context: {
-    pricingBase?: 'INDIVIDUAL' | 'BATCH';
-    scaleLabel?: string;
-    scaleMarkupPct?: number;
-    batchSize?: number;
-    designRaw?: number;
-    designSurcharge?: number;
-    customerAdjusted?: boolean;
-    fabricationPriceUsed?: number;
-    roundingStep?: number;
-  };
-}
-
-export interface QuoteDto {
-  id: string;
-  code: string;
-  type: 'PRODUCT' | 'ADHOC';
-  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
-  customerName: string;
-  customerEmail: string | null;
-  customerPhone: string | null;
-  customerNotes: string | null;
-  customerId: string | null;
-  customerProfileSnapshot: {
-    name?: string;
-    type?: 'STANDARD' | 'WHOLESALE' | 'CONSIGNMENT' | 'SPECIAL';
-    skipChannelCommission?: boolean;
-    skipMarketing?: boolean;
-    skipRegime?: boolean;
-    skipReinvestment?: boolean;
-  } | null;
-  channelId: string | null;
-  channelName: string | null;
-  withInvoice: boolean;
-  subtotal: number;
-  discount: number;
-  total: number;
-  validUntil: string | null;
-  notes: string | null;
-  itemCount: number;
-  createdAt: string;
-  items: Array<{
-    id: string;
-    productId: string | null;
-    description: string;
-    quantity: number;
-    unitCost: number;
-    unitPrice: number;
-    /** Logic C v3 — ganancia de bolsillo por unidad (snapshot al crear). */
-    unitProfit: number;
-    lineTotal: number;
-    adhocPayload: {
-      designMinutes?: number;
-      designSurcharge?: number;
-      templateKind?: 'KEYCHAIN';
-      appliedMarkupPct?: number;
-      tierLabel?: string;
-      batchSize?: number;
-      /** Snapshot de los componentes del item (sin precios). Útil para
-       * que la UI y el PDF muestren el itemizado cuando hay 2+
-       * componentes en el mismo grupo. */
-      pieces?: Array<{
-        name?: string;
-        filamentName?: string;
-      }>;
-      materials?: Array<{
-        quantity?: number;
-        materialName?: string;
-      }>;
-    } | null;
-    pricingBreakdown?: QuoteItemPricingBreakdown | null;
-  }>;
-}
+export type {
+  QuoteDto,
+  QuoteItemDto,
+  QuoteItemPricingBreakdown,
+  AdhocItemPayload,
+} from '@tienda3d/shared';
 
 const TRANSITIONS: Record<QuoteDto['status'], Array<{ to: QuoteDto['status']; label: string }>> = {
   DRAFT: [
@@ -213,7 +123,9 @@ export function QuoteActions({ quote }: { quote: QuoteDto }) {
             Usar como base
           </Button>
         )}
-        {can('quote:read') &&
+        {/* Cambiar el estado exige `quote:create` en el backend: mover a ACCEPTED
+            imputa volúmenes mensuales. Un rol de solo lectura no ve estos botones. */}
+        {can('quote:create') &&
           transitions.map((t) => (
             <Button
               key={t.to}

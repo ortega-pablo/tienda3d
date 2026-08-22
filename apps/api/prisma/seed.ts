@@ -43,6 +43,10 @@ const PERMISSIONS = [
   // Production
   'production:read',
   'production:execute',
+  // Customers (staff)
+  'customer:read',
+  'customer:write',
+  'customer:portal:manage',
   // Admin
   'user:read',
   'user:manage',
@@ -50,6 +54,18 @@ const PERMISSIONS = [
   'audit:read',
   // Sensitive: see "cash without invoice" prices
   'pricing:no-invoice:read',
+] as const;
+
+/**
+ * Permisos del portal del cliente. Van al catálogo pero NO a los roles de
+ * staff: los consume el rol `customer-portal`, creado por la migración
+ * `20260508010000_customers`. Si vivieran en PERMISSIONS, el filtro
+ * `endsWith(':read')` le daría `portal:catalog:read` al rol viewer.
+ */
+const PORTAL_PERMISSIONS = [
+  'portal:catalog:read',
+  'portal:order:create',
+  'portal:profile:edit',
 ] as const;
 
 const VIEWER_PERMS = PERMISSIONS.filter((p) => p.endsWith(':read'));
@@ -60,11 +76,13 @@ const OPERATOR_PERMS = PERMISSIONS.filter(
       'user:manage',
       'role:manage',
       'pricing:no-invoice:read',
+      // El operador gestiona clientes pero no sus cuentas de portal.
+      'customer:portal:manage',
     ].includes(p),
 );
 
 async function seedPermissions() {
-  for (const key of PERMISSIONS) {
+  for (const key of [...PERMISSIONS, ...PORTAL_PERMISSIONS]) {
     await prisma.permission.upsert({
       where: { key },
       update: {},
@@ -87,12 +105,22 @@ async function seedRoles() {
       update: { description, isSystem: true },
       create: { name, description, isSystem: true },
     });
-    await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+    // Reconciliación NO destructiva: sólo agrega lo que falta.
+    //
+    // El borrado ciego (`deleteMany` + `createMany`) que había acá borraba dos
+    // cosas que el seed no conoce: los permisos que agregaron migraciones
+    // posteriores (customer:*) y los ajustes que un admin haya hecho desde
+    // Admin > Roles. Correr el seed sobre una base existente dejaba a admin,
+    // operator y viewer sin acceso al módulo de clientes.
+    //
+    // Si alguna vez hace falta REVOCAR un permiso desde el seed, hacerlo
+    // explícito con una lista de revocación por rol, nunca con un borrado ciego.
     await prisma.rolePermission.createMany({
       data: permissionKeys
         .map((k) => byKey.get(k))
         .filter((id): id is string => Boolean(id))
         .map((permissionId) => ({ roleId: role.id, permissionId })),
+      skipDuplicates: true,
     });
     return role;
   };
@@ -123,7 +151,9 @@ async function seedAdminUser(roleId: string) {
       roleId,
     },
   });
-  console.log(`✔ Admin user → ${email} / ${password}`);
+  // La contraseña NO se imprime: en producción el stdout del seed va derecho a
+  // los logs del contenedor.
+  console.log(`✔ Admin user → ${email}`);
 }
 
 async function seedGlobalParams() {
@@ -141,10 +171,16 @@ async function seedGlobalParams() {
     ['price_rounding_step', '50', 'Paso de redondeo de los precios finales de venta (ARS). Los precios al cliente se redondean hacia arriba a este múltiplo. 0 = sin redondeo.'],
     ['currency', 'ARS', 'Moneda principal del sistema'],
   ];
+  // OJO: `update` NO toca `value`. Estos son valores INICIALES, no la fuente de
+  // verdad: el taller los ajusta desde /parametros y el README documenta correr
+  // el seed sobre una base existente. Con `update: { value }` una re-corrida
+  // reseteaba todo lo ajustado — p.ej. design_hour_cost de 7500 a 0, dejando
+  // todos los cargos de diseño en cero sin ningún aviso.
+  // La descripción sí se actualiza: es documentación, no configuración.
   for (const [key, value, description] of params) {
     await prisma.globalParam.upsert({
       where: { key },
-      update: { value, description },
+      update: { description },
       create: { key, value, description },
     });
   }

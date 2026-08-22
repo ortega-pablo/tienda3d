@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Package, Zap } from 'lucide-react';
 import { requirePermission } from '@/lib/auth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default async function NewQuoteChooserPage() {
   await requirePermission('quote:create');

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
+import type { QuoteItemInputDto } from '@tienda3d/shared';
+import { PricingWarnings } from '@/components/pricing-warnings';
 import { handleApiError } from '@/lib/handle-error';
 import { formatMoney } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -114,6 +116,8 @@ interface Preview {
   unitProfit: number;
   lineTotal: number;
   designSurcharge: number;
+  /** Avisos del motor: filamento sin precio, comisión faltante, etc. */
+  warnings?: string[];
 }
 
 /**
@@ -154,6 +158,7 @@ interface KeychainMatrixRow {
   unitProfit: number;
   lineTotal: number;
   designSurcharge: number;
+  warnings?: string[];
 }
 
 /**
@@ -392,30 +397,10 @@ export function RapidQuoteForm({
   const [matrix, setMatrix] = useState<KeychainMatrixRow[] | 'loading' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  type AdhocItemPayload = {
-    type: 'ADHOC';
-    description: string;
-    quantity: number;
-    payload: {
-      pieces: Array<{
-        name: string;
-        grams: number;
-        printMinutes: number;
-        filamentId: string;
-      }>;
-      individualPieces?: Array<{
-        name: string;
-        grams: number;
-        printMinutes: number;
-        filamentId: string;
-      }>;
-      materials: Array<{ materialId: string; quantity: number }>;
-      assemblyMinutes: number;
-      managementMinutes: number;
-      designMinutes: number;
-      templateKind?: 'KEYCHAIN';
-    };
-  };
+  // El payload que se manda al backend es el MISMO tipo que valida el
+  // controller (@tienda3d/shared). Antes se re-declaraba a mano acá: si el
+  // backend agregaba un campo, esto seguía compilando y el campo nunca llegaba.
+  type AdhocItemPayload = Extract<QuoteItemInputDto, { type: 'ADHOC' }>;
 
   /**
    * Particiona el state del form en N items ADHOC, uno por grupo.
@@ -1036,7 +1021,7 @@ export function RapidQuoteForm({
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Las piezas e insumos huérfanos (asignados a un grupo que ya no existe) caen
-                  en un "Grupo adicional" automático al guardar.
+                  en un &ldquo;Grupo adicional&rdquo; automático al guardar.
                 </p>
               </div>
             )}
@@ -1231,7 +1216,7 @@ export function RapidQuoteForm({
             {Number(designMinutes || '0') > 0 && (
               <p className="text-xs text-muted-foreground">
                 El cargo de diseño se suma una sola vez a la línea (no escala con la
-                cantidad). Tarifa configurable en Parámetros → "Hora de diseño 3D".
+                cantidad). Tarifa configurable en Parámetros → &ldquo;Hora de diseño 3D&rdquo;.
               </p>
             )}
           </CardContent>
@@ -1258,12 +1243,13 @@ export function RapidQuoteForm({
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {preview === null && (
-            <p className="text-muted-foreground">Click en "Calcular precio" para previsualizar.</p>
+            <p className="text-muted-foreground">Click en &ldquo;Calcular precio&rdquo; para previsualizar.</p>
           )}
           {preview === 'loading' && <p className="text-muted-foreground">Calculando…</p>}
           {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}
           {preview && typeof preview === 'object' && (
             <>
+              <PricingWarnings warnings={preview.warnings} className="mb-1" />
               {groupPreviews && groupPreviews.length > 1 ? (
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
