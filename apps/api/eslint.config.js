@@ -19,7 +19,9 @@ module.exports = [
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        project: ['./tsconfig.json'],
+        // tsconfig.spec.json suma test/ y los *.int-spec.ts, que el tsconfig
+        // de build excluye para no emitirlos en dist.
+        project: ['./tsconfig.json', './tsconfig.spec.json'],
         tsconfigRootDir: __dirname,
         sourceType: 'module',
       },

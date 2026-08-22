@@ -171,10 +171,16 @@ async function seedGlobalParams() {
     ['price_rounding_step', '50', 'Paso de redondeo de los precios finales de venta (ARS). Los precios al cliente se redondean hacia arriba a este múltiplo. 0 = sin redondeo.'],
     ['currency', 'ARS', 'Moneda principal del sistema'],
   ];
+  // OJO: `update` NO toca `value`. Estos son valores INICIALES, no la fuente de
+  // verdad: el taller los ajusta desde /parametros y el README documenta correr
+  // el seed sobre una base existente. Con `update: { value }` una re-corrida
+  // reseteaba todo lo ajustado — p.ej. design_hour_cost de 7500 a 0, dejando
+  // todos los cargos de diseño en cero sin ningún aviso.
+  // La descripción sí se actualiza: es documentación, no configuración.
   for (const [key, value, description] of params) {
     await prisma.globalParam.upsert({
       where: { key },
-      update: { value, description },
+      update: { description },
       create: { key, value, description },
     });
   }
