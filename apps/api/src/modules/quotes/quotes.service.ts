@@ -625,7 +625,12 @@ export class QuotesService {
           productId: item.productId,
           description: item.description ?? product.name,
           quantity: item.quantity,
-          unitCost: cost.totalCost,
+          // Costo AJUSTADO, la misma base sobre la que se calculó el precio.
+          // Antes se persistía `cost.totalCost` (sin ajustar) mientras el precio
+          // salía de `adjustedCost`: para clientes con skipMarketing o
+          // skipReinvestment los dos números quedaban sobre bases distintas y
+          // cualquier margen derivado de la cotización guardada salía inflado.
+          unitCost: adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment,
           unitPrice,
           unitProfit,
           lineTotal,
@@ -816,7 +821,8 @@ export class QuotesService {
         productId: null,
         description: item.description,
         quantity: item.quantity,
-        unitCost: cost.totalCost,
+        // Ver comentario en la rama PRODUCT: mismo criterio.
+        unitCost: adjustedCost.fabricationPrice + adjustedCost.otherMaterialsWithReplenishment,
         unitPrice,
         unitProfit,
         lineTotal,

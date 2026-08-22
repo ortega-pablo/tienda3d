@@ -90,9 +90,17 @@ export class CostingService {
       ? await this.prisma.material.findMany({
           where: { id: { in: [...filamentIds] } },
           include: {
-            suppliers: { where: { isCurrent: true }, take: 1 },
+            suppliers: {
+              where: { isCurrent: true },
+              orderBy: { registeredAt: 'desc' },
+              take: 1,
+            },
             parent: {
-              include: { suppliers: { where: { isCurrent: true }, take: 1 } },
+              include: { suppliers: {
+              where: { isCurrent: true },
+              orderBy: { registeredAt: 'desc' },
+              take: 1,
+            } },
             },
           },
         })
@@ -144,6 +152,10 @@ export class CostingService {
     const materialPrices = materialIds.length
       ? await this.prisma.supplierMaterial.findMany({
           where: { materialId: { in: materialIds }, isCurrent: true },
+          // Ascendente a propósito: el Map de abajo indexa por materialId, así
+          // que si hubiera más de un precio vigente (ver índice único parcial)
+          // gana el último en insertarse, o sea el más reciente.
+          orderBy: { registeredAt: 'asc' },
         })
       : [];
     const priceById = new Map(materialPrices.map((p) => [p.materialId, p]));
@@ -235,15 +247,27 @@ export class CostingService {
         ? this.prisma.material.findMany({
             where: { id: { in: filamentIds } },
             include: {
-              suppliers: { where: { isCurrent: true }, take: 1 },
-              parent: { include: { suppliers: { where: { isCurrent: true }, take: 1 } } },
+              suppliers: {
+              where: { isCurrent: true },
+              orderBy: { registeredAt: 'desc' },
+              take: 1,
+            },
+              parent: { include: { suppliers: {
+              where: { isCurrent: true },
+              orderBy: { registeredAt: 'desc' },
+              take: 1,
+            } } },
             },
           })
         : [],
       materialIds.length
         ? this.prisma.material.findMany({
             where: { id: { in: materialIds } },
-            include: { suppliers: { where: { isCurrent: true }, take: 1 } },
+            include: { suppliers: {
+              where: { isCurrent: true },
+              orderBy: { registeredAt: 'desc' },
+              take: 1,
+            } },
           })
         : [],
       this.machineHour.computeActive(),

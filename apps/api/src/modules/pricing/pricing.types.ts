@@ -52,6 +52,12 @@ export interface PricingGlobals {
    * costos, netPrice, profit ni márgenes.
    */
   roundingStep: number;
+  /**
+   * Alícuota de IVA (%) que se aplica al precio neto en los canales DETAILED
+   * con `appliesIva`. Configurable por GlobalParam `iva_pct` — antes estaba
+   * hardcodeada como 1.21 en dos lugares del motor.
+   */
+  ivaPct: number;
 }
 
 export interface ProductPricingInputs {

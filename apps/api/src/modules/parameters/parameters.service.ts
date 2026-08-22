@@ -26,6 +26,8 @@ const NUMERIC_KEYS = new Set([
   'adhoc_default_markup_pct',
   // Paso de redondeo de los precios finales de venta (0 = sin redondeo).
   'price_rounding_step',
+  // Alícuota de IVA aplicada en canales DETALLADO con appliesIva.
+  'iva_pct',
 ]);
 
 /** Params que deben ser enteros positivos (≥ 1). */
@@ -42,6 +44,7 @@ const PCT_KEYS = new Set([
   'direct_sale_commission_pct',
   'labor_markup_pct',
   'kwh_markup_pct',
+  'iva_pct',
   // adhoc_default_markup_pct admite > 100% (markups de 200%, 300%
   // son comunes en piezas chicas personalizadas), así que NO se
   // agrega a este set — se valida ≥ 0 vía NUMERIC_KEYS.

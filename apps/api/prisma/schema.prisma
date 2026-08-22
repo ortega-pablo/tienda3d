@@ -240,6 +240,11 @@ model Material {
   @@map("materials")
 }
 
+/// OJO: además de los índices declarados acá, la migración
+/// `20260821030000_one_current_price_per_material` crea un índice ÚNICO PARCIAL
+/// `("materialId") WHERE "isCurrent"` que garantiza un solo precio vigente por
+/// insumo. Prisma no sabe expresar índices parciales, así que vive sólo en SQL:
+/// no lo borres al correr `prisma migrate dev` sobre un schema regenerado.
 model SupplierMaterial {
   id         String   @id @default(cuid())
   supplierId String

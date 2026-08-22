@@ -33,3 +33,23 @@ describe('roundPriceUp', () => {
     expect(roundPriceUp(Number.NaN, 50)).toBeNaN();
   });
 });
+
+describe('roundPriceUp — error de punto flotante', () => {
+  it('no cobra un paso de más cuando el valor ya era múltiplo', () => {
+    // Ambos salen de multiplicaciones/divisiones reales del motor.
+    expect(roundPriceUp(3000.0000000000005, 100)).toBe(3000);
+    expect(roundPriceUp(1210.0000000000002, 10)).toBe(1210);
+  });
+
+  it('un excedente real sí sube al siguiente múltiplo', () => {
+    expect(roundPriceUp(3000.01, 100)).toBe(3100);
+    expect(roundPriceUp(1211, 10)).toBe(1220);
+  });
+
+  it('sigue siendo idempotente', () => {
+    for (const [value, step] of [[3000.0000000000005, 100], [1234.56, 50], [7, 5]] as const) {
+      const once = roundPriceUp(value, step);
+      expect(roundPriceUp(once, step)).toBe(once);
+    }
+  });
+});

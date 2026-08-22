@@ -13,5 +13,17 @@
 export function roundPriceUp(value: number, step: number): number {
   if (!Number.isFinite(step) || step <= 0) return value;
   if (!Number.isFinite(value) || value <= 0) return value;
-  return Math.ceil(value / step) * step;
+
+  const quotient = value / step;
+  const nearest = Math.round(quotient);
+  // Tolerancia relativa: si el cociente está a distancia de error de punto
+  // flotante de un entero, el "excedente" no es un precio mayor sino ruido de
+  // la división. Sin esto, `roundPriceUp(3000.0000000000005, 100)` devolvía
+  // 3100 — un paso entero de más sobre un valor que ya era múltiplo. Ese tipo
+  // de valor sale naturalmente de `netPrice × 1.21` cuando netPrice viene de
+  // una división.
+  const tolerance = Math.abs(quotient) * Number.EPSILON * 8;
+  if (Math.abs(quotient - nearest) <= tolerance) return nearest * step;
+
+  return Math.ceil(quotient) * step;
 }
