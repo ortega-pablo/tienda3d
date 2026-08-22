@@ -65,10 +65,10 @@ Marcar el estado en la última columna: `pendiente` / `en curso` / `hecho` / `de
 | F-24 | `roundPriceUp` puede cobrar un paso de más | Baja | 6 | **hecho** |
 | F-14 | Cada ítem recarga el cliente entero dos veces | Media | 7 | **hecho** |
 | F-16 | Backup sin contrapresión ni cancelación | Media | 7 | **hecho** |
-| F-25 | Tests cubren el cálculo, no el sistema | Baja | 8 | **parcial (falta suite con DB)** |
-| F-20 | `packages/shared` no comparte el contrato real | Baja | 9 | **parcial (a, b)** |
+| F-25 | Tests cubren el cálculo, no el sistema | Baja | 8 | **hecho** |
+| F-20 | `packages/shared` no comparte el contrato real | Baja | 9 | **hecho** |
 
-**Progreso:** 22 / 25 completos + 3 parciales — ver Bitácora
+**Progreso:** 24 / 25 completos + 1 parcial (F-23) + 4 hallazgos nuevos — ver Bitácora
 
 ---
 
@@ -1014,6 +1014,9 @@ Una fila por fase cerrada. Anotar lo que se desvió del plan.
 | 2026-08-21 | 7 | F-14, F-16 | `b23811d` | Además del cliente, se memoizaron por request los parámetros globales y la grilla de escalas, que se releían una vez por ítem. |
 | 2026-08-21 | 8 | F-25 (parcial) | `51d2e10` | 9 tests que corren SIN base de datos (reflexión sobre metadata + Prisma mockeado) y cubren F-01, F-02 y F-04. Verificado que fallan al revertir cada fix. La suite contra Postgres queda pendiente. |
 | 2026-08-21 | 9 | F-20 (parcial) | `b33b17b` | Movido el contrato de errores a shared. Verificado que agregar un código nuevo rompe el typecheck de web. Faltan los schemas de Zod y los DTO. |
+| 2026-08-22 | 8 (cierre) | F-25 | `b1215d2` | Suite de integración contra Postgres real: 24 tests. Destapó **F-27** y **F-26**. |
+| 2026-08-22 | 9 (cierre) | F-20 | `c278d1e` | Schemas de Zod y DTO de cotizaciones movidos a shared, con verificación de enums en tiempo de compilación. |
+| 2026-08-22 | verificación | — | `3e9f9e9` | Stack levantado con Docker. Destapó **F-28** y **F-29**. Verificados F-03, F-05, F-16, F-18 y F-19 contra contenedores reales. |
 
 ---
 
@@ -1030,25 +1033,45 @@ Cosas que la auditoría no miró y que no cubre este plan:
 
 ---
 
-## Pendiente tras la ejecución del 2026-08-21
+## Hallazgos nuevos (aparecidos al ejecutar el plan)
 
-Lo que NO quedó hecho, y por qué. Nada de esto está bloqueado por otra cosa.
+No estaban en la auditoría original: los tres primeros los destapó correr las
+migraciones y los tests contra una base real, el cuarto sigue abierto.
 
-### Requiere la base de datos levantada
+| ID | Hallazgo | Sev | Estado |
+|---|---|---|---|
+| F-26 | El seed reseteaba los parámetros globales ajustados (`design_hour_cost` de 7500 a 0) | Media | **hecho** |
+| F-27 | La cadena de migraciones no se podía aplicar a una base nueva (`setval(seq, 0)`) | Alta | **hecho** |
+| F-28 | La imagen de producción de la API nunca pudo arrancar (`dist/src/main.js` vs `dist/main.js`) | Alta | **hecho** |
+| F-29 | El endpoint de backup fallaba siempre (`?schema=public` no lo entiende libpq) | Media | **hecho** |
+| F-30 | La imagen de producción de **web** no se puede construir (Turbopack no infiere la raíz del workspace) | Alta | pendiente |
 
-La ejecución se hizo sin Docker corriendo, así que ninguna verificación contra
-Postgres pudo ejecutarse. Las migraciones nuevas están escritas y el schema
-valida, pero **no se aplicaron**:
+### F-30 — build de la imagen de web
 
-- [ ] `pnpm prisma migrate deploy` con las 4 migraciones nuevas
-      (`document_counters`, `login_lockout`, `global_param_iva_pct`,
-      `one_current_price_per_material`).
-- [ ] Antes de aplicar `one_current_price_per_material`, correr la query de
-      duplicados de la Fase 6: la migración los resuelve sola conservando el
-      más reciente, pero conviene ver cuántos había.
-- [ ] Verificaciones de la Fase 1 (seed sobre base existente), Fase 2
-      (concurrencia real), Fase 3 (`whoami` en el contenedor, healthcheck en
-      verde) y Fase 7 (conteo de queries, cancelación de backup).
+```
+Error: Next.js inferred your workspace root, but it may not be correct.
+  We couldn't find the Next.js package (next/package.json) from the project
+  directory: /app/apps/web/src/app
+```
+
+Pre-existente: verificado que falla igual con el Dockerfile de `develop`, y la
+imagen que estaba corriendo tenía 4 semanas (nadie la reconstruyó desde
+entonces). En la etapa `deps` el symlink `apps/web/node_modules/next` apunta
+correctamente a `/app/node_modules/.pnpm/...`, así que la resolución se rompe
+en la etapa `build`.
+
+Probé fijar `turbopack.root` en `next.config.ts` —lo que sugiere el propio
+mensaje— y no lo resuelve; reverti ese intento antes que dejar un cambio que no
+puedo justificar. Queda por investigar si el problema es cómo la etapa `build`
+copia los `node_modules` de pnpm entre stages.
+
+- [ ] Reproducir con `docker build -f apps/web/Dockerfile --target build .`
+- [ ] Probar copiar el workspace completo en vez de los node_modules por stage,
+      o usar `pnpm deploy` para armar un árbol autocontenido.
+
+---
+
+## Pendiente
 
 ### F-23 — rotación que rompe el entorno si se hace a medias
 
@@ -1063,25 +1086,28 @@ valida, pero **no se aplicaron**:
 - [ ] `SEED_ADMIN_PASSWORD`: cambiar la contraseña del admin desde la UI (el
       hash vive en `users`), y después actualizar la variable.
 
-### F-25 — suite de integración contra Postgres
-
-Lo que se hizo corre sin base de datos y cubre F-01, F-02 y F-04. Falta lo que
-sí necesita una base:
-
-- [ ] Infraestructura: base de test, `jest.config` de integración, helper de
-      migrate + seed + truncate.
-- [ ] Flujo cotización de punta a punta e imputación de volumen al aceptar.
-- [ ] Cierre mensual contra datos reales.
-
-### F-20 — el resto del contrato compartido
-
-- [ ] Mover los schemas de Zod de los controllers a `packages/shared`, módulo
-      por módulo, empezando por `quotes`.
-- [ ] Derivar los DTO de respuesta desde un solo lugar.
-
 ### Deuda nueva, asumida a conciencia
 
 - [ ] Adoptar `react-hooks/set-state-in-effect` y `react-hooks/immutability`
       (10 sitios). Hoy están apagadas con justificación en
       `apps/web/eslint.config.js`. Es una migración de compatibilidad con el
       React Compiler, con su propio testing.
+- [ ] Un test de integración falló **una vez** (`24 → 1 failed`) al correr en
+      la misma invocación que typecheck y lint. No reproduce: 5 corridas
+      posteriores en verde, incluidas 2 con ambas suites seguidas. Anotado por
+      si reaparece; no está diagnosticado.
+
+---
+
+## Cómo correr los tests
+
+```bash
+docker compose up -d db                # la suite de integración necesita la base
+
+pnpm --filter @tienda3d/api test       # unitarios (131) — no necesitan base
+pnpm --filter @tienda3d/api test:int   # integración (24) — base tienda3d_test
+pnpm --filter @tienda3d/api test:all   # las dos
+```
+
+La suite de integración usa una base **separada** (`tienda3d_test`), la migra
+con `migrate deploy` y la trunca entre tests: nunca toca los datos del taller.
