@@ -20,6 +20,9 @@ import type { AccessPayload } from '../auth/auth.service';
  *   - Permiso `parameter:write` (mismo que edita params globales).
  *   - Cada backup queda registrado en el audit log con el id del actor.
  */
+/** Tiempo máximo que puede tardar un dump antes de cortarlo. */
+const DUMP_TIMEOUT_MS = 10 * 60 * 1000;
+
 @UseGuards(PermissionsGuard)
 @Controller('admin/backup')
 export class DatabaseBackupController {
@@ -57,45 +60,70 @@ export class DatabaseBackupController {
       stderrBuffer += chunk.toString();
     });
 
-    // Si el proceso falla ANTES de empezar a streamear (ej. pg_dump no
-    // existe en el container), tenemos que cerrar la response con error.
-    // Si falla DESPUÉS, la response ya está parcialmente enviada — solo
-    // podemos cortarla.
-    let responseStarted = false;
-    proc.stdout.on('data', (chunk: Buffer) => {
-      if (!responseStarted) responseStarted = true;
-      res.write(chunk);
+    // Corte por tiempo: un pg_dump colgado (lock en la base, red caída contra
+    // un RDS) no puede quedar corriendo indefinidamente ocupando una conexión.
+    const timeout = setTimeout(() => {
+      stderrBuffer += `\nTimeout de ${DUMP_TIMEOUT_MS / 1000}s alcanzado.`;
+      proc.kill('SIGTERM');
+    }, DUMP_TIMEOUT_MS);
+
+    // `pipe` en vez de un `on('data')` manual: respeta la contrapresión sola.
+    // Con la escritura manual, un cliente que descarga más lento de lo que
+    // Postgres dumpea —habitual sobre el Wi-Fi del taller— hacía crecer el
+    // buffer de la respuesta en memoria sin techo.
+    proc.stdout.pipe(res);
+
+    // Si el cliente cancela la descarga, matamos el dump: si no, el proceso
+    // queda huérfano ocupando una conexión a la base.
+    let finished = false;
+    res.on('close', () => {
+      if (!finished) proc.kill('SIGTERM');
     });
 
-    proc.on('error', (err) => {
-      if (!responseStarted) {
-        res.status(500).json({ error: `No se pudo iniciar pg_dump: ${err.message}` });
-      } else {
-        res.end();
-      }
-    });
-
-    proc.on('close', (code) => {
-      if (code !== 0 && !responseStarted) {
-        res.status(500).json({
-          error: `pg_dump terminó con código ${code}`,
-          stderr: stderrBuffer.slice(0, 500),
-        });
-        return;
-      }
-      res.end();
-      // Audit no bloqueante: registramos al cerrar el stream (éxito o
-      // no). El audit log captura quién pidió un backup y cuándo.
+    const audit = (code: number | null, cancelled: boolean) =>
       void this.audit
         .record({
           actorId: user.sub,
           entity: 'DatabaseBackup',
           entityId: filename,
-          action: code === 0 ? 'create' : 'failed',
+          action: code === 0 && !cancelled ? 'create' : 'failed',
           before: null,
-          after: { filename, exitCode: code },
+          after: {
+            filename,
+            exitCode: code,
+            ...(cancelled ? { cancelled: true } : {}),
+            ...(stderrBuffer ? { stderr: stderrBuffer.slice(0, 500) } : {}),
+          },
         })
         .catch(() => undefined);
+
+    proc.on('error', (err) => {
+      finished = true;
+      clearTimeout(timeout);
+      if (!res.headersSent) {
+        res.status(500).json({ error: `No se pudo iniciar pg_dump: ${err.message}` });
+      } else {
+        res.end();
+      }
+      audit(null, false);
+    });
+
+    proc.on('close', (code) => {
+      finished = true;
+      clearTimeout(timeout);
+      const cancelled = res.destroyed;
+      // Si el proceso falló ANTES de emitir el primer byte, la respuesta sigue
+      // sin cabeceras y todavía se puede convertir en un error legible.
+      if (code !== 0 && !res.headersSent) {
+        res.status(500).json({
+          error: `pg_dump terminó con código ${code}`,
+          stderr: stderrBuffer.slice(0, 500),
+        });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+      // El audit registra tanto el éxito como el fallo y la cancelación.
+      audit(code, cancelled);
     });
   }
 }

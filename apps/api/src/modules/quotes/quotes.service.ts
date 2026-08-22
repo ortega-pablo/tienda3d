@@ -17,11 +17,18 @@ import {
   CustomersService,
   type CustomerWithRelations,
 } from '../customers/customers.service';
-import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scale-tiers.service';
+import {
+  KeychainScaleTiersService,
+  type KeychainScaleTierDto,
+} from '../keychain-scale-tiers/keychain-scale-tiers.service';
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
 import { roundPriceUp } from '../pricing/round-price';
-import type { CustomerPricingProfile, PriceLine } from '../pricing/pricing.types';
+import type {
+  CustomerPricingProfile,
+  PriceLine,
+  PricingGlobals,
+} from '../pricing/pricing.types';
 import { CategoryTiersService } from '../categories/category-tiers.service';
 import type {
   AdhocItemPayload,
@@ -35,6 +42,45 @@ import type {
 } from './quotes.types';
 
 type CustomerSnapshot = CustomerWithRelations & { capturedAt: string };
+
+/**
+ * Lecturas que NO dependen del ítem (parámetros globales, grilla de escalas de
+ * llavero) memoizadas por invocación pública.
+ *
+ * `buildItemRow` corre una vez por ítem, y cada corrida releía lo mismo: los
+ * globals de pricing, la grilla de escalas, el tamaño de tanda y la hora de
+ * diseño. Una cotización de 10 ítems hacía 10 veces cada una de esas queries.
+ * La caché vive lo que dura la request, así que no hay riesgo de servir un
+ * parámetro viejo entre requests.
+ */
+class QuoteBuildCache {
+  private globals?: Promise<PricingGlobals>;
+  private scaleTiers?: Promise<KeychainScaleTierDto[]>;
+  private batchSize?: Promise<number>;
+  private designHourCost?: Promise<number>;
+
+  constructor(
+    private readonly loaders: {
+      globals: () => Promise<PricingGlobals>;
+      scaleTiers: () => Promise<KeychainScaleTierDto[]>;
+      batchSize: () => Promise<number>;
+      designHourCost: () => Promise<number>;
+    },
+  ) {}
+
+  getGlobals(): Promise<PricingGlobals> {
+    return (this.globals ??= this.loaders.globals());
+  }
+  getScaleTiers(): Promise<KeychainScaleTierDto[]> {
+    return (this.scaleTiers ??= this.loaders.scaleTiers());
+  }
+  getBatchSize(): Promise<number> {
+    return (this.batchSize ??= this.loaders.batchSize());
+  }
+  getDesignHourCost(): Promise<number> {
+    return (this.designHourCost ??= this.loaders.designHourCost());
+  }
+}
 
 /**
  * Resultado de `buildItemRow`: la fila a persistir más las piezas del cálculo
@@ -154,15 +200,18 @@ export class QuotesService {
     const channelId = input.channelId ?? null;
 
     const code = await this.nextCode(quoteType);
+    // Una sola caché para toda la cotización: los parámetros globales y la
+    // grilla de escalas se leen una vez, no una vez por ítem.
+    const cache = this.newBuildCache();
     const built = await Promise.all(
-      input.items.map((item) => this.buildItemRow(item, channelId, customerCtx)),
+      input.items.map((item) => this.buildItemRow(item, channelId, customerCtx, cache)),
     );
     const itemsData = built.map((b) => b.row);
     // Cada lineTotal ya es múltiplo del paso (unitPrice y designSurcharge vienen
     // redondeados del motor), así que el subtotal también lo es. El descuento
     // puede romper el múltiplo, por eso el total se redondea hacia arriba tras
     // restarlo. loadGlobals trae el paso (0 = sin redondeo).
-    const { roundingStep } = await this.pricing.loadGlobals();
+    const { roundingStep } = await cache.getGlobals();
     const subtotal = itemsData.reduce((acc, i) => acc + Number(i.lineTotal), 0);
     const discount = input.discount ?? 0;
     const total = roundPriceUp(Math.max(subtotal - discount, 0), roundingStep);
@@ -227,13 +276,20 @@ export class QuotesService {
     const productItems = items.filter((i): i is { type: 'PRODUCT'; productId: string; quantity: number; description?: string } =>
       i.type === 'PRODUCT',
     );
-    for (const item of productItems) {
-      const ok = await this.customers.canBuy(customerId, item.productId);
-      if (!ok) {
-        throw new ForbiddenException(
-          `El cliente no tiene acceso al producto ${item.productId} (catálogo restringido).`,
-        );
-      }
+    // El cliente ya está cargado: se le pasa a canBuy para que no lo relea por
+    // ítem. Antes una cotización de 10 ítems disparaba 10 getWithRelations
+    // completos acá, más otros 10 en resolveProductProfile.
+    const checks = await Promise.all(
+      productItems.map(async (item) => ({
+        productId: item.productId,
+        ok: await this.customers.canBuy(customerId, item.productId, customer),
+      })),
+    );
+    const denied = checks.find((c) => !c.ok);
+    if (denied) {
+      throw new ForbiddenException(
+        `El cliente no tiene acceso al producto ${denied.productId} (catálogo restringido).`,
+      );
     }
     return {
       customer,
@@ -488,6 +544,7 @@ export class QuotesService {
       ? await this.resolveCustomerContext(input.customerId, [])
       : null;
 
+    const cache = this.newBuildCache();
     const rows = await Promise.all(
       tiers.map(async (tier) => {
         // Usamos el minQty como cantidad representativa de la escala.
@@ -500,7 +557,12 @@ export class QuotesService {
             templateKind: 'KEYCHAIN' as const,
           },
         };
-        const { row, cost, line } = await this.buildItemRow(item, input.channelId, customerCtx);
+        const { row, cost, line } = await this.buildItemRow(
+          item,
+          input.channelId,
+          customerCtx,
+          cache,
+        );
         const adhocPayload = row.adhocPayload as
           | { designSurcharge?: number; appliedMarkupPct?: number }
           | null;
@@ -527,6 +589,21 @@ export class QuotesService {
 
   // ----- internals -----
 
+  /** Caché de lecturas globales, una por invocación pública. */
+  private newBuildCache(): QuoteBuildCache {
+    return new QuoteBuildCache({
+      globals: () => this.pricing.loadGlobals(),
+      scaleTiers: () => this.keychainScaleTiers.list(),
+      batchSize: () => this.loadKeychainBatchSize(),
+      designHourCost: async () => {
+        const param = await this.prisma.globalParam.findUnique({
+          where: { key: 'design_hour_cost' },
+        });
+        return param ? Number(param.value) : 0;
+      },
+    });
+  }
+
   /**
    * Construye la fila de ítem lista para persistir y devuelve, aparte, el
    * desglose que la produjo. El desglose se necesita en el preview: hasta ahora
@@ -539,6 +616,7 @@ export class QuotesService {
     item: QuoteItemInput,
     channelId: string | null,
     customerCtx: ResolvedCustomerContext | null,
+    cache: QuoteBuildCache = this.newBuildCache(),
   ): Promise<BuiltItemRow> {
     if (item.type === 'PRODUCT') {
       const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
@@ -553,7 +631,7 @@ export class QuotesService {
       let keychainCtx: Partial<QuoteItemPricingContext> = {};
       let cost: CostingResult;
       if (isKeychain) {
-        const scaleTiers = await this.keychainScaleTiers.list();
+        const scaleTiers = await cache.getScaleTiers();
         const scaleTier = KeychainScaleTiersService.resolveApplicable(scaleTiers, item.quantity);
         if (!scaleTier) {
           throw new BadRequestException(
@@ -563,7 +641,7 @@ export class QuotesService {
         keychainMarkupOverride = scaleTier.markupPct;
         const scope = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
         const batchSize =
-          scope === PieceScope.BATCH ? await this.loadKeychainBatchSize() : undefined;
+          scope === PieceScope.BATCH ? await cache.getBatchSize() : undefined;
         const costingOpts =
           scope === PieceScope.INDIVIDUAL
             ? { pieceScope: PieceScope.INDIVIDUAL }
@@ -582,7 +660,11 @@ export class QuotesService {
       // Si hay cliente, resolvemos su profile para este producto
       // (puede tener custom markup, tier piso por categoría, etc.).
       const profile = customerCtx
-        ? await this.customers.resolveProductProfile(customerCtx.customer.id, item.productId)
+        ? await this.customers.resolveProductProfile(
+            customerCtx.customer.id,
+            item.productId,
+            customerCtx.customer,
+          )
         : null;
 
       // Recombinamos los componentes del costo si el profile pide
@@ -606,6 +688,7 @@ export class QuotesService {
         profile,
         0,
         keychainMarkupOverride,
+        cache,
       );
       const lineTotal = unitPrice * item.quantity;
 
@@ -647,19 +730,11 @@ export class QuotesService {
       throw new BadRequestException('La cantidad de llaveros debe ser un entero ≥ 1');
     }
 
-    const [designHourCostParam, batchSizeParam, scaleTiers] = await Promise.all([
-      this.prisma.globalParam.findUnique({ where: { key: 'design_hour_cost' } }),
-      isKeychain
-        ? this.prisma.globalParam.findUnique({ where: { key: 'keychain_batch_size' } })
-        : Promise.resolve(null),
-      isKeychain ? this.keychainScaleTiers.list() : Promise.resolve([]),
+    const [designHourCost, batchSize, scaleTiers] = await Promise.all([
+      cache.getDesignHourCost(),
+      isKeychain ? cache.getBatchSize() : Promise.resolve(1),
+      isKeychain ? cache.getScaleTiers() : Promise.resolve([]),
     ]);
-
-    const batchSize = isKeychain
-      ? batchSizeParam
-        ? Math.max(1, Math.floor(Number(batchSizeParam.value)))
-        : 5
-      : 1;
 
     // Modelo de llaveros: la escala (grilla contigua) y la base dependen de la
     // cantidad. 1-4 usa `individualPieces` (piezas para 1 unidad); 5+ usa la
@@ -703,7 +778,6 @@ export class QuotesService {
       managementMinutes: item.payload.managementMinutes,
     });
     const designMinutes = item.payload.designMinutes ?? 0;
-    const designHourCost = designHourCostParam ? Number(designHourCostParam.value) : 0;
     const designRaw = (designMinutes / 60) * designHourCost;
     // Para ADHOC el cliente no tiene categoría que matchear, así que solo
     // aplican los flags globales (skipMarketing/skipChannelCommission/etc.).
@@ -738,6 +812,7 @@ export class QuotesService {
         profile,
         designRaw,
         keychainScale ? keychainScale.markupPct : null,
+        cache,
       );
     // El cargo de diseño es plano por línea (no escala con la cantidad)
     // pero forma parte del lineTotal para que paye comisión + régimen
@@ -855,6 +930,7 @@ export class QuotesService {
     designRawAmount = 0,
     /** Override explícito de markup (p.ej. tier de llaveros). Pisa el target. */
     markupOverridePct: number | null = null,
+    cache: QuoteBuildCache = this.newBuildCache(),
   ): Promise<{
     unitPrice: number;
     unitProfit: number;
@@ -909,7 +985,7 @@ export class QuotesService {
             where: { productId_channelId: { productId, channelId } },
           })
         : Promise.resolve(null),
-      this.pricing.loadGlobals(),
+      cache.getGlobals(),
       product
         ? this.pricing.resolveBaseMarkup(product.categoryId).catch(() => 0)
         : Promise.resolve(0),

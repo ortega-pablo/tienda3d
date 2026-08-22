@@ -192,8 +192,14 @@ export class CustomersService {
   async resolveProductProfile(
     customerId: string,
     productId: string,
+    /**
+     * Cliente ya cargado. Los callers que arman una cotización lo tienen en la
+     * mano: sin esto, cada ítem disparaba un `getWithRelations` completo (con
+     * commitments y overrides) sólo para releer lo mismo.
+     */
+    preloaded?: CustomerWithRelations,
   ): Promise<CustomerPricingProfile & { skipMarketing: boolean; skipReinvestment: boolean }> {
-    const customer = await this.getWithRelations(customerId);
+    const customer = preloaded ?? (await this.getWithRelations(customerId));
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: {
@@ -238,9 +244,14 @@ export class CustomersService {
    *               commitments del cliente (directa o vía padre).
    *   SPECIAL → solo si está en CustomerProduct.
    */
-  async canBuy(customerId: string, productId: string): Promise<boolean> {
+  async canBuy(
+    customerId: string,
+    productId: string,
+    /** Cliente ya cargado (ver resolveProductProfile). */
+    preloaded?: CustomerWithRelations,
+  ): Promise<boolean> {
     const [customer, product] = await Promise.all([
-      this.getWithRelations(customerId),
+      preloaded ? Promise.resolve(preloaded) : this.getWithRelations(customerId),
       this.prisma.product.findUnique({
         where: { id: productId },
         select: {
