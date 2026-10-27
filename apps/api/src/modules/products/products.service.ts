@@ -307,21 +307,36 @@ export class ProductsService {
           categoryId: input.categoryId,
         },
       });
-      await tx.productPiece.deleteMany({ where: { productId: id } });
-      await tx.productMaterial.deleteMany({ where: { productId: id } });
-      if (input.pieces.length) {
-        await tx.productPiece.createMany({
-          data: input.pieces.map((piece, idx) => ({
-            productId: id,
-            name: piece.name,
-            grams: piece.grams,
-            printMinutes: piece.printMinutes,
-            defaultFilamentId: piece.defaultFilamentId,
-            sortOrder: piece.sortOrder ?? idx,
-            scope: piece.scope ?? PieceScope.INDIVIDUAL,
-          })),
-        });
+      // Las piezas conservan su id: se actualizan las que vienen con un id de
+      // este producto, se crean las nuevas y se borran solo las quitadas. Los
+      // colores de la tienda online y las órdenes de producción
+      // (`filamentOverrides`) referencian piezas por id. Un id de otra pieza
+      // (de otro producto) se trata como pieza nueva.
+      const current = await tx.productPiece.findMany({
+        where: { productId: id },
+        select: { id: true },
+      });
+      const currentIds = new Set(current.map((piece) => piece.id));
+      const keptIds = input.pieces
+        .map((piece) => piece.id)
+        .filter((pieceId): pieceId is string => !!pieceId && currentIds.has(pieceId));
+      await tx.productPiece.deleteMany({ where: { productId: id, id: { notIn: keptIds } } });
+      for (const [idx, piece] of input.pieces.entries()) {
+        const data = {
+          name: piece.name,
+          grams: piece.grams,
+          printMinutes: piece.printMinutes,
+          defaultFilamentId: piece.defaultFilamentId,
+          sortOrder: piece.sortOrder ?? idx,
+          scope: piece.scope ?? PieceScope.INDIVIDUAL,
+        };
+        if (piece.id && keptIds.includes(piece.id)) {
+          await tx.productPiece.update({ where: { id: piece.id }, data });
+        } else {
+          await tx.productPiece.create({ data: { ...data, productId: id } });
+        }
       }
+      await tx.productMaterial.deleteMany({ where: { productId: id } });
       if (input.materials.length) {
         await tx.productMaterial.createMany({
           data: input.materials.map((m) => ({

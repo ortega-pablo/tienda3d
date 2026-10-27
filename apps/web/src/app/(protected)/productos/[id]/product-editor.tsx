@@ -123,7 +123,14 @@ export interface CostingResult {
   productId: string;
   productName: string;
   filament: {
-    items: Array<{ pieceId: string; pieceName: string; total: number; rawCost: number; wasteAmount: number; filamentName: string }>;
+    items: Array<{
+      pieceId: string;
+      pieceName: string;
+      total: number;
+      rawCost: number;
+      wasteAmount: number;
+      filamentName: string;
+    }>;
     raw: number;
     waste: number;
     total: number;
@@ -213,10 +220,7 @@ function defaultChannelState(available: ChannelLite[]): ChannelState[] {
   }));
 }
 
-function buildInitialState(
-  product: ProductDto | undefined,
-  available: ChannelLite[],
-): FormState {
+function buildInitialState(product: ProductDto | undefined, available: ChannelLite[]): FormState {
   if (product) {
     return {
       name: product.name,
@@ -443,6 +447,9 @@ export function ProductEditor({
     machineId: form.machineId || null,
     categoryId: form.categoryId,
     pieces: form.pieces.map((p, idx) => ({
+      // El id conserva la identidad de la pieza (colores de la tienda,
+      // órdenes de producción); una pieza nueva no lo tiene.
+      ...(p.id ? { id: p.id } : {}),
       name: p.name,
       grams: Number(p.grams),
       printMinutes: Number(p.printMinutes || '0'),
@@ -581,178 +588,248 @@ export function ProductEditor({
             it acts like a transparent wrapper. We deliberately avoid
             `display: contents` because it has interop issues with React's
             DOM reconciliation in some browsers (insertBefore mismatches). */}
-        <fieldset
-          disabled={readOnly}
-          className="m-0 min-w-0 space-y-4 border-0 p-0"
-        >
-        <Card>
-          <CardHeader>
-            <CardTitle>Datos del producto</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nombre" required>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </Field>
-            <Field label="SKU">
-              <Input
-                value={mode === 'edit' && product?.sku ? product.sku : 'Se asigna al guardar (PTK-PROD-NNNNNN)'}
-                disabled
-                readOnly
-                className="font-mono"
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Auto-generado por el sistema. Inmutable después de la creación.
-              </p>
-            </Field>
-            <Field label="Marketing mensual ($)">
-              <Input
-                type="number"
-                step="any"
-                value={form.marketingMonthly}
-                onChange={(e) => setForm({ ...form, marketingMonthly: e.target.value })}
-              />
-            </Field>
-            <Field label="Unidades estimadas / mes">
-              <Input
-                type="number"
-                step="any"
-                value={form.estimatedUnitsMonth}
-                onChange={(e) => setForm({ ...form, estimatedUnitsMonth: e.target.value })}
-              />
-            </Field>
-            <Field label="Tiempo armado (min)">
-              <Input
-                type="number"
-                step="any"
-                value={form.assemblyMinutes}
-                onChange={(e) => setForm({ ...form, assemblyMinutes: e.target.value })}
-              />
-            </Field>
-            <Field label="Tiempo gestión (min)">
-              <Input
-                type="number"
-                step="any"
-                value={form.managementMinutes}
-                onChange={(e) => setForm({ ...form, managementMinutes: e.target.value })}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Máquina (impresora)" required>
-                <select
-                  value={form.machineId}
-                  onChange={(e) => setForm({ ...form, machineId: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="">Seleccioná una máquina…</option>
-                  {machines.map((mc) => (
-                    <option key={mc.id} value={mc.id}>
-                      {mc.name}
-                      {!mc.isActive ? ' (inactiva)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Impresora donde se fabrica el producto. No afecta el costo (siempre se usa la
-                  máquina activa).
-                </p>
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Categoría" required>
-                <select
-                  value={form.categoryId}
-                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="">Seleccioná una categoría…</option>
-                  {categories.map((parent) => {
-                    const childOptions = (parent.children ?? [])
-                      .filter((c) => c.isActive || c.id === form.categoryId)
-                      .map((child) => (
-                        <option key={child.id} value={child.id}>
-                          {parent.name} → {child.name}
-                          {!child.isActive ? ' (inactiva)' : ''}
-                        </option>
-                      ));
-                    if (!parent.isActive && parent.id !== form.categoryId && childOptions.length === 0) {
-                      return null;
-                    }
-                    return (
-                      <optgroup key={parent.id} label={parent.name}>
-                        {(parent.isActive || parent.id === form.categoryId) && (
-                          <option value={parent.id}>
-                            {parent.name}
-                            {!parent.isActive ? ' (inactiva)' : ''}
-                          </option>
-                        )}
-                        {childOptions}
-                      </optgroup>
-                    );
-                  })}
-                </select>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  El <strong>markup y las escalas vienen de la categoría</strong> (con herencia
-                  subcategoría → padre). Configuralas en{' '}
-                  <Link className="underline" href="/categorias">Gestionar categorías</Link>.
-                </p>
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Descripción">
+        <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-4 border-0 p-0">
+          <Card>
+            <CardHeader>
+              <CardTitle>Datos del producto</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <Field label="Nombre" required>
                 <Input
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </Field>
+              <Field label="SKU">
+                <Input
+                  value={
+                    mode === 'edit' && product?.sku
+                      ? product.sku
+                      : 'Se asigna al guardar (PTK-PROD-NNNNNN)'
+                  }
+                  disabled
+                  readOnly
+                  className="font-mono"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Visible para el equipo y para el cliente (catálogo).
+                  Auto-generado por el sistema. Inmutable después de la creación.
                 </p>
               </Field>
-            </div>
-            {canSeeNotes && (
+              <Field label="Marketing mensual ($)">
+                <Input
+                  type="number"
+                  step="any"
+                  value={form.marketingMonthly}
+                  onChange={(e) => setForm({ ...form, marketingMonthly: e.target.value })}
+                />
+              </Field>
+              <Field label="Unidades estimadas / mes">
+                <Input
+                  type="number"
+                  step="any"
+                  value={form.estimatedUnitsMonth}
+                  onChange={(e) => setForm({ ...form, estimatedUnitsMonth: e.target.value })}
+                />
+              </Field>
+              <Field label="Tiempo armado (min)">
+                <Input
+                  type="number"
+                  step="any"
+                  value={form.assemblyMinutes}
+                  onChange={(e) => setForm({ ...form, assemblyMinutes: e.target.value })}
+                />
+              </Field>
+              <Field label="Tiempo gestión (min)">
+                <Input
+                  type="number"
+                  step="any"
+                  value={form.managementMinutes}
+                  onChange={(e) => setForm({ ...form, managementMinutes: e.target.value })}
+                />
+              </Field>
               <div className="sm:col-span-2">
-                <Field label="Notas internas">
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    rows={3}
-                    disabled={readOnly}
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  />
+                <Field label="Máquina (impresora)" required>
+                  <select
+                    value={form.machineId}
+                    onChange={(e) => setForm({ ...form, machineId: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Seleccioná una máquina…</option>
+                    {machines.map((mc) => (
+                      <option key={mc.id} value={mc.id}>
+                        {mc.name}
+                        {!mc.isActive ? ' (inactiva)' : ''}
+                      </option>
+                    ))}
+                  </select>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    🔒 Solo visible para usuarios administrativos. Nunca se muestra al cliente.
+                    Impresora donde se fabrica el producto. No afecta el costo (siempre se usa la
+                    máquina activa).
                   </p>
                 </Field>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="sm:col-span-2">
+                <Field label="Categoría" required>
+                  <select
+                    value={form.categoryId}
+                    onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="">Seleccioná una categoría…</option>
+                    {categories.map((parent) => {
+                      const childOptions = (parent.children ?? [])
+                        .filter((c) => c.isActive || c.id === form.categoryId)
+                        .map((child) => (
+                          <option key={child.id} value={child.id}>
+                            {parent.name} → {child.name}
+                            {!child.isActive ? ' (inactiva)' : ''}
+                          </option>
+                        ));
+                      if (
+                        !parent.isActive &&
+                        parent.id !== form.categoryId &&
+                        childOptions.length === 0
+                      ) {
+                        return null;
+                      }
+                      return (
+                        <optgroup key={parent.id} label={parent.name}>
+                          {(parent.isActive || parent.id === form.categoryId) && (
+                            <option value={parent.id}>
+                              {parent.name}
+                              {!parent.isActive ? ' (inactiva)' : ''}
+                            </option>
+                          )}
+                          {childOptions}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    El <strong>markup y las escalas vienen de la categoría</strong> (con herencia
+                    subcategoría → padre). Configuralas en{' '}
+                    <Link className="underline" href="/categorias">
+                      Gestionar categorías
+                    </Link>
+                    .
+                  </p>
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Descripción">
+                  <Input
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Visible para el equipo y para el cliente (catálogo).
+                  </p>
+                </Field>
+              </div>
+              {canSeeNotes && (
+                <div className="sm:col-span-2">
+                  <Field label="Notas internas">
+                    <textarea
+                      value={form.notes}
+                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                      rows={3}
+                      disabled={readOnly}
+                      className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      🔒 Solo visible para usuarios administrativos. Nunca se muestra al cliente.
+                    </p>
+                  </Field>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {form.pieces.length === 0 && form.materials.length === 0 && (
-          <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
-            ⚠ El producto debe tener <strong>al menos una pieza impresa o un insumo</strong>.
-            Agregá lo que corresponda usando los botones abajo.
-          </div>
-        )}
-
-        {isKeychain ? (
-          <>
-            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
-              🔑 <strong>Producto tipo llavero.</strong> Cargá las piezas en dos
-              secciones: <strong>individual</strong> (para imprimir 1 unidad, base del
-              precio para 1-4 unidades) y <strong>tanda</strong> (la placa de 5, base
-              del precio para 5 o más). Los <strong>insumos y adicionales son por
-              unidad</strong>. Los markups por escala (1-4 / 5-24 / 25-49 / 50-99 /
-              100+) se editan en{' '}
-              <a className="underline" href="/parametros">Parámetros</a>.
+          {form.pieces.length === 0 && form.materials.length === 0 && (
+            <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm">
+              ⚠ El producto debe tener <strong>al menos una pieza impresa o un insumo</strong>.
+              Agregá lo que corresponda usando los botones abajo.
             </div>
+          )}
 
+          {isKeychain ? (
+            <>
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
+                🔑 <strong>Producto tipo llavero.</strong> Cargá las piezas en dos secciones:{' '}
+                <strong>individual</strong> (para imprimir 1 unidad, base del precio para 1-4
+                unidades) y <strong>tanda</strong> (la placa de 5, base del precio para 5 o más).
+                Los <strong>insumos y adicionales son por unidad</strong>. Los markups por escala
+                (1-4 / 5-24 / 25-49 / 50-99 / 100+) se editan en{' '}
+                <a className="underline" href="/parametros">
+                  Parámetros
+                </a>
+                .
+              </div>
+
+              <Card>
+                <CardHeader className="flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle>Piezas — producto individual</CardTitle>
+                    <CardDescription>
+                      Todas las piezas para imprimir <strong>un solo llavero</strong>. Base del
+                      precio para cantidades 1-4.
+                    </CardDescription>
+                  </div>
+                  {canWrite && (
+                    <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
+                      <Plus className="h-4 w-4" /> Agregar pieza
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {form.pieces
+                    .map((piece, idx) => ({ piece, idx }))
+                    .filter(({ piece }) => piece.scope === 'INDIVIDUAL')
+                    .map(({ piece, idx }) => renderPieceRow(piece, idx))}
+                  {form.pieces.every((p) => p.scope !== 'INDIVIDUAL') && (
+                    <p className="text-sm text-muted-foreground">
+                      Sin piezas individuales. Agregá al menos una.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle>Piezas — tanda (placa de 5)</CardTitle>
+                    <CardDescription>
+                      Todas las piezas del{' '}
+                      <strong>mismo producto dispuestas en una placa de 5</strong>. Base del precio
+                      para 5 o más unidades (se divide por 5).
+                    </CardDescription>
+                  </div>
+                  {canWrite && (
+                    <Button variant="outline" size="sm" onClick={() => addPiece('BATCH')}>
+                      <Plus className="h-4 w-4" /> Agregar pieza
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {form.pieces
+                    .map((piece, idx) => ({ piece, idx }))
+                    .filter(({ piece }) => piece.scope === 'BATCH')
+                    .map(({ piece, idx }) => renderPieceRow(piece, idx))}
+                  {form.pieces.every((p) => p.scope !== 'BATCH') && (
+                    <p className="text-sm text-muted-foreground">
+                      Sin piezas de tanda. Agregá al menos una.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          ) : (
             <Card>
               <CardHeader className="flex-row items-center justify-between gap-2">
                 <div>
-                  <CardTitle>Piezas — producto individual</CardTitle>
+                  <CardTitle>Piezas impresas</CardTitle>
                   <CardDescription>
-                    Todas las piezas para imprimir <strong>un solo llavero</strong>. Base
-                    del precio para cantidades 1-4.
+                    Cada pieza usa un filamento por marca; el color se elige al fabricar.
                   </CardDescription>
                 </div>
                 {canWrite && (
@@ -762,243 +839,187 @@ export function ProductEditor({
                 )}
               </CardHeader>
               <CardContent className="space-y-3">
-                {form.pieces
-                  .map((piece, idx) => ({ piece, idx }))
-                  .filter(({ piece }) => piece.scope === 'INDIVIDUAL')
-                  .map(({ piece, idx }) => renderPieceRow(piece, idx))}
-                {form.pieces.every((p) => p.scope !== 'INDIVIDUAL') && (
+                {form.pieces.map((piece, idx) => renderPieceRow(piece, idx))}
+                {form.pieces.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    Sin piezas individuales. Agregá al menos una.
+                    Sin piezas impresas. Agregá una si el producto se fabrica en la impresora.
                   </p>
                 )}
               </CardContent>
             </Card>
+          )}
 
-            <Card>
-              <CardHeader className="flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle>Piezas — tanda (placa de 5)</CardTitle>
-                  <CardDescription>
-                    Todas las piezas del <strong>mismo producto dispuestas en una placa de
-                    5</strong>. Base del precio para 5 o más unidades (se divide por 5).
-                  </CardDescription>
-                </div>
-                {canWrite && (
-                  <Button variant="outline" size="sm" onClick={() => addPiece('BATCH')}>
-                    <Plus className="h-4 w-4" /> Agregar pieza
-                  </Button>
-                )}
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {form.pieces
-                  .map((piece, idx) => ({ piece, idx }))
-                  .filter(({ piece }) => piece.scope === 'BATCH')
-                  .map(({ piece, idx }) => renderPieceRow(piece, idx))}
-                {form.pieces.every((p) => p.scope !== 'BATCH') && (
-                  <p className="text-sm text-muted-foreground">
-                    Sin piezas de tanda. Agregá al menos una.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </>
-        ) : (
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-2">
               <div>
-                <CardTitle>Piezas impresas</CardTitle>
+                <CardTitle>Insumos extra</CardTitle>
                 <CardDescription>
-                  Cada pieza usa un filamento por marca; el color se elige al fabricar.
+                  Hojas, packaging, hardware, etc.
+                  {isKeychain ? ' Cantidades por unidad (1 llavero).' : ''}
                 </CardDescription>
               </div>
               {canWrite && (
-                <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
-                  <Plus className="h-4 w-4" /> Agregar pieza
+                <Button variant="outline" size="sm" onClick={addMaterial}>
+                  <Plus className="h-4 w-4" /> Agregar insumo
                 </Button>
               )}
             </CardHeader>
             <CardContent className="space-y-3">
-              {form.pieces.map((piece, idx) => renderPieceRow(piece, idx))}
-              {form.pieces.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Sin piezas impresas. Agregá una si el producto se fabrica en la impresora.
-                </p>
+              {form.materials.length === 0 && (
+                <p className="text-sm text-muted-foreground">Sin insumos extra.</p>
               )}
+              {form.materials.map((mat, idx) => {
+                const m = materials.find((x) => x.id === mat.materialId);
+                return (
+                  <div key={idx} className="grid gap-2 rounded-md border p-3 sm:grid-cols-12">
+                    <div className="sm:col-span-7">
+                      <Label className="text-xs" required>
+                        Insumo
+                      </Label>
+                      <select
+                        value={mat.materialId}
+                        onChange={(e) => setMaterial(idx, { materialId: e.target.value })}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
+                      >
+                        {nonFilaments.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.unit.toLowerCase()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <Label className="text-xs" required>
+                        Cantidad
+                      </Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        value={mat.quantity}
+                        onChange={(e) => setMaterial(idx, { quantity: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex items-end sm:col-span-2">
+                      <Button variant="ghost" size="sm" onClick={() => removeMaterial(idx)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                    {m && (
+                      <p className="text-xs text-muted-foreground sm:col-span-12">
+                        Tipo: {m.type.toLowerCase()} · unidad: {m.unit.toLowerCase()}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
-        )}
 
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-2">
-            <div>
-              <CardTitle>Insumos extra</CardTitle>
+          <Card>
+            <CardHeader>
+              <CardTitle>Canales de venta</CardTitle>
               <CardDescription>
-                Hojas, packaging, hardware, etc.
-                {isKeychain ? ' Cantidades por unidad (1 llavero).' : ''}
+                Elegí dónde se vende este producto. Venta Directa y Efectivo vienen
+                pre-seleccionados. MercadoLibre requiere cargar la comisión por producto.
               </CardDescription>
-            </div>
-            {canWrite && (
-              <Button variant="outline" size="sm" onClick={addMaterial}>
-                <Plus className="h-4 w-4" /> Agregar insumo
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {form.materials.length === 0 && (
-              <p className="text-sm text-muted-foreground">Sin insumos extra.</p>
-            )}
-            {form.materials.map((mat, idx) => {
-              const m = materials.find((x) => x.id === mat.materialId);
-              return (
-                <div key={idx} className="grid gap-2 rounded-md border p-3 sm:grid-cols-12">
-                  <div className="sm:col-span-7">
-                    <Label className="text-xs" required>
-                      Insumo
-                    </Label>
-                    <select
-                      value={mat.materialId}
-                      onChange={(e) => setMaterial(idx, { materialId: e.target.value })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-2 text-sm"
-                    >
-                      {nonFilaments.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.unit.toLowerCase()})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="sm:col-span-3">
-                    <Label className="text-xs" required>
-                      Cantidad
-                    </Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={mat.quantity}
-                      onChange={(e) => setMaterial(idx, { quantity: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-end sm:col-span-2">
-                    <Button variant="ghost" size="sm" onClick={() => removeMaterial(idx)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                  {m && (
-                    <p className="text-xs text-muted-foreground sm:col-span-12">
-                      Tipo: {m.type.toLowerCase()} · unidad: {m.unit.toLowerCase()}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Canales de venta</CardTitle>
-            <CardDescription>
-              Elegí dónde se vende este producto. Venta Directa y Efectivo vienen pre-seleccionados.
-              MercadoLibre requiere cargar la comisión por producto.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {form.channels.map((c) => {
-              const channel = channelsById.get(c.channelId);
-              if (!channel) return null;
-              const isLockedKind = channel.kind === 'DIRECT_SALE' || channel.kind === 'CASH';
-              const isMarketplace = channel.kind === 'MARKETPLACE';
-              const showFields = c.isEnabled && !isLockedKind;
-              return (
-                <div
-                  key={c.channelId}
-                  className={
-                    c.isEnabled
-                      ? 'rounded-md border border-primary/30 bg-primary/5 p-3'
-                      : 'rounded-md border p-3'
-                  }
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="flex flex-1 cursor-pointer items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={c.isEnabled}
-                        onChange={(e) => setChannel(c.channelId, { isEnabled: e.target.checked })}
-                        disabled={!canWrite}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2 font-medium">
-                          {channel.icon && <span>{channel.icon}</span>}
-                          {channel.name}
-                          {isLockedKind && (
-                            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                              comisión global
-                            </span>
-                          )}
-                          {isMarketplace && (
-                            <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] uppercase text-accent">
-                              comisión por producto
-                            </span>
-                          )}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {form.channels.map((c) => {
+                const channel = channelsById.get(c.channelId);
+                if (!channel) return null;
+                const isLockedKind = channel.kind === 'DIRECT_SALE' || channel.kind === 'CASH';
+                const isMarketplace = channel.kind === 'MARKETPLACE';
+                const showFields = c.isEnabled && !isLockedKind;
+                return (
+                  <div
+                    key={c.channelId}
+                    className={
+                      c.isEnabled
+                        ? 'rounded-md border border-primary/30 bg-primary/5 p-3'
+                        : 'rounded-md border p-3'
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex flex-1 cursor-pointer items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={c.isEnabled}
+                          onChange={(e) => setChannel(c.channelId, { isEnabled: e.target.checked })}
+                          disabled={!canWrite}
+                          className="h-4 w-4 rounded border-input"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2 font-medium">
+                            {channel.icon && <span>{channel.icon}</span>}
+                            {channel.name}
+                            {isLockedKind && (
+                              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                                comisión global
+                              </span>
+                            )}
+                            {isMarketplace && (
+                              <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] uppercase text-accent">
+                                comisión por producto
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {channel.kind === 'DIRECT_SALE' &&
+                              'Comisión definida en Parámetros · régimen aplicado'}
+                            {channel.kind === 'CASH' &&
+                              'Sin comisión · régimen aplicado (toggleable para admins)'}
+                            {channel.kind === 'MARKETPLACE' &&
+                              'Cargá la comisión que cobra el marketplace por este producto'}
+                            {channel.kind === 'CUSTOM' &&
+                              'Canal libre — opcional override de comisión'}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {channel.kind === 'DIRECT_SALE' &&
-                            'Comisión definida en Parámetros · régimen aplicado'}
-                          {channel.kind === 'CASH' &&
-                            'Sin comisión · régimen aplicado (toggleable para admins)'}
-                          {channel.kind === 'MARKETPLACE' &&
-                            'Cargá la comisión que cobra el marketplace por este producto'}
-                          {channel.kind === 'CUSTOM' &&
-                            'Canal libre — opcional override de comisión'}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-
-                  {showFields && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      {isMarketplace && (
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">
-                            Comisión <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            type="number"
-                            step="any"
-                            min="0"
-                            max="100"
-                            value={c.commissionPct}
-                            onChange={(e) =>
-                              setChannel(c.channelId, { commissionPct: e.target.value })
-                            }
-                            placeholder="ej. 13"
-                            disabled={!canWrite}
-                          />
-                        </div>
-                      )}
-                      {channel.kind === 'CUSTOM' && (
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Comisión override (%)</Label>
-                          <Input
-                            type="number"
-                            step="any"
-                            value={c.commissionPct}
-                            onChange={(e) =>
-                              setChannel(c.channelId, { commissionPct: e.target.value })
-                            }
-                            placeholder="hereda canal"
-                            disabled={!canWrite}
-                          />
-                        </div>
-                      )}
+                      </label>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+
+                    {showFields && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        {isMarketplace && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">
+                              Comisión <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                              type="number"
+                              step="any"
+                              min="0"
+                              max="100"
+                              value={c.commissionPct}
+                              onChange={(e) =>
+                                setChannel(c.channelId, { commissionPct: e.target.value })
+                              }
+                              placeholder="ej. 13"
+                              disabled={!canWrite}
+                            />
+                          </div>
+                        )}
+                        {channel.kind === 'CUSTOM' && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Comisión override (%)</Label>
+                            <Input
+                              type="number"
+                              step="any"
+                              value={c.commissionPct}
+                              onChange={(e) =>
+                                setChannel(c.channelId, { commissionPct: e.target.value })
+                              }
+                              placeholder="hereda canal"
+                              disabled={!canWrite}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
         </fieldset>
       </div>
 
@@ -1064,8 +1085,8 @@ function CostPanel({
           <CardHeader>
             <CardTitle>Costo unitario por base</CardTitle>
             <CardDescription>
-              No se pudo calcular. Revisá que ambas secciones de piezas tengan filamento
-              y precios cargados.
+              No se pudo calcular. Revisá que ambas secciones de piezas tengan filamento y precios
+              cargados.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -1077,8 +1098,8 @@ function CostPanel({
         <CardHeader>
           <CardTitle>Costo unitario por base</CardTitle>
           <CardDescription>
-            Logic C v3. La escala 1-4 usa la base <strong>individual</strong>; las escalas
-            5+ usan la base de <strong>tanda ÷ {batchSize}</strong>.
+            Logic C v3. La escala 1-4 usa la base <strong>individual</strong>; las escalas 5+ usan
+            la base de <strong>tanda ÷ {batchSize}</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -1094,8 +1115,8 @@ function CostPanel({
             subheading={`Piezas de la placa de ${batchSize}, por unidad`}
           />
           <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-            El precio final por escala (markup + comisión + régimen) está en la matriz de
-            precios debajo del formulario.
+            El precio final por escala (markup + comisión + régimen) está en la matriz de precios
+            debajo del formulario.
           </p>
         </CardContent>
       </Card>
@@ -1121,9 +1142,8 @@ function CostPanel({
       <CardContent className="space-y-3">
         <CostBreakdown cost={cost} />
         <p className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-          La ganancia y el precio final dependen del tier y canal. Mirá la
-          matriz de precios debajo — viene de las escalas configuradas en la
-          categoría del producto.
+          La ganancia y el precio final dependen del tier y canal. Mirá la matriz de precios debajo
+          — viene de las escalas configuradas en la categoría del producto.
         </p>
       </CardContent>
     </Card>
@@ -1200,9 +1220,7 @@ function CostBreakdown({
             <Row
               label="Otros insumos (post-profit)"
               value={otherWithReab}
-              sub={
-                materialsReab > 0 ? `incluye ${formatMoney(materialsReab)} de reab.` : undefined
-              }
+              sub={materialsReab > 0 ? `incluye ${formatMoney(materialsReab)} de reab.` : undefined}
             />
           </>
         )}
@@ -1222,9 +1240,23 @@ function CostBreakdown({
   );
 }
 
-function Row({ label, value, sub, bold, muted }: { label: string; value: number; sub?: string; bold?: boolean; muted?: boolean }) {
+function Row({
+  label,
+  value,
+  sub,
+  bold,
+  muted,
+}: {
+  label: string;
+  value: number;
+  sub?: string;
+  bold?: boolean;
+  muted?: boolean;
+}) {
   return (
-    <div className={`flex items-baseline justify-between gap-2 ${muted ? 'text-muted-foreground' : ''}`}>
+    <div
+      className={`flex items-baseline justify-between gap-2 ${muted ? 'text-muted-foreground' : ''}`}
+    >
       <div>
         <div className={bold ? 'font-medium' : ''}>{label}</div>
         {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
