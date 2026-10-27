@@ -12,10 +12,14 @@
 set -eu
 cd "$(dirname "$0")/.."
 
+# Binarios instalados: sin pnpm/corepack, que intentan descargar pnpm de
+# internet al ejecutar (la red interna del ecosistema no tiene salida).
+bin="./node_modules/.bin"
+
 url="${MIGRATION_DATABASE_URL:-${DATABASE_URL:-}}"
 [ -n "$url" ] || { echo "Falta MIGRATION_DATABASE_URL (o DATABASE_URL)" >&2; exit 1; }
 
-DATABASE_URL="$url" pnpm prisma migrate deploy
+DATABASE_URL="$url" "$bin/prisma" migrate deploy
 
 if [ -n "${APP_DB_ROLE:-}" ]; then
   # psql no entiende los parámetros de Prisma (?schema=public): se cortan.
@@ -24,5 +28,5 @@ if [ -n "${APP_DB_ROLE:-}" ]; then
 fi
 
 if [ "${RUN_SEED:-false}" = "true" ]; then
-  DATABASE_URL="$url" pnpm prisma db seed
+  DATABASE_URL="$url" "$bin/tsx" prisma/seed.ts
 fi
