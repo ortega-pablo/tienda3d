@@ -95,3 +95,131 @@ describe('[int] Editar un producto', () => {
     expect(product.notes).toBe('Costo real con descuento del proveedor');
   });
 });
+
+/**
+ * F2·3: las piezas conservan su id al editar. Antes el PUT las borraba y
+ * recreaba, y nada podía referenciarlas (colores de la tienda online,
+ * `filamentOverrides` de las órdenes de producción).
+ */
+describe('[int] Piezas al editar un producto', () => {
+  let moduleRef: TestingModule;
+  let prisma: PrismaService;
+  let service: ProductsService;
+  let close: () => Promise<void>;
+  let fx: Fixtures;
+  let machineId: string;
+
+  beforeAll(async () => {
+    ({ moduleRef, prisma, close } = await bootTestApp());
+    service = moduleRef.get(ProductsService);
+  });
+
+  afterAll(async () => {
+    await close();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(prisma);
+    fx = await seedFixtures(prisma);
+    machineId = (await prisma.machine.findFirstOrThrow()).id;
+  });
+
+  const base = (pieces: ProductInput['pieces']): ProductInput => ({
+    name: 'Producto test',
+    marketingMonthly: 0,
+    estimatedUnitsMonth: 1,
+    assemblyMinutes: 6,
+    managementMinutes: 4,
+    machineId,
+    categoryId: fx.categoryId,
+    pieces,
+    materials: [{ materialId: fx.materialId, quantity: 2 }],
+  });
+
+  it('editar los gramos de una pieza mantiene su id', async () => {
+    const [cuerpo] = await prisma.productPiece.findMany({ where: { productId: fx.productId } });
+
+    const result = await service.update(
+      fx.productId,
+      base([
+        {
+          id: cuerpo!.id,
+          name: 'Cuerpo',
+          grams: 80,
+          printMinutes: 90,
+          defaultFilamentId: fx.filamentId,
+        },
+      ]),
+    );
+
+    expect(result.pieces).toHaveLength(1);
+    expect(result.pieces[0]!.id).toBe(cuerpo!.id);
+    expect(Number(result.pieces[0]!.grams)).toBe(80);
+  });
+
+  it('agregar una pieza la crea y quitar otra la borra, sin tocar las que quedan', async () => {
+    const [cuerpo] = await prisma.productPiece.findMany({ where: { productId: fx.productId } });
+    const conTapa = await service.update(
+      fx.productId,
+      base([
+        {
+          id: cuerpo!.id,
+          name: 'Cuerpo',
+          grams: 50,
+          printMinutes: 90,
+          defaultFilamentId: fx.filamentId,
+        },
+        { name: 'Tapa', grams: 10, printMinutes: 20, defaultFilamentId: fx.filamentId },
+      ]),
+    );
+    const tapa = conTapa.pieces.find((p) => p.name === 'Tapa')!;
+
+    const sinCuerpo = await service.update(
+      fx.productId,
+      base([
+        {
+          id: tapa.id,
+          name: 'Tapa',
+          grams: 12,
+          printMinutes: 20,
+          defaultFilamentId: fx.filamentId,
+        },
+      ]),
+    );
+
+    expect(sinCuerpo.pieces.map((p) => p.id)).toEqual([tapa.id]);
+    expect(await prisma.productPiece.count({ where: { id: cuerpo!.id } })).toBe(0);
+  });
+
+  it('un id de pieza de otro producto se trata como pieza nueva y no la toca', async () => {
+    const otro = await prisma.product.create({
+      data: {
+        name: 'Otro',
+        sku: 'PTK-TEST-000002',
+        categoryId: fx.categoryId,
+        pieces: {
+          create: [{ name: 'Ajena', grams: 5, printMinutes: 5, defaultFilamentId: fx.filamentId }],
+        },
+      },
+      include: { pieces: true },
+    });
+    const ajena = otro.pieces[0]!;
+
+    const result = await service.update(
+      fx.productId,
+      base([
+        {
+          id: ajena.id,
+          name: 'Pirata',
+          grams: 99,
+          printMinutes: 9,
+          defaultFilamentId: fx.filamentId,
+        },
+      ]),
+    );
+
+    expect(result.pieces[0]!.id).not.toBe(ajena.id);
+    const intacta = await prisma.productPiece.findUniqueOrThrow({ where: { id: ajena.id } });
+    expect(intacta).toMatchObject({ name: 'Ajena', productId: otro.id });
+  });
+});
