@@ -96,7 +96,8 @@ const inputSchema = z
   // Un producto estándar no maneja el concepto de tanda.
   .refine(
     (data) =>
-      data.kind === 'KEYCHAIN' || data.pieces.every((p) => (p.scope ?? 'INDIVIDUAL') === 'INDIVIDUAL'),
+      data.kind === 'KEYCHAIN' ||
+      data.pieces.every((p) => (p.scope ?? 'INDIVIDUAL') === 'INDIVIDUAL'),
     {
       message: 'Un producto estándar no puede tener piezas de tanda',
       path: ['pieces'],
@@ -164,7 +165,10 @@ export class ProductsController {
     @CurrentUser() user: AccessPayload,
   ) {
     const canNotes = user.permissions.includes(NOTES_PERMISSION);
-    return this.products.create({ ...body, notes: canNotes ? (body.notes ?? null) : null });
+    return this.products.create(
+      { ...body, notes: canNotes ? (body.notes ?? null) : null },
+      canNotes,
+    );
   }
 
   @Permissions('product:write')
@@ -176,7 +180,12 @@ export class ProductsController {
   ) {
     const canNotes = user.permissions.includes(NOTES_PERMISSION);
     // No-admin: notes = undefined → el service preserva las existentes.
-    return this.products.update(id, { ...body, notes: canNotes ? (body.notes ?? null) : undefined });
+    // La respuesta también respeta la visibilidad de las notas.
+    return this.products.update(
+      id,
+      { ...body, notes: canNotes ? (body.notes ?? null) : undefined },
+      canNotes,
+    );
   }
 
   @Permissions('product:write')
