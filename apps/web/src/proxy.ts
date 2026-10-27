@@ -41,6 +41,26 @@ function readExp(jwt: string): number | null {
   }
 }
 
+/** `nombre → valor` de cada Set-Cookie que devolvió la API. */
+function freshCookies(setCookies: string[]): Map<string, string> {
+  const fresh = new Map<string, string>();
+  for (const cookie of setCookies) {
+    const [pair = ''] = cookie.split(';');
+    const eq = pair.indexOf('=');
+    if (eq > 0) fresh.set(pair.slice(0, eq).trim(), pair.slice(eq + 1));
+  }
+  return fresh;
+}
+
+/** Cabeceras del request con las cookies reemplazadas por las nuevas. */
+function withCookies(req: NextRequest, fresh: Map<string, string>): Headers {
+  const cookies = new Map(req.cookies.getAll().map((c) => [c.name, c.value]));
+  for (const [name, value] of fresh) cookies.set(name, value);
+  const headers = new Headers(req.headers);
+  headers.set('cookie', [...cookies].map(([name, value]) => `${name}=${value}`).join('; '));
+  return headers;
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const requiresAuth = !PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -62,8 +82,14 @@ export async function proxy(req: NextRequest) {
         headers: { cookie: `${REFRESH_COOKIE}=${refresh}` },
       });
       if (apiRes.ok) {
-        const res = NextResponse.next();
-        for (const cookie of apiRes.headers.getSetCookie()) {
+        const setCookies = apiRes.headers.getSetCookie();
+        // La página se renderiza en ESTE request: tiene que ver las cookies
+        // nuevas, no las vencidas que mandó el navegador. Sin esto, con el
+        // access ya vencido, la página volvía a fallar y mandaba al login.
+        const res = NextResponse.next({
+          request: { headers: withCookies(req, freshCookies(setCookies)) },
+        });
+        for (const cookie of setCookies) {
           res.headers.append('set-cookie', cookie);
         }
         return res;
