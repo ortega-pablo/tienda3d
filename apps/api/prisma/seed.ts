@@ -12,6 +12,7 @@ import '../src/common/config/load-secret-files';
 import { ChannelKind, MaterialType, MaterialUnit, PrismaClient, TaxMode } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { readSecret } from '../src/common/config/secret-files';
+import { seedAdminPasswordIssue } from '../src/common/config/validate-secrets';
 
 const prisma = new PrismaClient();
 
@@ -141,7 +142,13 @@ async function seedRoles() {
 
 async function seedAdminUser(roleId: string) {
   const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@plastik.local';
-  const password = readSecret('SEED_ADMIN_PASSWORD') ?? 'admin123';
+  const configured = readSecret('SEED_ADMIN_PASSWORD');
+  if (process.env.NODE_ENV === 'production') {
+    const issue = seedAdminPasswordIssue(configured);
+    if (issue) throw new Error(`No se crea el admin inicial en producción: ${issue}.`);
+  }
+  // En desarrollo se tolera la clave de ejemplo para el primer arranque.
+  const password = configured ?? 'admin123';
   const passwordHash = await argon2.hash(password);
   await prisma.user.upsert({
     where: { email },
