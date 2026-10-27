@@ -45,6 +45,9 @@ COPY --from=build --chown=nestjs:nodejs /app/packages/shared ./packages/shared
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/scripts ./apps/api/scripts
+# El seed (tsx prisma/seed.ts) importa la lectura de secretos y las reglas de
+# claves desde src/common/config: sin estos fuentes falla dentro de la imagen.
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/config ./apps/api/src/common/config
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --chown=nestjs:nodejs package.json pnpm-workspace.yaml ./
 
