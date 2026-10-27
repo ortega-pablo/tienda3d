@@ -15,3 +15,4 @@ export interface AuthenticatedUser {
   role: string;
   permissions: string[];
 }
+export * from './web-catalog';

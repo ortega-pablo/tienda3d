@@ -27,6 +27,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { UsersModule } from './modules/users/users.module';
+import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { UsersModule } from './modules/users/users.module';
     MaterialsModule,
     ChannelsModule,
     CategoriesModule,
+    WebCatalogModule,
     ProductsModule,
     CustomersModule,
     QuotesModule,
