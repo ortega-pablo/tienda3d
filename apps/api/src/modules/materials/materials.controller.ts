@@ -18,6 +18,7 @@ import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
 import { MaterialsService } from './materials.service';
+import { queryBoolean } from '@/common/utils/query-boolean';
 
 const inputSchema = z.object({
   name: z.string().min(1).max(160),
@@ -56,7 +57,7 @@ const stockAdjustSchema = z.object({
 
 const listQuerySchema = z.object({
   type: z.nativeEnum(MaterialType).optional(),
-  activeOnly: z.coerce.boolean().optional(),
+  activeOnly: queryBoolean.optional(),
 });
 
 @UseGuards(PermissionsGuard)

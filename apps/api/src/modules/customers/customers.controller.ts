@@ -23,9 +23,10 @@ import { CustomerCatalogService } from './customer-catalog.service';
 import { CustomerCronService } from './customer-cron.service';
 import { CustomerPricingService } from './customer-pricing.service';
 import { CustomersService, CustomersWriteService } from './customers.service';
+import { queryBoolean } from '@/common/utils/query-boolean';
 
 const listQuerySchema = z.object({
-  activeOnly: z.coerce.boolean().optional(),
+  activeOnly: queryBoolean.optional(),
   type: z.nativeEnum(CustomerType).optional(),
 });
 
