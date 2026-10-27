@@ -12,7 +12,8 @@ cd "$(dirname "$0")/.."
 
 paso() { printf '\n▶ %s\n' "$1"; }
 
-paso "shared"
+paso "cliente de Prisma y shared"
+pnpm --filter @tienda3d/api exec prisma generate >/dev/null
 pnpm --filter @tienda3d/shared build >/dev/null
 
 paso "typecheck"
