@@ -143,3 +143,16 @@ Pendiente:
 ## Licencia
 
 Privado — uso interno de Plastik 3D.
+
+## Hooks de git (sin GitHub Actions)
+
+La verificación corre en la máquina, con [lefthook](https://lefthook.dev): no hay GitHub Actions.
+
+| Hook | Qué corre |
+| --- | --- |
+| `pre-commit` | `gitleaks` sobre lo que se está por commitear: frena el commit si encuentra una clave |
+| `pre-push` | `gitleaks` sobre los commits que todavía no están en ningún remoto |
+
+Instalación: se instalan solos con `pnpm install` (lefthook es devDependency); si no, `pnpm exec lefthook install`. El escaneo usa el binario de gitleaks (`brew install gitleaks`) o, si no
+está, su imagen de Docker. Las excepciones revisadas están en `.gitleaks.toml`. Para escanear todo el
+historial: `sh scripts/hooks/gitleaks.sh history`.

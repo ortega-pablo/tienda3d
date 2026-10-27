@@ -1,0 +1,11 @@
+# Hooks de git del repo. La verificación es local: no hay GitHub Actions.
+# Se instalan con `lefthook install` (en los repos con pnpm, solos al correr `pnpm install`).
+pre-commit:
+  commands:
+    secretos:
+      run: sh scripts/hooks/gitleaks.sh staged
+
+pre-push:
+  commands:
+    secretos:
+      run: sh scripts/hooks/gitleaks.sh push
