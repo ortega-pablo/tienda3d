@@ -19,6 +19,7 @@ import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
 import { CategoriesService } from './categories.service';
 import { CategoryTiersService } from './category-tiers.service';
+import { queryBoolean } from '@/common/utils/query-boolean';
 
 const inputSchema = z.object({
   name: z.string().min(1).max(120),
@@ -34,9 +35,9 @@ const inputSchema = z.object({
 const updateSchema = inputSchema.partial();
 
 const listQuerySchema = z.object({
-  activeOnly: z.coerce.boolean().optional(),
+  activeOnly: queryBoolean.optional(),
   /** Si flat=true devuelve listado plano sin anidar children. */
-  flat: z.coerce.boolean().optional(),
+  flat: queryBoolean.optional(),
 });
 
 const tiersQuerySchema = z.object({
