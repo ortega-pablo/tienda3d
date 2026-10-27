@@ -2,6 +2,8 @@
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+# Los hooks de git (lefthook) no tienen sentido en la imagen y no hay git.
+ENV LEFTHOOK=0
 WORKDIR /app
 
 # ----- deps: install workspace dependencies -----

@@ -1044,7 +1044,7 @@ migraciones y los tests contra una base real, el cuarto sigue abierto.
 | F-27 | La cadena de migraciones no se podía aplicar a una base nueva (`setval(seq, 0)`) | Alta | **hecho** |
 | F-28 | La imagen de producción de la API nunca pudo arrancar (`dist/src/main.js` vs `dist/main.js`) | Alta | **hecho** |
 | F-29 | El endpoint de backup fallaba siempre (`?schema=public` no lo entiende libpq) | Media | **hecho** |
-| F-30 | La imagen de producción de **web** no se puede construir (Turbopack no infiere la raíz del workspace) | Alta | pendiente |
+| F-30 | La imagen de producción de **web** no se puede construir (Turbopack no infiere la raíz del workspace) | Alta | resuelto (F2·1 de `ecosistema-tienda-online.md`) |
 
 ### F-30 — build de la imagen de web
 
@@ -1065,9 +1065,15 @@ mensaje— y no lo resuelve; reverti ese intento antes que dejar un cambio que n
 puedo justificar. Queda por investigar si el problema es cómo la etapa `build`
 copia los `node_modules` de pnpm entre stages.
 
-- [ ] Reproducir con `docker build -f apps/web/Dockerfile --target build .`
-- [ ] Probar copiar el workspace completo en vez de los node_modules por stage,
+- [x] Reproducir con `docker build -f apps/web/Dockerfile --target build .`
+- [x] Probar copiar el workspace completo en vez de los node_modules por stage,
       o usar `pnpm deploy` para armar un árbol autocontenido.
+
+**Resuelto (2026-10-27, F2·1 del plan de unificación).** La etapa `build` no
+copiaba `pnpm-lock.yaml`. Turbopack usa el lockfile para inferir la raíz del
+workspace: sin él tomaba `apps/web` como raíz y no podía seguir los enlaces de
+pnpm, que apuntan a `/app/node_modules/.pnpm`, fuera de esa raíz. Con el
+lockfile copiado la imagen compila y `/login` responde 200 contra la API real.
 
 ---
 
