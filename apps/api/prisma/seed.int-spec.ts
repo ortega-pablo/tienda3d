@@ -49,6 +49,20 @@ describe('[int] Idempotencia del seed', () => {
     expect(await permissionsByRole()).toEqual(before);
   });
 
+  it('los permisos de la tienda online son solo del admin (F4·1)', async () => {
+    const perms = await permissionsByRole();
+    const ecommerce = [
+      'ecommerce:orders',
+      'ecommerce:read',
+      'ecommerce:settings',
+      'ecommerce:write',
+    ];
+    expect(perms.admin!.filter((p) => p.startsWith('ecommerce:')).sort()).toEqual(ecommerce);
+    for (const role of ['operator', 'viewer']) {
+      expect(perms[role]!.filter((p) => p.startsWith('ecommerce:'))).toEqual([]);
+    }
+  });
+
   it('no le da permisos de portal a los roles de staff', async () => {
     const perms = await permissionsByRole();
     for (const role of ['admin', 'operator', 'viewer']) {
