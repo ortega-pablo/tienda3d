@@ -7,18 +7,14 @@ const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? 'http://api:3001';
 /** Refresh proactively when less than this many seconds are left on the access. */
 const REFRESH_THRESHOLD_SECONDS = 60;
 
-const PROTECTED_PREFIX = [
-  '/dashboard',
-  '/admin',
-  '/parametros',
-  '/equipos',
-  '/proveedores',
-  '/insumos',
-  '/productos',
-  '/canales',
-  '/cotizaciones',
-  '/produccion',
-];
+/**
+ * Rutas que NO requieren sesión. Todo lo demás pasa por el refresco proactivo.
+ *
+ * Antes era una lista de rutas protegidas, y las secciones que se agregaban
+ * después (/clientes, /categorias, /reportes) quedaban afuera: con el access
+ * token vencido mandaban al login aunque el refresh siguiera vigente.
+ */
+const PUBLIC_PATHS = ['/login'];
 
 function redirectToLogin(req: NextRequest, pathname: string) {
   const url = req.nextUrl.clone();
@@ -33,10 +29,10 @@ function readExp(jwt: string): number | null {
     const [, payload] = jwt.split('.');
     if (!payload) return null;
     // Edge runtime: atob is global; pad base64url for atob compatibility.
-    const padded = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(
-      payload.length + ((4 - (payload.length % 4)) % 4),
-      '=',
-    );
+    const padded = payload
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(payload.length + ((4 - (payload.length % 4)) % 4), '=');
     const json = atob(padded);
     const parsed = JSON.parse(json) as { exp?: number };
     return typeof parsed.exp === 'number' ? parsed.exp : null;
@@ -47,9 +43,7 @@ function readExp(jwt: string): number | null {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const requiresAuth = PROTECTED_PREFIX.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
+  const requiresAuth = !PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (!requiresAuth) return NextResponse.next();
 
   const access = req.cookies.get(ACCESS_COOKIE)?.value;
