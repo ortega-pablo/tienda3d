@@ -1,5 +1,5 @@
 import 'server-only';
-import { cookies } from 'next/headers';
+import { cookies, headers as requestHeaders } from 'next/headers';
 import { ApiError, apiErrorFromResponse, type ApiErrorCode } from '@tienda3d/shared';
 
 /** `ApiError` y los códigos vienen de `@tienda3d/shared` — ver api-client.ts. */
@@ -27,11 +27,15 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
         .join('; ')
     : '';
 
+  // Si el request que se está renderizando trae un id, viaja a la API.
+  const incomingId = (await requestHeaders()).get('x-request-id');
+
   const res = await fetch(`${API_BASE}/api${path}`, {
     ...rest,
     headers: {
       'content-type': 'application/json',
       ...(cookieHeader ? { cookie: cookieHeader } : {}),
+      ...(incomingId ? { 'x-request-id': incomingId } : {}),
       ...(headers ?? {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

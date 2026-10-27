@@ -44,6 +44,9 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     if (HOP_BY_HOP.has(name) || CLIENT_SPOOFABLE.has(name)) return;
     headers.set(key, value);
   });
+  // Id para seguir el request en los logs de la API. Si el navegador (o un
+  // proxy delante) no manda uno, lo genera el panel. La API lo valida.
+  if (!headers.has('x-request-id')) headers.set('x-request-id', crypto.randomUUID());
 
   const init: RequestInit = {
     method: req.method,

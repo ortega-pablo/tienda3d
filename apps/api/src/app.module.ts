@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { validateEnv } from './common/config/env.schema';
+import { requestId } from './common/logging/request-id';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -53,6 +54,8 @@ import { UsersModule } from './modules/users/users.module';
             ? { target: 'pino-pretty', options: { singleLine: true } }
             : undefined,
         autoLogging: true,
+        // Mismo id en los logs de los dos sistemas (ver common/logging/request-id.ts).
+        genReqId: requestId,
         redact: ['req.headers.authorization', 'req.headers.cookie'],
       },
     }),
