@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+// Primero: carga los secretos de archivo (NOMBRE_FILE) antes de que se importe
+// AppModule, cuyo ConfigModule lee el entorno al importarse.
+import './common/config/load-secret-files';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';

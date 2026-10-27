@@ -42,6 +42,7 @@ COPY --from=build --chown=nestjs:nodejs /app/apps/api/node_modules ./apps/api/no
 COPY --from=build --chown=nestjs:nodejs /app/packages/shared ./packages/shared
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/scripts ./apps/api/scripts
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --chown=nestjs:nodejs package.json pnpm-workspace.yaml ./
 
@@ -49,4 +50,4 @@ USER nestjs
 WORKDIR /app/apps/api
 EXPOSE 3001
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "scripts/with-secrets.sh", "sh", "-c", "pnpm prisma migrate deploy && node dist/main.js"]
