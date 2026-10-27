@@ -52,4 +52,7 @@ USER nestjs
 WORKDIR /app/apps/api
 EXPOSE 3001
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "scripts/with-secrets.sh", "sh", "-c", "pnpm prisma migrate deploy && node dist/main.js"]
+# La API no migra al arrancar: lo hace el servicio `migrate` con el dueño del
+# esquema (scripts/migrate.sh) y la API se conecta con un rol sin DDL. Lee sus
+# secretos de archivo sola (NOMBRE_FILE).
+CMD ["node", "dist/main.js"]
