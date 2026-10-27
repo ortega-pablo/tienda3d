@@ -42,6 +42,22 @@ const PRISMA_ONLY_PARAMS = [
 ];
 
 /** Deja la connection string en algo que libpq acepte. */
+/**
+ * Separa la contraseña de la URL. Pasada como argumento, la URL con la clave
+ * queda visible para cualquiera que liste los procesos (`ps`); por eso viaja
+ * en `PGPASSWORD`, que solo ve el proceso hijo.
+ */
+export function splitPassword(libpqUrl: string): { url: string; password?: string } {
+  try {
+    const url = new URL(libpqUrl);
+    const password = url.password ? decodeURIComponent(url.password) : undefined;
+    url.password = '';
+    return { url: url.toString(), password };
+  } catch {
+    return { url: libpqUrl };
+  }
+}
+
 export function toLibpqUrl(databaseUrl: string): string {
   try {
     const url = new URL(databaseUrl);
@@ -75,15 +91,16 @@ export class DatabaseBackupController {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     // `pg_dump -Fc` produce el formato custom (comprimido + restore selectivo).
-    // Pasamos DATABASE_URL como argumento posicional — pg_dump acepta connection
-    // strings desde la versión 9.6+, lo cual está cubierto por nuestra imagen.
-    const proc = spawn('pg_dump', ['--no-owner', '--no-privileges', '-Fc', toLibpqUrl(databaseUrl)], {
-      // Si las env vars del proceso tienen PGPASSWORD/etc no las pasamos al
-      // child para evitar override accidental — DATABASE_URL ya tiene las
-      // credenciales embebidas.
+    // La URL va como argumento posicional (pg_dump acepta connection strings
+    // desde 9.6) pero SIN la contraseña, que viaja en PGPASSWORD: así no queda
+    // en la lista de procesos. El hijo no hereda el resto del entorno (secretos
+    // de la API incluidos).
+    const { url, password } = splitPassword(toLibpqUrl(databaseUrl));
+    const proc = spawn('pg_dump', ['--no-owner', '--no-privileges', '-Fc', url], {
       env: {
         PATH: process.env.PATH ?? '/usr/bin:/bin',
         LANG: process.env.LANG ?? 'C',
+        ...(password ? { PGPASSWORD: password } : {}),
       },
     });
 

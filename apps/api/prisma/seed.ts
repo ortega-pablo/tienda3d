@@ -7,8 +7,11 @@
  *   - Demo channels mirroring the Excel
  */
 
+// Primero: los secretos de archivo (DATABASE_URL_FILE, SEED_ADMIN_PASSWORD_FILE…).
+import '../src/common/config/load-secret-files';
 import { ChannelKind, MaterialType, MaterialUnit, PrismaClient, TaxMode } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { readSecret } from '../src/common/config/secret-files';
 
 const prisma = new PrismaClient();
 
@@ -138,7 +141,7 @@ async function seedRoles() {
 
 async function seedAdminUser(roleId: string) {
   const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@plastik.local';
-  const password = process.env.SEED_ADMIN_PASSWORD ?? 'admin123';
+  const password = readSecret('SEED_ADMIN_PASSWORD') ?? 'admin123';
   const passwordHash = await argon2.hash(password);
   await prisma.user.upsert({
     where: { email },
