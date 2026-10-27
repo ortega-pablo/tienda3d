@@ -14,7 +14,7 @@
 0. [Convenciones](#0-convenciones)
 1. [Objetivo y resultado final](#1-objetivo-y-resultado-final)
 2. [Decisiones tomadas](#2-decisiones-tomadas)
-3. [Decisiones abiertas](#3-decisiones-abiertas)
+3. [Decisiones](#3-decisiones)
 4. [Relevamiento](#4-relevamiento)
 5. [Arquitectura objetivo](#5-arquitectura-objetivo)
 6. [Fases](#6-fases)
@@ -31,7 +31,7 @@
 | IDs | `F<fase>·<n>` (por ejemplo `F5·3`). No se reutilizan: una tarea descartada se tacha con su motivo. |
 | Repos | **[t3d]** = `tienda3d` · **[sf]** = `tienda-plastik-page` (código en `storefront/`) · **[infra]** = repo nuevo `tienda-plastik-infra` (D1). |
 | Rutas | Relativas a la raíz de cada repo. En [sf], relativas a `storefront/`. |
-| Ramas | `feat/eco-f<fase>-<slug>` desde la rama base de cada repo (en [t3d], después de F0·1). |
+| Ramas | `feat/<id>-<slug>` (por ejemplo `feat/f5-3-colores`) desde la rama por defecto de cada repo: `unificacion` en [t3d] y [sf] mientras dure la unificación, `main` en [infra]. Cada tarea entra por un PR que la cierra (ver el tablero, `.claude/tablero.md`). |
 | Commits | Estilo de cada repo: [t3d] `feat(scope): …`; [sf] mensaje en español. Incluir el ID: `Cierra F5·3.` |
 | Verificación mínima | [t3d] `pnpm typecheck && pnpm test && pnpm test:int` · [sf] `pnpm typecheck && pnpm lint && pnpm test` (+ `pnpm test:e2e` donde se indique). |
 | Verificación automática | **Sin GitHub Actions.** Corre en hooks locales con lefthook: `pre-commit` (gitleaks sobre lo que se commitea + formato y lint de los archivos tocados) y `pre-push` (typecheck + tests unitarios). `pnpm verify` corre todo, integración incluida, y es obligatorio antes de mergear un PR. |
@@ -80,31 +80,40 @@ Definidas por Pablo el 2026-10-26.
 | T10 | Destino: **EC2 con Docker**; a largo plazo **RDS**. Primero, probar todo en local. | F3 replica la topología de producción en local; F17–F18 son evaluación. |
 | T11 | **Mercado Pago** se conecta más adelante. Los secretos tienen que seguir **los mejores estándares**, con herramientas **gratuitas**. | F1 y §5.8; MP queda en F19. |
 
-**Interpretación de T6, a confirmar en D4:** "usuario de cliente normal" es una **cuenta de cliente
-del sitio**, no un usuario del sistema de gestión. Así no se incorporan usuarios a tienda3d (T1), y
-el sistema registra a cada comprador como **cliente web** a partir de sus pedidos.
+**Cómo se aplica T6 (con D4):** "usuario de cliente normal" es una **cuenta de cliente del sitio**,
+no un usuario del sistema de gestión, así que no se incorporan usuarios a tienda3d (T1). El sistema
+registra a cada comprador como **cliente** (`Customer` tipo `STANDARD`, origen web).
 
 ---
 
-## 3. Decisiones abiertas
+## 3. Decisiones
 
-Cada una tiene una **propuesta** con la que el plan está escrito. Si se elige otra opción, corregir
-las tareas que se nombran.
+Definidas por Pablo el 2026-10-27. Las tareas del plan ya están escritas con estas respuestas.
 
-| ID | Pregunta | Propuesta | Si se elige otra | Bloquea |
-| --- | --- | --- | --- | --- |
-| D1 | ¿Dónde vive la orquestación del ecosistema (compose conjunto, Caddy, scripts de secretos y de despliegue)? | Repo nuevo **`tienda-plastik-infra`** en la carpeta madre. Los dos repos de apps siguen siendo independientes. | Carpeta `deploy/` dentro de tienda3d: cambian las rutas de F3 y F17. | F3 |
-| D2 | ¿El sitio registra el pedido en el sistema en el momento o en diferido? | **En el momento** (llamada a la API con idempotencia), porque el sistema valida precio y reserva stock; los cambios siguientes viajan como **eventos con reintento**. Si el sistema no responde, el sitio no toma el pedido y lo dice. | Diferido (outbox): el pedido nunca se pierde, pero puede venderse stock que no hay. | F14·3 |
-| D3 | ¿La web aplica las escalas de Venta Directa por cantidad (comprar 10 sale más barato por unidad)? | **No**: precio unitario de cantidad 1 para cualquier cantidad. Es el precio publicado y no sorprende al cliente. | Sí: la vista expone las escalas y el carrito recalcula por cantidad. | F7, F12, F14 |
-| D4 | ¿Cómo registra el sistema a los compradores web? | Tabla propia **`web_customers`** (copia mínima que manda el sitio), separada de los clientes B2B (`customers`). | Crear `Customer` tipo `STANDARD`: mezcla compradores web con mayoristas y consignación. | F14·2 |
-| D5 | ¿Hay que verificar el email antes de poder comprar? | **Sí** (link de un uso, 24 h). Evita pedidos con emails falsos y asegura que lleguen los avisos. | No: se verifica después y se marca en el pedido. | F13 |
-| D6 | ¿Se permiten **atributos informativos** sin producto del sistema detrás (por ejemplo "Tipo de hoja: Cuadro/Punto")? | **Sí**, sin impacto en el precio: hoy los usan 6 cuadernos. | No: cada valor tiene que ser un producto del sistema distinto (habría que crear 6 productos más en tienda3d). | F5·4, F9 |
-| D7 | ¿Cómo se paga hasta que esté Mercado Pago? | **Transferencia** con confirmación manual del admin en el panel. En local, además, el pago **simulado**. | Solo "coordinar por WhatsApp" (pedido sin pago en el sitio). | F14·4 |
-| D8 | En EC2, ¿el panel de gestión queda abierto a internet? | Con una **capa extra gratuita**: Cloudflare Access o Tailscale. Se decide en F17. | Solo el login de tienda3d con su bloqueo por intentos. | F17 |
-| D9 | ¿Cómo se maneja el stock de la tienda? | Por variante: **a pedido** (con plazo y máximo por pedido) o **stock de producto terminado** cargado a mano. La orden de producción se genera a mano desde el pedido. | Conectar producción terminada con stock automáticamente (fuera de alcance, §8). | F5·5 |
-| D10 | ¿Quién manda los mails? | **Solo el storefront** (ya tiene mailer y plantillas). tienda3d no necesita SMTP. Proveedor productivo (SES, Brevo, SMTP del dominio) se elige en F17. | tienda3d también manda (por ejemplo, avisos internos): hay que sumarle un mailer. | F13, F14 |
-| D11 | ¿EC2 ARM (Graviton) o x86? | Se decide en F16 con las mediciones. ARM es más barato; `argon2` y `sharp` tienen binarios para arm64, pero hay que construir las imágenes para esa arquitectura. | — | F17 |
-| D12 | Conciliación del catálogo actual con la dueña (§4.8). | Armar el pedido de confirmación con las 4 diferencias y los colores. | — | F9 |
+| ID | Pregunta | Definición | Tareas afectadas |
+| --- | --- | --- | --- |
+| D1 | ¿Dónde vive la orquestación del ecosistema (compose conjunto, Caddy, scripts de secretos, backup y despliegue)? | Repo nuevo **`ortega-pablo/tienda-plastik-infra`** (privado) en la carpeta madre. Los dos repos de apps siguen independientes. | F1, F3, F16, F17 |
+| D2 | ¿Cuándo registra el sitio cada pedido en el sistema? | **En el momento de comprar**: llamada a la API con idempotencia; el sistema valida el precio y reserva stock. Si no responde, el sitio no toma el pedido y lo avisa. Los cambios siguientes viajan como eventos con reintento. | F14·3 |
+| D3 | ¿La web aplica las escalas de Venta Directa por cantidad? | **No**: precio unitario de cantidad 1 para cualquier cantidad. | F7, F12·6, F14·3 |
+| D4 | ¿Cómo ve el sistema a los compradores de la web? | **Como clientes del sistema**: `Customer` tipo `STANDARD`, con `source = WEB` y `externalId` = id de la cuenta del sitio. Aparecen en Clientes junto a los B2B, con un filtro por origen. Si el email ya es de un cliente existente, los pedidos web se vinculan a ese cliente en lugar de crear otro. **El precio web es siempre el publicado**: nunca se aplican los flags ni el markup propio del cliente. | F13·8, F14·2, F14·8, F15 |
+| D5 | ¿Hay que verificar el email antes de comprar? | **Sí**: link de un solo uso válido 24 h. | F13·2, F13·6 |
+| D6 | ¿Se permiten opciones informativas sin producto del sistema detrás ("Tipo de hoja: Cuadro/Punto")? | **Sí**, sin impacto en el precio. | F5·4, F9·2 |
+| D7 | ¿Cómo se paga hasta que esté Mercado Pago? | **Transferencia** con confirmación manual del admin en el panel. En local, además, el pago **simulado**. | F14·4 |
+| D9 | ¿Cómo se maneja el stock de la tienda? | **Por variante**: a pedido (con plazo y máximo por compra) o stock de producto terminado cargado a mano, que la compra descuenta. La orden de producción se genera a mano desde el pedido. | F5·5, F14·3 |
+| D10 | ¿Quién manda los mails? | **Solo el sitio**. El sistema avisa los cambios al sitio y el sitio escribe al cliente. El proveedor de producción se elige en F17. | F13, F14·9 |
+| D13 | ¿Las categorías de la tienda van aparte de las del sistema (que definen el markup)? | **Aparte**: categorías de la tienda propias; un producto web puede estar en varias. | F5·6, F8·5 |
+| D14 | ¿Un producto del sistema puede estar en más de una publicación web? | **No**, en una sola. | F5·2 |
+| D15 | ¿Cómo se arma el SKU de cada variante web? | **`PTK-PROD-NNNNNN-VNN`**: el SKU del producto del sistema más un sufijo de variante. El SKU de WooCommerce se guarda como referencia (`legacySku`). | F5·5, F9·2 |
+| D16 | ¿Las solicitudes de personalización piden cuenta? | **Sí**: se envían desde la cuenta del cliente, quedan vinculadas a su `Customer` en el sistema y el cliente ve su estado en Mi cuenta. | F15 |
+| D17 | ¿Dónde se guardan los secretos en EC2? | **AWS Systems Manager Parameter Store** (`SecureString` estándar), leídos con el rol IAM de la instancia hacia tmpfs. | F17·3 |
+
+**Siguen abiertas** (no bloquean empezar):
+
+| ID | Pregunta | Propuesta | Se define en |
+| --- | --- | --- | --- |
+| D8 | En EC2, ¿el panel de gestión queda abierto a internet? | Con una capa extra gratuita: Cloudflare Access o Tailscale. | F17 |
+| D11 | ¿EC2 ARM (Graviton) o x86? | Según las mediciones de F16·4. ARM es más barato; `argon2` y `sharp` tienen binarios para arm64, pero las imágenes hay que construirlas para esa arquitectura. | F16·4 |
+| D12 | Conciliación del catálogo actual con la dueña (§4.8). | Respuesta de la dueña al pedido de F0·5. | bloquea F9 |
 
 ---
 
@@ -446,7 +455,7 @@ $ 39.995,78 y $ 47.643,01 en la Trapecio). F9·3 arma el reporte de diferencias 
 | Publicaciones web, variantes, colores, atributos, fotos, categorías web, ajustes de la tienda | tienda3d (admin) | storefront | vistas `storefront_v1` |
 | Precio publicado (Venta Directa, cliente normal, cantidad 1) | tienda3d (cálculo automático) | storefront | vista |
 | Stock de venta web | tienda3d | storefront | vista + reserva por API al registrar el pedido |
-| Cuentas de cliente, sesiones, direcciones | storefront | tienda3d (copia mínima: cliente web) | evento `customer.upserted` |
+| Cuentas de cliente, sesiones, direcciones | storefront | tienda3d (como `Customer` tipo STANDARD, origen web: D4) | evento `customer.upserted` |
 | Pedido (datos de la compra) | storefront | tienda3d (registro) | API `POST …/orders` |
 | Estado de **pago** | storefront (MP en F19; transferencia confirmada por el admin vía evento) | tienda3d | eventos |
 | Estado de **preparación / entrega** | tienda3d | storefront | eventos |
@@ -639,15 +648,15 @@ Cada fase indica el repo, de qué depende, la estimación propuesta y sus tareas
 | F12 | El sitio lee el catálogo del sistema | sf | F9, F10, F11 | 12–18 h |
 | F13 | Cuentas de cliente | sf | F12 | 20–30 h |
 | F14 | Pedidos de punta a punta | t3d, sf | F11, F13 | 30–45 h |
-| F15 | Solicitudes de personalización | t3d, sf | F11 | 8–12 h |
+| F15 | Solicitudes de personalización | t3d, sf | F11, F13 | 10–15 h |
 | F16 | Prueba integral local y decisión | infra, sf | F12–F15 | 12–18 h |
-| **Local** | | | | **199–304 h** |
+| **Local** | | | | **201–307 h** |
 | F17 | Despliegue en EC2 (si F16 da "sí") | infra | F16 | 16–24 h |
 | F18 | Base en RDS (largo plazo) | infra | F17 | 6–10 h |
 | F19 | Mercado Pago | sf | F17 | 10–16 h |
 | F20 | Lanzamiento y baja del WordPress | infra, sf | F17 | 6–10 h |
 
-Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permite cargar datos.
+Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permite cargar datos.
 
 ---
 
@@ -655,21 +664,27 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
 
 > **Objetivo:** repos en un punto estable, datos sensibles fuera de los repos y decisiones confirmadas.
 
-- [ ] **F0·1 [t3d] Integrar la rama de auditoría**
+- [ ] **F0·1 [t3d] El trabajo del sistema arranca desde su última versión corregida**
+  - Para qué: que la unificación parta de todo lo arreglado en la auditoría, sin cambios sueltos ni ramas a medio subir.
   - Qué hacer:
     - Commitear el rename de `docs/FUNCIONALIDADES.md` → `docs/funcionalidades-sistema-gestion.md`.
     - Pushear `fix/auditoria-correcciones`.
     - Mergearla a `develop` y `develop` a `main` (o definir que `develop` es la base y dejarlo escrito).
   - Cierra cuando: la rama base de tienda3d contiene `dba0c3a` y `git status` está limpio.
-- [ ] **F0·2 Sacar los volcados de las carpetas de los repos**
+- [ ] **F0·2 [t3d] Los volcados con datos de clientes quedan fuera de las carpetas de los repos**
+  - Para qué: que una copia de la base con usuarios y clientes no termine en un commit, una imagen o una carpeta compartida.
   - Qué hacer: mover `tienda3d_dump_2026-07-22.sql` a una carpeta de respaldos fuera de los repos, con el disco cifrado (FileVault). Revisar que no queden otros `*.sql` o `*.dump`.
   - Cierra cuando: `find <repos> -maxdepth 2 -name '*.sql'` no devuelve volcados con datos.
-- [ ] **F0·3 Confirmar D1–D11** y anotar la respuesta en §3.
+- [ ] **F0·3 [t3d] Las decisiones abiertas del plan quedan definidas**
+  - Para qué: trabajar sobre definiciones confirmadas y no sobre supuestos.
+  - Qué hacer: registrar en §3 la respuesta de cada decisión abierta y ajustar las tareas que cambian.
   - Cierra cuando: §3 no tiene propuestas sin confirmar que bloqueen F1–F5.
-- [ ] **F0·4 Línea de base en verde**
+- [ ] **F0·4 [t3d][sf] Sabemos qué pruebas pasan hoy en los dos sistemas antes de tocar nada**
+  - Para qué: distinguir lo que rompa la unificación de lo que ya estaba roto.
   - Qué hacer: correr la verificación mínima de los dos repos y la e2e del storefront.
   - Cierra cuando: la bitácora registra los resultados (o los tests que fallan, con su motivo).
-- [ ] **F0·5 Pedido de conciliación a la dueña (D12)**
+- [ ] **F0·5 [t3d] La dueña recibe las diferencias del catálogo para confirmarlas**
+  - Para qué: publicar la tienda nueva con los productos, colores y precios que ella reconoce.
   - Qué hacer: armar el pedido con las 4 diferencias de §4.8 (TPK/PTK, Noche/Día, Riso, 380 vs 390), los 11 colores y a qué línea de filamento pertenecen, y el aviso de que los precios cambian (T5).
   - Cierra cuando: el pedido está enviado; su respuesta desbloquea F9.
 
@@ -682,7 +697,8 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
 > **Objetivo:** los dos sistemas leen secretos desde archivos, rechazan valores débiles y no se puede
 > commitear un secreto sin que salte una alarma.
 
-- [ ] **F1·1 [t3d][sf] Leer secretos desde archivo**
+- [ ] **F1·1 [t3d][sf] Los sistemas leen sus claves desde archivos y no desde variables de entorno**
+  - Para qué: que las claves no queden expuestas en la configuración de los contenedores ni en los procesos que lanzan.
   - Qué hacer:
     - Crear un helper `readSecret(name)`: si existe `NAME_FILE`, lee el archivo y recorta el salto de línea; si no, usa `NAME`.
     - [t3d]: crear `apps/api/src/common/config/env.schema.ts` (zod) con **todas** las variables de §4.2, validado al arrancar (`ConfigModule.forRoot({ validate })`), y reemplazar las lecturas sueltas de `ConfigService.get` por el objeto tipado.
@@ -692,16 +708,19 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
     - con `JWT_SECRET_FILE=/run/secrets/jwt_secret` y sin `JWT_SECRET`, la API arranca;
     - con ambos ausentes, falla con un mensaje claro;
     - hay tests unitarios del helper y del esquema en los dos repos.
-- [ ] **F1·2 [t3d][sf] Validación de arranque ampliada**
+- [ ] **F1·2 [t3d][sf] Ningún sistema arranca en producción con claves débiles o de ejemplo**
+  - Para qué: que un descuido de configuración no deje el sistema abierto con contraseñas conocidas.
   - Qué hacer:
     - [t3d]: sumar a `assertSecrets` la clave de la base, `SEED_ADMIN_PASSWORD` (si corre el seed) y las credenciales de integraciones habilitadas.
     - [sf]: en `production`, exigir `SITE_URL` https, secretos de ≥32 caracteres, `PAYMENTS_PROVIDER ≠ fake` y las claves de MP si el proveedor es `mercadopago`.
     - Los dos rechazan los valores de ejemplo conocidos (`changeme`, `admin123`, `cambiar-esta-clave`, `plastik-dev`, `replace-with-…`).
   - Cierra cuando: hay un test por regla, y arrancar en `production` con un valor de ejemplo corta con el nombre de la variable.
-- [ ] **F1·3 [infra] Generador de secretos locales**
+- [ ] **F1·3 [infra] Las claves locales se generan con un solo comando**
+  - Para qué: armar el entorno sin inventar ni pasarse contraseñas a mano.
   - Qué hacer: `scripts/secrets/init-local.sh` crea cada archivo del inventario (§5.8) con `openssl rand -base64 32`, permisos `600`, **sin pisar los que existen**, e imprime la lista (no los valores).
   - Cierra cuando: correrlo dos veces no cambia ningún archivo, y `git status` no los muestra.
-- [ ] **F1·4 [t3d][sf][infra] gitleaks en los hooks locales**
+- [ ] **F1·4 [t3d][sf][infra] Un commit con una clave adentro se frena antes de salir de la máquina**
+  - Para qué: que ninguna clave llegue a GitHub por error, sin gastar minutos de GitHub Actions.
   - Qué hacer:
     - `.gitleaks.toml` con una allowlist acotada: `apps/api/src/common/config/validate-secrets.spec.ts` en [t3d] y el commit `a23354bc` en [sf].
     - lefthook como devDependency (se instala solo con `pnpm install`; en [infra], binario de brew):
@@ -712,13 +731,15 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
   - Cierra cuando:
     - un commit con un token falso se rechaza en local;
     - el escaneo del historial completo da 0 hallazgos fuera de la allowlist.
-- [ ] **F1·5 [t3d] Rotar las credenciales débiles locales (F-23)**
+- [ ] **F1·5 [t3d] La base del taller deja de usar las contraseñas de ejemplo**
+  - Para qué: cerrar el acceso con claves públicas (`changeme`, `admin123`) a la base en uso.
   - Qué hacer:
     - `ALTER USER` del Postgres local con la clave nueva y cambio de la clave del admin desde el panel.
     - Mover los dos valores a archivos de secretos.
     - **Pedir OK antes**, porque toca la base en uso.
   - Cierra cuando: el `.env` de [t3d] no contiene `changeme` ni `admin123`, y el login funciona con la clave nueva.
-- [ ] **F1·6 [infra] Inventario y runbook de rotación**
+- [ ] **F1·6 [infra] Hay un procedimiento escrito para cambiar cada clave**
+  - Para qué: poder rotar una clave comprometida en minutos y sin cortar el servicio.
   - Qué hacer: escribir `docs/secretos.md` con la tabla de §5.8, el procedimiento de rotación de cada secreto (base, JWT, clave de API con dos activas, secretos de eventos, MP) y qué reiniciar en cada caso.
   - Cierra cuando: hay una rotación de prueba de `storefront_api_key` hecha siguiendo el runbook, sin cortar la integración (después de F11).
 
@@ -731,31 +752,38 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
 > **Objetivo:** que el sistema sea una fuente de verdad confiable para la web y se pueda construir
 > como en producción.
 
-- [ ] **F2·1 La imagen de producción de la web compila (F-30)**
+- [ ] **F2·1 [t3d] El panel del sistema se puede construir como imagen de producción**
+  - Para qué: probar el ecosistema como va a correr en el servidor y poder desplegarlo (F-30).
   - Qué hacer: seguir los pasos que dejó el plan de auditoría (§F-30 de `correcciones-auditoria-2026-08.md`): reproducir con `docker build --target build`, probar `pnpm deploy --filter web` o copiar el workspace completo al stage de build, y `outputFileTracingRoot`.
   - Cierra cuando: `docker compose -f docker-compose.yml build web` termina y `/login` responde 200 desde la imagen.
-- [ ] **F2·2 Editar un producto no cambia lo que no se tocó**
+- [ ] **F2·2 [t3d] Editar un producto no cambia lo que no se tocó**
+  - Para qué: que guardar una ficha no reactive productos archivados ni vuelva a habilitar Venta Directa, cosas que la tienda publicaría.
   - Qué hacer:
     - En el PUT, `isActive` omitido conserva el valor actual.
     - `channels` omitido conserva los canales.
     - La respuesta del PUT respeta la visibilidad de `notes`.
   - Cierra cuando: hay tests de integración para los tres casos (producto archivado, Directa apagada y usuario sin `parameter:write`).
-- [ ] **F2·3 Las piezas conservan su identidad al editar**
+- [ ] **F2·3 [t3d] Las piezas de un producto conservan su identidad al editarlo**
+  - Para qué: poder atar los colores de la tienda y las órdenes de producción a cada pieza.
   - Qué hacer: el PUT hace upsert de las piezas por `id` (crea las nuevas, actualiza las existentes y borra solo las quitadas). Agregar `id` opcional a `pieceSchema` y mandarlo desde `product-editor.tsx`.
   - Cierra cuando: editar los gramos de una pieza mantiene su `id` (test), y las órdenes de producción existentes no se rompen.
-- [ ] **F2·4 Los filtros `activeOnly` funcionan con "false"**
+- [ ] **F2·4 [t3d] El filtro de activos e inactivos funciona en insumos y categorías**
+  - Para qué: que el selector de colores no ofrezca colores dados de baja.
   - Qué hacer: reemplazar `z.coerce.boolean` por un parser de `'true'`/`'false'` en `materials.controller.ts:59` y `categories.controller.ts:37`.
   - Cierra cuando: un test con `activeOnly=false` devuelve los inactivos.
-- [ ] **F2·5 Producir llaveros consume solo las piezas de su escala**
+- [ ] **F2·5 [t3d] Producir llaveros consume solo las piezas de su escala**
+  - Para qué: que una orden de producción de llaveros no descuente el doble de filamento.
   - Qué hacer: en `productions.service.ts` (consumo y costo), usar las piezas `INDIVIDUAL` para cantidades 1–4 y `BATCH ÷ keychain_batch_size` para 5+, igual que las cotizaciones.
   - Cierra cuando: un test con un producto KEYCHAIN da el mismo consumo que la cotización para 1 y para 10 unidades.
-- [ ] **F2·6 La API funciona con un rol sin privilegios**
+- [ ] **F2·6 [t3d] El sistema funciona con un usuario de base sin privilegios**
+  - Para qué: que una falla en la API no pueda cambiar la estructura de la base ni leer más de lo que necesita.
   - Qué hacer:
     - Sacar `prisma migrate deploy` del CMD de `apps/api/Dockerfile` y crear el target o comando `migrate`, que corre con `MIGRATION_DATABASE_URL` (owner) y después aplica `db/grants.sql` (F10·2).
     - La API usa `DATABASE_URL` con `tienda3d_app`.
     - Documentar en el README cómo se corre en local sin el repo de infra.
   - Cierra cuando: con la API conectada como `tienda3d_app`, toda la suite de integración pasa y un `CREATE TABLE` desde esa conexión falla.
-- [ ] **F2·7 Verificación local antes de integrar**
+- [ ] **F2·7 [t3d] Un cambio que rompe las pruebas no se puede subir**
+  - Para qué: sostener la calidad con verificación local, sin depender de GitHub Actions.
   - Qué hacer:
     - Hooks de lefthook (los de F1·4 más los de verificación):
       - `pre-commit` corre formato y lint de los archivos tocados;
@@ -765,13 +793,15 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
   - Cierra cuando:
     - un push con un test roto se rechaza;
     - `pnpm verify` en verde desde un clon limpio.
-- [ ] **F2·8 Request id de punta a punta**
+- [ ] **F2·8 [t3d] Cada pedido se puede seguir en los registros de los dos sistemas**
+  - Para qué: diagnosticar un problema de punta a punta con un solo identificador.
   - Qué hacer:
     - `pinoHttp.genReqId` toma `x-request-id` si viene y, si no, genera uno.
     - La API devuelve el id en la respuesta.
     - El proxy de la web lo reenvía.
   - Cierra cuando: un request con `x-request-id: prueba-123` aparece con ese id en el log de la API.
-- [ ] **F2·9 Refresco proactivo en todas las rutas protegidas**
+- [ ] **F2·9 [t3d] La sesión del panel se renueva sola en todas las secciones**
+  - Para qué: que el admin no vuelva al login en Clientes, Categorías, Reportes o Tienda online.
   - Qué hacer: sumar `/clientes`, `/categorias`, `/reportes` y `/tienda-online` a `PROTECTED_PREFIX` (`apps/web/src/proxy.ts`).
   - Cierra cuando: navegar a `/clientes` con el access token por vencer lo refresca sin pasar por el login.
 
@@ -783,46 +813,54 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F13; F9 en cuanto F8 permi
 
 > **Objetivo:** levantar todo el ecosistema, como en producción, con un solo comando.
 
-- [ ] **F3·1 [infra] Crear el repo `tienda-plastik-infra`** (D1)
+- [ ] **F3·1 [infra] El ecosistema tiene su repo de infraestructura**
+  - Para qué: un lugar único para levantar, respaldar y desplegar los dos sistemas juntos (D1).
   - Qué hacer: crear el repo privado en la carpeta madre con:
     - `compose.yaml`, `compose.dev.yaml`, `Caddyfile`;
     - `db/init/`, `scripts/` y `docs/`;
     - `secrets/` en `.gitignore`;
     - un README con el arranque.
   - Cierra cuando: el repo existe en GitHub y `CLAUDE.md` de la carpeta madre lo lista.
-- [ ] **F3·2 [infra] Un Postgres con dos bases y sus roles**
+- [ ] **F3·2 [infra] Cada servicio entra a la base solo con los permisos que necesita**
+  - Para qué: que el sitio no pueda tocar los datos del sistema y viceversa.
   - Qué hacer:
     - `db/init/00-roles.sh` lee `/run/secrets/*` y crea los roles y las bases de §5.3 con `REVOKE CONNECT … FROM PUBLIC`.
     - Debe ser idempotente y no requerir superusuario más allá del init, para reusarlo en RDS (F18).
     - El puerto se publica solo en `127.0.0.1:5452` con el perfil `dev`.
   - Cierra cuando: `storefront_reader` no puede conectarse a la base `storefront`, `storefront_app` no puede conectarse a `tienda3d` y `tienda3d_app` no puede hacer DDL.
-- [ ] **F3·3 [infra] Servicios del ecosistema**
+- [ ] **F3·3 [infra] El ecosistema completo se levanta con un comando**
+  - Para qué: probar todo en local tal como va a correr en el servidor.
   - Qué hacer:
     - Servicios `db`, `tienda3d-migrate`, `tienda3d-api`, `tienda3d-web`, `storefront-migrate`, `storefront`, `storefront-worker` (desde F11), `mailpit` y `caddy`.
     - `build.context` apunta a `../tienda3d` y `../tienda-plastik-page/storefront`.
     - Healthchecks en todos y `depends_on` con `service_healthy` / `service_completed_successfully`.
     - `restart: unless-stopped`, logs `json-file` con `max-size`.
   - Cierra cuando: desde cero (sin volúmenes), `docker compose up -d --build` deja todo en `healthy`, con los dos sitios respondiendo.
-- [ ] **F3·4 [infra] Caddy como única puerta**
+- [ ] **F3·4 [infra] Una sola puerta de entrada atiende al público**
+  - Para qué: que las rutas internas entre los sistemas no se puedan alcanzar desde afuera.
   - Qué hacer:
     - `tienda.localhost` → storefront, `sistema.localhost` → tienda3d-web, `correo.localhost` → mailpit.
     - Responde 404 a `/api/internal/*` y `/api/integrations/*`.
     - Cabeceras de seguridad (HSTS solo con TLS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) y `x-request-id`.
     - `tls internal` opcional para probar cookies `Secure`.
   - Cierra cuando: `curl http://tienda.localhost/api/internal/events` da 404 desde el host, y desde la red interna da 401 sin firma (después de F11).
-- [ ] **F3·5 [infra] Volúmenes**
+- [ ] **F3·5 [infra] El sistema guarda las fotos y el sitio solo puede leerlas**
+  - Para qué: compartir las fotos sin que el sitio pueda modificarlas ni borrarlas.
   - Qué hacer: crear `pgdata`, `media` (rw en tienda3d-api, `:ro` en storefront y worker), `t3d-private`, `sf-private` y `backups`, con uid 1001.
   - Cierra cuando: la API escribe un archivo en `media`, el storefront lo lee, y escribir desde el storefront falla con `EROFS`.
-- [ ] **F3·6 [infra] Secretos como archivos**
+- [ ] **F3·6 [infra] Ninguna clave aparece en la configuración de los contenedores**
+  - Para qué: que inspeccionar un contenedor no revele contraseñas.
   - Qué hacer: sección `secrets:` de Compose con los archivos de `secrets/local/`; cada servicio monta solo los suyos y recibe `*_FILE`. `NODE_ENV=production` en el perfil por defecto.
   - Cierra cuando: `docker inspect` de cada contenedor no contiene ningún valor de `secrets/local/`, y las cookies del sistema salen con `Secure` bajo `tls internal`.
-- [ ] **F3·7 [infra] Backup y restauración**
+- [ ] **F3·7 [infra] Todo el ecosistema se respalda y se restaura con un comando**
+  - Para qué: recuperar bases y fotos después de un error o de perder el equipo.
   - Qué hacer:
     - `scripts/backup.sh` hace `pg_dump -Fc` de las dos bases y `tar` de `media` y de los privados, con fecha, a `backups/`.
     - `scripts/restore.sh` pide confirmación antes de pisar.
     - `make up/down/logs/backup/restore/ps`.
   - Cierra cuando: un backup restaurado en un ecosistema limpio deja los dos sitios con los mismos datos y fotos.
-- [ ] **F3·8 [infra] Perfil de desarrollo**
+- [ ] **F3·8 [infra] Se puede desarrollar sobre el ecosistema con recarga en vivo**
+  - Para qué: trabajar en cualquiera de los dos sistemas sin reconstruir imágenes.
   - Qué hacer: `compose.dev.yaml` con bind mounts y hot reload de las dos apps sobre el mismo Postgres.
   - Cierra cuando: un cambio en un componente del storefront o del panel se ve sin reconstruir la imagen.
 
@@ -835,17 +873,19 @@ funcionando, y `make backup && make restore` funciona.
 
 > **Objetivo:** que solo el rol `admin` (T1) vea y gestione la tienda online.
 
-- [ ] **F4·1 Permisos nuevos**
+- [ ] **F4·1 [t3d] Solo el rol admin tiene permisos sobre la tienda online**
+  - Para qué: que operadores y usuarios de solo lectura no puedan publicar productos ni ver pedidos web.
   - Qué hacer:
-    - Crear `ecommerce:read`, `ecommerce:write` (catálogo web y fotos), `ecommerce:orders` (pedidos, clientes web y solicitudes) y `ecommerce:settings` (ajustes de la tienda), con descripción en español.
+    - Crear `ecommerce:read`, `ecommerce:write` (catálogo web y fotos), `ecommerce:orders` (pedidos web y solicitudes) y `ecommerce:settings` (ajustes de la tienda), con descripción en español.
     - Migración con `INSERT … ON CONFLICT DO NOTHING` de los permisos y su asignación al rol `admin`.
     - En `seed.ts`: sumarlos a `PERMISSIONS` y **excluirlos** de `operator` y de `viewer`, que toma todas las `:read`.
   - Cierra cuando:
     - un test del seed comprueba que `admin` los tiene y `operator`/`viewer` no;
     - `route-permissions.spec.ts` reconoce las claves;
     - aplicar la migración sobre una copia de la base en uso se los da al admin actual.
-- [ ] **F4·2 Grupo "Tienda online" en el menú**
-  - Qué hacer: agregar el grupo en `apps/web/src/components/nav.ts` (Publicaciones, Pedidos web, Clientes web, Solicitudes, Categorías web, Ajustes), cada ítem con su permiso.
+- [ ] **F4·2 [t3d] El admin ve la sección Tienda online en el menú**
+  - Para qué: entrar a la gestión del ecommerce desde el sistema.
+  - Qué hacer: agregar el grupo en `apps/web/src/components/nav.ts` (Publicaciones, Pedidos web, Solicitudes, Categorías web, Ajustes), cada ítem con su permiso. Los clientes de la web se ven en Clientes, con su filtro (D4).
   - Cierra cuando: con el usuario `operator` el grupo no aparece y las rutas redirigen; con `admin`, sí.
 
 **Nota:** el RBAC es dinámico, así que un admin podría darle `ecommerce:*` a otro rol desde
@@ -860,7 +900,8 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 > **Objetivo:** que el sistema pueda describir todo lo que muestra la tienda, sin tocar el modelo de
 > costeo.
 
-- [ ] **F5·1 Esquema y migración**
+- [ ] **F5·1 [t3d] El sistema puede describir todo lo que muestra la tienda**
+  - Para qué: tener la base para gestionar desde el sistema publicaciones, variantes, fotos, categorías y ajustes.
   - Qué hacer: crear los modelos (borrador abajo) con `@@map` snake_case y columnas camelCase, como el resto. Agregar el módulo `apps/api/src/modules/web-catalog/` y sus schemas y DTOs en `packages/shared/src/schemas/web-catalog.ts` + `types/web-catalog.ts`.
   - Cierra cuando: la migración aplica sobre una base vacía y sobre una copia de la base en uso.
 
@@ -976,41 +1017,48 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   }
   ```
 
-- [ ] **F5·2 Publicaciones y miembros**
+- [ ] **F5·2 [t3d] Un producto web agrupa uno o más productos del sistema**
+  - Para qué: vender como una sola ficha los productos que son tamaños o modelos de lo mismo.
   - Qué hacer:
     - Endpoints `GET/POST /web-catalog/products`, `GET/PATCH /web-catalog/products/:id`, `PUT /web-catalog/products/:id/members` (`ecommerce:read` / `ecommerce:write`).
     - Reglas: un producto del sistema pertenece a una sola publicación, debe estar activo y tener Venta Directa habilitada.
     - Al cambiar el `slug`, el viejo queda en `WebProductSlug`.
     - Auditoría con `AuditService.record`.
   - Cierra cuando: hay tests de integración de las reglas, del cambio de slug y del rechazo de un producto que ya está en otra publicación.
-- [ ] **F5·3 Colores elegidos por filamento (T8)**
+- [ ] **F5·3 [t3d] Cada producto web ofrece solo los colores elegidos de su filamento**
+  - Para qué: mostrar, por ejemplo, 2 colores aunque se pueda imprimir en 5.
   - Qué hacer:
     - `PUT /web-catalog/products/:id/color-options`. Cada opción tiene línea de filamento, colores elegidos y piezas.
     - Por defecto, las piezas son todas las de los miembros cuyo `defaultFilamentId` es esa línea.
     - Validar que la línea esté usada por las piezas elegidas y que cada color sea un hijo **activo** de esa línea.
     - Si un color se desactiva en Insumos, las variantes que lo usan dejan de venderse y el panel lo avisa.
   - Cierra cuando: hay tests que rechazan un color de otra línea, un color inactivo y una pieza de otro producto.
-- [ ] **F5·4 Atributos informativos (D6)**
+- [ ] **F5·4 [t3d] Un producto web puede tener opciones informativas que no cambian el precio**
+  - Para qué: ofrecer "Tipo de hoja" sin crear un producto del sistema por cada valor (D6).
   - Qué hacer: `PUT /web-catalog/products/:id/attributes` (etiqueta + valores ordenados).
   - Cierra cuando: un cuaderno con "Tipo de hoja: Cuadro/Punto" genera variantes por cada valor, con el mismo precio.
-- [ ] **F5·5 Variantes**
+- [ ] **F5·5 [t3d] Cada combinación vendible tiene su SKU, su disponibilidad y su stock**
+  - Para qué: saber exactamente qué se vende, si hay y cuánto tarda en fabricarse.
   - Qué hacer:
     - `POST /web-catalog/products/:id/variants/regenerate`: arma la matriz miembro × valores de cada opción de color × valores de cada atributo, portando `planVariants` (conserva, crea y desactiva; nunca borra una variante con pedidos).
     - SKU nuevo `<SKU del miembro>-VNN` con un contador por miembro, inmutable.
     - `PATCH /web-catalog/variants/:id` para activa, disponibilidad (D9), stock, máximo por pedido, plazo y foto.
     - Portar las reglas de disponibilidad de `storefront/src/domain/catalog.ts` (`variantAvailability`) a un dominio puro con tests.
   - Cierra cuando: regenerar la Trapecio (2 miembros × 4 colores) da 8 variantes; quitar un color desactiva 2 y conservarlo no cambia los SKU.
-- [ ] **F5·6 Categorías web**
+- [ ] **F5·6 [t3d] Las categorías de la tienda se gestionan aparte de las de precios**
+  - Para qué: ordenar la vidriera sin cambiar ningún precio.
   - Qué hacer: CRUD `/web-catalog/categories` (dos niveles, slug, descripción, foto y orden) y la asignación a publicaciones.
   - Cierra cuando: no se puede borrar una categoría con publicaciones o hijas (test).
-- [ ] **F5·7 Botón publicar / ocultar**
+- [ ] **F5·7 [t3d] El admin publica u oculta un producto con un botón**
+  - Para qué: controlar qué ve el cliente, con un aviso de lo que falta antes de publicar.
   - Qué hacer:
     - `POST /web-catalog/products/:id/publish` y `/hide`. `DRAFT → PUBLISHED ↔ HIDDEN`.
     - Antes de publicar se verifica: slug, al menos 1 foto, al menos 1 variante activa con precio `OK` y descripción.
     - Al publicar se responde con la lista de lo que falta.
     - Cada cambio registra auditoría y un evento `catalog.changed` en el outbox (la tabla llega en F11·3; hasta entonces, un no-op detrás de una interfaz).
   - Cierra cuando: hay tests del checklist y del ida y vuelta publicar → ocultar → publicar.
-- [ ] **F5·8 Ajustes de la tienda**
+- [ ] **F5·8 [t3d] Envíos, retiro, transferencia y email de avisos se configuran en el sistema**
+  - Para qué: cambiar las condiciones de venta sin tocar el sitio.
   - Qué hacer: `GET/PUT /web-catalog/settings` (`ecommerce:settings`) sobre `EcommerceSettings`.
   - Cierra cuando: un test cubre el guardado y la validación (montos ≥ 0, email válido).
 
@@ -1022,20 +1070,24 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 
 > **Objetivo:** subir, ordenar y borrar fotos desde el sistema, guardadas en el volumen `media` (T9).
 
-- [ ] **F6·1 Puerto `MediaStorage` con adaptador de disco**
+- [ ] **F6·1 [t3d] Los archivos se guardan en el volumen de forma segura**
+  - Para qué: que ninguna ruta armada desde afuera escriba o lea fuera de la carpeta de fotos.
   - Qué hacer: `apps/api/src/common/storage/` con `save`, `delete` y `read` sobre `MEDIA_DIR` (y `PRIVATE_DIR`), con rutas generadas por el sistema y control de *path traversal*.
   - Cierra cuando: un test intenta `../` y falla.
-- [ ] **F6·2 Subida de fotos**
+- [ ] **F6·2 [t3d] El admin sube, ordena y borra las fotos de un producto**
+  - Para qué: gestionar la galería desde el sistema, con fotos livianas para la web.
   - Qué hacer:
     - `POST /web-catalog/products/:id/images` (multipart con `FileInterceptor`, `memoryStorage`, máximo 15 MB y 10 archivos).
     - Verificar el tipo por *magic bytes* y procesar con `sharp`: WebP, 2000 px como máximo, sin EXIF, guardando ancho y alto.
     - `PATCH …/images/:imageId` (alt, posición, color) y `DELETE` (borra la fila y el archivo).
     - El límite JSON global de `1mb` no aplica a esta ruta.
   - Cierra cuando: hay tests con un JPG real, un archivo `.jpg` que en realidad es texto (rechazado) y uno de 16 MB (rechazado).
-- [ ] **F6·3 Ver las fotos en el panel**
+- [ ] **F6·3 [t3d] El panel muestra las fotos subidas**
+  - Para qué: ver la galería mientras se arma la publicación.
   - Qué hacer: `GET /web-catalog/media/*` autenticado (`ecommerce:read`), con `Cache-Control` privado.
   - Cierra cuando: el panel muestra una foto subida.
-- [ ] **F6·4 Fotos de categoría**
+- [ ] **F6·4 [t3d] Cada categoría de la tienda tiene su foto**
+  - Para qué: armar las tarjetas de categoría de la vidriera.
   - Qué hacer: lo mismo en `/web-catalog/categories/:id/image`.
   - Cierra cuando: hay un test de subida y reemplazo, y el archivo viejo se borra.
 
@@ -1048,22 +1100,26 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 > **Objetivo:** que el precio web sea siempre el de Venta Directa a cliente normal, cantidad 1 (T5),
 > sin cargarlo a mano.
 
-- [ ] **F7·1 Cálculo del precio publicado**
+- [ ] **F7·1 [t3d] El precio web es el de Venta Directa a cliente normal**
+  - Para qué: un solo precio de venta, el mismo que cotiza el sistema.
   - Qué hacer:
     - `WebPriceService.computeFor(productId)` usa `PricingService.forProduct` y toma el bloque `directa`: `base.finalPrice` o el tier con `minQty = 1`; en KEYCHAIN, la banda 1–4.
     - Si no hay bloque (Directa deshabilitada) o no hay markup, guarda `NO_PRICE` con el motivo.
     - `inputsHash` sirve para no escribir cuando nada cambió.
   - Cierra cuando: un test compara el precio publicado con el que muestra `GET /products/:id/prices` para un producto sin escalas, uno con escalas y un llavero.
-- [ ] **F7·2 Recálculo automático**
+- [ ] **F7·2 [t3d] El precio web se actualiza solo cuando cambia un costo o un markup**
+  - Para qué: no tener que acordarse de actualizar la web cada vez que sube un insumo.
   - Qué hacer:
     - Después de cada escritura de la lista de §4.3 (al confirmarse la transacción), llamar a `WebPriceService.recomputePublished()` con *debounce* de 2 s. Son unas decenas de productos, así que se recalculan todos los publicados.
     - Sumar un cron de respaldo cada 10 min y un botón "Recalcular precios" (`ecommerce:write`).
     - Si algún precio cambió, registrar `WebPriceHistory` y emitir `catalog.changed`.
   - Cierra cuando: cambiar el precio vigente de "PLA Genérico" actualiza en menos de 5 s el precio publicado de todos los productos que lo usan (test de integración con el reloj controlado).
-- [ ] **F7·3 Historial de precios**
+- [ ] **F7·3 [t3d] Se ve el historial de precios de cada producto**
+  - Para qué: saber cuándo y por qué cambió un precio.
   - Qué hacer: `GET /web-catalog/prices/:productId/history`.
   - Cierra cuando: el panel muestra los últimos cambios con su causa.
-- [ ] **F7·4 Alertas**
+- [ ] **F7·4 [t3d] Un producto sin precio no se puede publicar y el panel dice por qué**
+  - Para qué: que la tienda nunca muestre un producto sin precio.
   - Qué hacer: el listado de publicaciones marca las variantes sin precio y por qué ("Venta Directa deshabilitada", "La categoría no tiene markup").
   - Cierra cuando: un producto sin markup no se puede publicar y el mensaje dice cómo resolverlo.
 
@@ -1076,19 +1132,23 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 > **Objetivo:** que el admin gestione toda la tienda desde tienda3d sin tocar la base. El punto de
 > entrada es la ficha del producto, con el botón de visibilidad.
 
-- [ ] **F8·1 Componentes que faltan**
+- [ ] **F8·1 [t3d] El panel tiene los componentes de interfaz que necesita la tienda**
+  - Para qué: armar las pantallas nuevas con el mismo estilo que el resto del sistema.
   - Qué hacer: `components/ui/{dialog,tabs,switch,textarea,select,badge}.tsx`, con el mismo estilo que los existentes (cva y tokens de `theme/tokens.css`).
   - Cierra cuando: se usan en F8·2–F8·6, y `product-editor.tsx` puede seguir con sus nativos.
-- [ ] **F8·2 Sección "Tienda online" en la ficha del producto**
+- [ ] **F8·2 [t3d] Desde la ficha del producto se publica u oculta en la tienda**
+  - Para qué: gestionar la tienda desde el lugar donde ya se trabaja cada producto.
   - Qué hacer:
     - Crear `productos/[id]/product-web-section.tsx` y renderizarla en `productos/[id]/page.tsx`, debajo del editor. Es visible con `ecommerce:read` y editable con `ecommerce:write`, con su propio `useEditMode`.
     - Muestra: la publicación a la que pertenece y su estado, el **interruptor "Visible en la tienda"** (publica u oculta la publicación y muestra el checklist si falta algo), el precio publicado y su estado, el link al editor y "Ver en la tienda".
     - Si el producto no está publicado: botón **"Crear publicación con este producto"**, que precarga nombre y descripción.
   - Cierra cuando: desde la ficha de "Lina" se crea la publicación, se completa, se hace visible y se oculta, sin salir del flujo.
-- [ ] **F8·3 Listado de publicaciones**
+- [ ] **F8·3 [t3d] El admin ve todas las publicaciones con sus alertas**
+  - Para qué: detectar de un vistazo qué falta publicar o corregir.
   - Qué hacer: `/tienda-online/publicaciones` con foto, nombre, estado, rango de precio, variantes activas/total, alertas (sin precio, color inactivo, sin fotos) y filtro por estado.
   - Cierra cuando: las 13 publicaciones migradas (F9) se ven con sus alertas.
-- [ ] **F8·4 Editor de publicación**
+- [ ] **F8·4 [t3d] El admin arma una publicación completa: contenido, variantes, fotos y categorías**
+  - Para qué: cargar y mantener un producto web sin tocar la base.
   - Qué hacer: `/tienda-online/publicaciones/[id]` con pestañas:
     - **Contenido**: nombre, slug, resumen, descripción con vista previa del formato simple y SEO.
     - **Variantes**: miembros con su etiqueta, opciones de color (línea, colores elegidos con swatches y piezas), atributos, matriz generada con edición en línea de activa, disponibilidad, stock, máximo y plazo.
@@ -1096,13 +1156,16 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - **Categorías**.
     - **Publicación**: checklist, historial de precios y link a la vista en el sitio.
   - Cierra cuando: se arma la Trapecio (2 productos del sistema, 4 colores, fotos por color) de punta a punta.
-- [ ] **F8·5 Categorías web**
+- [ ] **F8·5 [t3d] El admin organiza las categorías de la tienda**
+  - Para qué: definir cómo se navega la vidriera.
   - Qué hacer: `/tienda-online/categorias` con árbol, alta y edición en diálogo, foto y orden.
   - Cierra cuando: se crea "Lámpara > Lámpara de mesa" con foto.
-- [ ] **F8·6 Ajustes de la tienda**
+- [ ] **F8·6 [t3d] El admin cambia las condiciones de venta de la tienda**
+  - Para qué: actualizar envíos, retiro y transferencia sin depender de un desarrollador.
   - Qué hacer: `/tienda-online/ajustes` (envíos, retiro, transferencia y email de avisos).
   - Cierra cuando: guardar cambia lo que muestra el checkout (después de F12).
-- [ ] **F8·7 Tipos compartidos**
+- [ ] **F8·7 [t3d] Las pantallas de la tienda usan los mismos tipos que la API**
+  - Para qué: que un cambio en la API que rompa el panel se detecte al compilar.
   - Qué hacer: las pantallas nuevas usan los DTOs de `packages/shared` y no los redeclaran.
   - Cierra cuando: `grep` no encuentra tipos `Web*Dto` declarados en `apps/web`.
 
@@ -1115,17 +1178,20 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 > **Objetivo:** que todo lo que hoy muestra el sitio exista en el sistema, conciliado con la dueña.
 > **Bloqueada por D12** (respuesta de F0·5).
 
-- [ ] **F9·1 Colores de filamento**
+- [ ] **F9·1 [t3d] El sistema tiene cargados los colores que se venden hoy**
+  - Para qué: ofrecer en la tienda los mismos colores que ya conocen los clientes.
   - Qué hacer: cargar como hijos de la línea que indique la dueña (por defecto "PLA Genérico") los colores de §4.8 que falten, con su `colorHex`, desde el panel de Insumos o con un script idempotente.
   - Cierra cuando: `GET /materials?type=FILAMENT` devuelve los 11 colores.
-- [ ] **F9·2 Script de importación**
+- [ ] **F9·2 [t3d] El catálogo actual de la web pasa al sistema sin perder nada**
+  - Para qué: lanzar la tienda nueva con los mismos productos, fotos y textos.
   - Qué hacer:
     - `apps/api/scripts/import-storefront-catalog.ts` lee `storefront/prisma/seed/catalog.json` y `media/` y mapea por la tabla conciliada.
     - Crea publicaciones, miembros, opciones de color con los colores que tiene cada producto, atributos, variantes (con el SKU viejo en `legacySku`), fotos copiadas al volumen, categorías web, contenido y SEO.
     - Las disponibilidades se copian del storefront.
     - Opción `--dry-run` con reporte. Es idempotente (vuelve a correr sin duplicar).
   - Cierra cuando: el dry-run no tiene errores, y la importación deja publicaciones y variantes equivalentes a §4.8 (13 y 52, salvo lo que cambie la conciliación).
-- [ ] **F9·3 Reporte de precios para la dueña**
+- [ ] **F9·3 [t3d] La dueña ve cómo cambia cada precio antes de publicar**
+  - Para qué: ajustar markups en el sistema si algún precio nuevo no le cierra.
   - Qué hacer: comparar por variante el precio web actual contra el precio publicado nuevo (Venta Directa), con la diferencia en pesos y en porcentaje.
   - Cierra cuando: el reporte está entregado y la dueña confirma o pide ajustar markups o categorías **en el sistema** (no en la web).
 
@@ -1138,13 +1204,16 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 > **Objetivo:** que el sitio pueda leer solo lo publicado, con un usuario que no puede ver ni
 > escribir nada más (T3).
 
-- [ ] **F10·1 Esquema `storefront_v1` y vistas**
+- [ ] **F10·1 [t3d] El sitio ve solo lo publicado, a través de vistas**
+  - Para qué: que la tienda no pueda leer costos, proveedores ni datos internos.
   - Qué hacer: migración SQL con las vistas de §5.4, `WITH (security_barrier)`, filtrando `status = 'PUBLISHED'`, producto del sistema activo, miembro activo y precio `OK`. Montos en centavos (`(price * 100)::int`).
   - Cierra cuando: la migración aplica en limpio, y una publicación oculta, un producto archivado o una variante sin precio no aparecen.
-- [ ] **F10·2 Permisos del lector**
+- [ ] **F10·2 [t3d] El usuario de lectura del sitio queda configurado en cada migración**
+  - Para qué: que una actualización del sistema no corte la lectura de la tienda.
   - Qué hacer: `db/grants.sql` idempotente, corrido por `tienda3d-migrate` después de `migrate deploy`, con `GRANT USAGE` + `SELECT ON ALL TABLES IN SCHEMA storefront_v1` y los ajustes del rol de §5.3. El rol lo crea el init de infra (F3·2); los tests lo crean en su setup.
   - Cierra cuando: después de una migración nueva, el lector sigue leyendo sin pasos manuales.
-- [ ] **F10·3 Tests de contrato**
+- [ ] **F10·3 [t3d] Hay pruebas automáticas de que el usuario de lectura no ve nada más**
+  - Para qué: detectar cualquier fuga de datos antes de que llegue a producción.
   - Qué hacer: `apps/api/test/storefront-contract.int-spec.ts` conecta como `storefront_reader` y verifica:
     - (a) puede leer cada vista;
     - (b) `SELECT` en `public.users`, `public.supplier_materials`, `public.customers`, `public.quotes` y `public.web_products` da *permission denied*;
@@ -1152,7 +1221,8 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - (d) las columnas de cada vista coinciden con un snapshot;
     - (e) lo oculto no aparece.
   - Cierra cuando: los tests están en verde en `pnpm verify`.
-- [ ] **F10·4 Documento del contrato**
+- [ ] **F10·4 [t3d][sf] El contrato de lectura está documentado**
+  - Para qué: que el sitio pueda evolucionar leyendo solo ese documento.
   - Qué hacer: escribir `docs/contrato-storefront-v1.md` (vistas, columnas, semántica, versionado y vectores de prueba de la firma de F11) y reemplazar `storefront/docs/integracion-tienda3d.md` por un link a él.
   - Cierra cuando: el storefront implementa F12 leyendo solo ese documento.
 
@@ -1165,32 +1235,38 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 > **Objetivo:** que los dos sistemas se hablen de forma autenticada, firmada, idempotente y con
 > reintentos (§5.5).
 
-- [ ] **F11·1 [t3d] Clientes de integración**
+- [ ] **F11·1 [t3d] Solo el sitio puede llamar a la API de integración del sistema**
+  - Para qué: que nadie más pueda registrar pedidos ni clientes en el sistema.
   - Qué hacer:
     - Tabla `integration_clients` y guard `IntegrationAuthGuard` (Bearer, SHA-256, `timingSafeEqual`, alcances), con throttler propio.
     - Comando `pnpm integration:issue-key <nombre>` que imprime la clave una sola vez, y `integration:revoke`.
     - Rutas bajo `/api/integrations/storefront/v1`.
     - El proxy de `apps/web` devuelve 404 para `/api/integrations/*`.
   - Cierra cuando: sin clave da 401, con clave revocada da 401, con alcance insuficiente da 403, y por `sistema.localhost` da 404.
-- [ ] **F11·2 [t3d][sf] Firma de eventos**
+- [ ] **F11·2 [t3d][sf] Los avisos entre los sistemas van firmados**
+  - Para qué: que un aviso falso o repetido no cambie un pedido.
   - Qué hacer: funciones `signEvent` / `verifyEvent` en cada repo (formato de §5.5), con los mismos vectores de prueba del documento de contrato.
   - Cierra cuando: los dos repos pasan los mismos vectores.
-- [ ] **F11·3 [t3d] Outbox y despacho**
+- [ ] **F11·3 [t3d] Los avisos del sistema al sitio se reintentan hasta llegar**
+  - Para qué: que un corte del sitio no haga perder un cambio de estado.
   - Qué hacer:
     - Tabla `outbox_events`. La escritura del evento va en la misma transacción que el cambio.
     - Despachador con `@nestjs/schedule` cada 15 s, con backoff y `lastError`.
     - Alerta en el panel si un evento lleva más de 1 h sin entregarse.
   - Cierra cuando: con el storefront apagado, un `catalog.changed` queda pendiente y se entrega al prenderlo.
-- [ ] **F11·4 [t3d] Recepción idempotente**
+- [ ] **F11·4 [t3d] El sistema no procesa dos veces el mismo aviso**
+  - Para qué: que un reintento no duplique pedidos ni clientes.
   - Qué hacer: tabla `inbound_events`. Los endpoints de §5.5 deduplican por `eventId` o `externalId`.
   - Cierra cuando: mandar dos veces el mismo evento produce un solo efecto (test).
-- [ ] **F11·5 [sf] Endpoint de eventos y worker**
+- [ ] **F11·5 [sf][infra] El sitio recibe avisos y reintenta los suyos**
+  - Para qué: que del lado del sitio tampoco se pierda ni se duplique nada.
   - Qué hacer:
     - `src/app/api/internal/events/route.ts` (verifica firma y ventana, deduplica en `inbound_events`).
     - Worker `src/worker/index.ts` (mismo `Dockerfile`, comando `node dist/worker.js` o `pnpm worker`) con su outbox, el envío de mails pendientes y la limpieza de sesiones y tokens vencidos.
     - Servicio `storefront-worker` en el compose de infra.
   - Cierra cuando: con tienda3d apagado, un `customer.upserted` queda pendiente y se entrega al prenderlo; una firma inválida da 401.
-- [ ] **F11·6 [sf] Revalidación del catálogo**
+- [ ] **F11·6 [sf] Un cambio en el panel se ve en la tienda en segundos**
+  - Para qué: que lo publicado sea lo que ve el cliente.
   - Qué hacer: `catalog.changed` → `revalidateTag(CATALOG_TAG | productTag(slug) | SETTINGS_TAG)`, con un `cacheLife` de respaldo de 5 minutos.
   - Cierra cuando: un cambio en el panel se ve en el sitio en menos de 5 s.
 
@@ -1204,22 +1280,27 @@ contenedor apagado.
 > **Objetivo:** que el storefront muestre solo lo que publica el sistema, sin catálogo ni panel
 > propios (T2, T3).
 
-- [ ] **F12·1 Cliente de lectura**
+- [ ] **F12·1 [sf] El sitio lee el catálogo del sistema**
+  - Para qué: tener la base para que la tienda muestre lo que publica el sistema.
   - Qué hacer:
     - `src/server/catalog/reader.ts`, con un `pg.Pool` separado (`TIENDA3D_READER_URL` desde archivo y un máximo de 5 conexiones).
     - Consultas a las vistas con validación zod en el borde.
     - Mapeo a los tipos existentes (`ProductView`, `ProductCardView`, opciones y valores), donde miembros, colores y atributos se vuelven opciones.
   - Cierra cuando: hay tests unitarios del mapeo con filas de ejemplo (Trapecio y un cuaderno con atributos).
-- [ ] **F12·2 Reemplazar las consultas**
+- [ ] **F12·2 [sf] Las páginas de la tienda muestran lo publicado en el sistema**
+  - Para qué: un solo catálogo para el sistema y la web.
   - Qué hacer: `server/catalog/queries.ts` y `server/settings.ts` pasan a leer las vistas, manteniendo `"use cache"` + `cacheTag` y leyendo primero los datos dinámicos (regla de Cache Components del `CLAUDE.md`).
   - Cierra cuando: `pnpm build` funciona sin base, y las páginas de tienda, categoría y producto muestran lo publicado.
-- [ ] **F12·3 Fotos desde el volumen del sistema**
+- [ ] **F12·3 [sf] La tienda muestra las fotos que se suben en el sistema**
+  - Para qué: cargar cada foto una sola vez.
   - Qué hacer: `/media/[...path]` lee de `MEDIA_DIR` (montado `:ro`) con `Cache-Control` largo y `next/image` sobre esas rutas.
   - Cierra cuando: las fotos subidas en el panel se ven en el sitio.
-- [ ] **F12·4 Redirecciones de slugs viejos**
+- [ ] **F12·4 [sf] Un link viejo a un producto sigue funcionando después de cambiarle el nombre**
+  - Para qué: no perder visitas ni posicionamiento en Google.
   - Qué hacer: un slug que figura en `slug_redirects` responde 308 al nuevo.
   - Cierra cuando: cambiar el slug en el panel no rompe el link viejo.
-- [ ] **F12·5 Sacar del storefront lo que pasó al sistema**
+- [ ] **F12·5 [sf] El sitio deja de tener catálogo y panel propios**
+  - Para qué: que no haya dos lugares donde editar un producto.
   - Qué hacer:
     - Borrar las rutas `/admin`, `server/actions/admin/*`, `server/admin/*`, `server/auth/session.ts` y los modelos `AdminUser`/`AdminSession`.
     - Borrar los modelos de catálogo y `StoreSettings`, el seed de catálogo y `scripts/import-woocommerce.ts`.
@@ -1227,7 +1308,8 @@ contenedor apagado.
     - Redirigir `/admin/*` y `/wp-admin` a la home.
     - Actualizar el README y el `CLAUDE.md` del repo.
   - Cierra cuando: `grep -r "requireAdmin\|AdminUser" src` no devuelve nada, y typecheck, lint y tests están en verde.
-- [ ] **F12·6 Carrito con variantes del sistema**
+- [ ] **F12·6 [sf] El carrito usa los precios y la disponibilidad del sistema**
+  - Para qué: que el cliente nunca pague un precio viejo ni compre algo oculto.
   - Qué hacer: las líneas guardan ids de `storefront_v1.variants`, y precio, disponibilidad y máximo salen de la vista (D3: precio de cantidad 1).
   - Cierra cuando: ocultar un producto en el panel lo saca del carrito con aviso ("ya no está disponible").
 
@@ -1240,48 +1322,59 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
 
 > **Objetivo:** que para comprar haya que tener una cuenta, y que la cuenta guarde todas las compras (T6).
 
-- [ ] **F13·1 Modelo**
+- [ ] **F13·1 [sf] El sitio guarda cuentas de cliente**
+  - Para qué: tener la base para comprar con cuenta y ver el historial.
   - Qué hacer:
     - `Customer`: `id` uuid, `email` único normalizado, `passwordHash` (scrypt de `server/auth/password.ts`), nombre, apellido, teléfono, documento opcional, `emailVerifiedAt`, `failedLoginAttempts`, `lockedUntil`, `acceptedTermsAt`, `createdAt` y `lastLoginAt`.
     - `CustomerSession` (hash del token, vencimiento, último uso).
     - `CustomerEmailToken` (`VERIFY`/`RESET`, hash, vencimiento, `usedAt`).
     - `CustomerAddress`.
   - Cierra cuando: la migración aplica y hay tests del dominio de tokens.
-- [ ] **F13·2 Registro y verificación de email (D5)**
+- [ ] **F13·2 [sf] El cliente se registra y verifica su email**
+  - Para qué: que cada compra tenga un email real para los avisos (D5).
   - Qué hacer:
     - `/mi-cuenta/registro` con aceptación de términos y privacidad.
     - Mail con link de un uso válido 24 h; `/mi-cuenta/verificar`.
     - Reenvío limitado a 3 por hora.
     - El registro no revela si el email ya existe ("Si el email no estaba registrado, te mandamos un link").
   - Cierra cuando: e2e de registro → mail en Mailpit → verificación.
-- [ ] **F13·3 Ingreso y sesión**
+- [ ] **F13·3 [sf] El cliente ingresa a su cuenta de forma segura**
+  - Para qué: proteger las cuentas de intentos de adivinar contraseñas.
   - Qué hacer:
     - `/mi-cuenta/ingresar`.
     - Cookie `tp_session`: `httpOnly`, `Secure` en producción, `SameSite=Lax`, 30 días con renovación por uso, token rotado al ingresar.
     - Bloqueo de 15 min tras 8 intentos fallidos (como tienda3d), más límite por IP y por email (`server/rate-limit.ts`).
     - Mensajes genéricos y `/mi-cuenta/salir`.
   - Cierra cuando: hay tests de bloqueo, rotación y vencimiento.
-- [ ] **F13·4 Recuperar la contraseña**
+- [ ] **F13·4 [sf] El cliente recupera su contraseña por email**
+  - Para qué: no perder clientes que se olvidaron la clave.
   - Qué hacer: `/mi-cuenta/olvide-mi-clave` → link de 1 h → `/mi-cuenta/restablecer`, que cierra todas las sesiones.
   - Cierra cuando: un link usado o vencido no funciona (test).
-- [ ] **F13·5 Mi cuenta**
+- [ ] **F13·5 [sf] El cliente ve sus compras y sus datos en Mi cuenta**
+  - Para qué: consultar cómo va cada compra sin escribirle a la tienda.
   - Qué hacer:
     - `/mi-cuenta` (resumen), `/mi-cuenta/compras` (lista), `/mi-cuenta/compras/[numero]` (detalle con estados, seguimiento e historial), `/mi-cuenta/datos`, `/mi-cuenta/direcciones` y cambio de contraseña (cierra las otras sesiones).
     - Quitar la redirección heredada `/mi-cuenta/* → /tienda/` de `next.config.ts`: se reusa la URL que tenía WordPress.
     - Proteger `/mi-cuenta/*` en `src/proxy.ts`.
   - Cierra cuando: un cliente ve solo sus compras; pedir la de otro devuelve 404.
-- [ ] **F13·6 El checkout exige sesión**
+- [ ] **F13·6 [sf] Para comprar hay que tener cuenta**
+  - Para qué: que cada compra quede en el historial de un cliente identificado.
   - Qué hacer:
     - Sin sesión, `/finalizar-compra` lleva a `/mi-cuenta/ingresar?volver=/finalizar-compra` (con link a registro). El carrito sigue en la cookie.
     - Con sesión pero sin email verificado, pide verificar.
     - Prellenar con los datos y las direcciones.
   - Cierra cuando: e2e muestra que sin cuenta no se puede comprar y que el carrito sobrevive al ingreso.
-- [ ] **F13·7 Privacidad (Ley 25.326)**
+- [ ] **F13·7 [sf] El sitio cumple con la ley de datos personales**
+  - Para qué: informar cómo se usan los datos y permitir pedir la baja.
   - Qué hacer: página de política de privacidad (texto a acordar con la dueña), consentimiento registrado y "Pedir la baja de mi cuenta" (en v1, por mail a la tienda).
   - Cierra cuando: la página está publicada y enlazada en el registro y en el footer.
-- [ ] **F13·8 Aviso al sistema**
-  - Qué hacer: `customer.upserted` por outbox al registrarse y al cambiar datos (solo nombre, email, teléfono y documento).
-  - Cierra cuando: el cliente aparece en `web_customers` de tienda3d (después de F14·2).
+- [ ] **F13·8 [sf][t3d] Cada cliente de la web aparece en Clientes del sistema**
+  - Para qué: que el taller vea quién compra, con su historial (D4).
+  - Qué hacer:
+    - [sf] `customer.upserted` por outbox al registrarse y al cambiar datos (solo nombre, email, teléfono y documento).
+    - [t3d] `POST /customers` de la API de integración: crea o actualiza un `Customer` tipo `STANDARD` con `source = WEB` y `externalId`; si el email ya es de un cliente existente, lo vincula (D4).
+    - [t3d] Filtro por origen en `/clientes`.
+  - Cierra cuando: un cliente que se registra en el sitio aparece en Clientes del sistema con origen web, y uno cuyo email ya existía queda vinculado al cliente existente (test).
 
 **Verificación:** verificación mínima de [sf] y e2e de cuentas.
 
@@ -1292,18 +1385,22 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
 > **Objetivo:** que el sitio guarde cada compra, el sistema la registre y el admin la gestione, y que
 > el cliente vea cada cambio (T4).
 
-- [ ] **F14·1 [sf] Pedido con dos ejes de estado**
+- [ ] **F14·1 [sf] Cada compra guarda qué se pagó y en qué etapa de preparación está**
+  - Para qué: separar el pago de la preparación, cada uno con su responsable.
   - Qué hacer:
     - Migración de `Order`: `customerId` obligatorio, `paymentStatus` + `fulfillmentStatus` (§5.6) en lugar de `status`, y `systemCode`.
     - `OrderItem` con snapshot: `webVariantId`, `sku`, `systemProductId`, nombre, etiqueta de la variante, colores elegidos `{línea: {id, nombre, hex}}`, atributos y precio unitario.
     - Portar `domain/orders.ts` a los dos ejes.
   - Cierra cuando: hay tests de dominio de las transiciones de cada eje.
-- [ ] **F14·2 [t3d] Modelo de pedidos web**
+- [ ] **F14·2 [t3d] El sistema registra los pedidos de la web con un código propio**
+  - Para qué: gestionar los pedidos web junto al resto del trabajo del taller.
   - Qué hacer:
-    - `WebCustomer` (D4), `WebOrder`, `WebOrderItem` (con `webVariantId`, `productId`, `colorSelections` y `productionOrderId?`) y `WebOrderEvent`.
+    - En `Customer`: campos `source` (`SYSTEM` | `WEB`) y `externalId` (único, opcional) para los clientes de la web (D4).
+    - `WebOrder` (vinculado a `Customer`), `WebOrderItem` (con `webVariantId`, `productId`, `colorSelections` y `productionOrderId?`) y `WebOrderEvent`.
     - Código `W-AAAA-NNNN` con `DocumentCodeService` (scope `WEB_ORDER:W`), usando el año de Argentina.
   - Cierra cuando: la migración aplica y hay un test del código correlativo.
-- [ ] **F14·3 Registro del pedido (D2)**
+- [ ] **F14·3 [t3d][sf] Un pedido se confirma solo si el sistema valida precio y stock**
+  - Para qué: no vender a un precio viejo ni más unidades de las que hay (D2).
   - Qué hacer:
     - [t3d] `POST /orders` es idempotente por `externalId`:
       - valida cada línea contra `web_prices` (si un precio cambió, 409 con los precios nuevos) y la disponibilidad;
@@ -1314,27 +1411,33 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
     - repetir la llamada no duplica;
     - dos compras simultáneas de la última unidad dejan una sola aprobada (test de concurrencia);
     - un cambio de precio en medio del checkout muestra el precio nuevo.
-- [ ] **F14·4 [sf] Pago provisorio (D7)**
+- [ ] **F14·4 [sf] El cliente paga por transferencia**
+  - Para qué: poder vender antes de conectar Mercado Pago (D7).
   - Qué hacer: la transferencia muestra las instrucciones de los ajustes y deja el pedido en `AWAITING_TRANSFER`. El pago simulado solo existe en local (ya validado en `env.ts`).
   - Cierra cuando: e2e completa con transferencia en el ecosistema.
-- [ ] **F14·5 [t3d] Panel de pedidos web**
+- [ ] **F14·5 [t3d] El admin gestiona los pedidos web desde el sistema**
+  - Para qué: confirmar pagos, preparar, enviar y cancelar desde un solo lugar.
   - Qué hacer:
     - `/tienda-online/pedidos`: lista con filtros (estado, pago, fecha, entrega) y contador de nuevos en el menú.
     - `/tienda-online/pedidos/[id]`: cliente, entrega, ítems con colores (swatches) y atributos, pago, historial y notas internas.
     - Acciones: confirmar transferencia, preparar, listo para retirar, enviado (con seguimiento), entregado y cancelar (pide motivo y libera stock).
   - Cierra cuando: cada acción respeta §5.6 (tests de API) y queda en auditoría.
-- [ ] **F14·6 Estados de vuelta al sitio**
+- [ ] **F14·6 [t3d][sf] El cliente ve cada cambio de su pedido y recibe un mail**
+  - Para qué: que no tenga que preguntar cómo va su compra.
   - Qué hacer:
     - [t3d] Emitir `order.fulfillment_changed` y `order.payment_confirmed_manually` por outbox.
     - [sf] Aplicarlos, sumarlos al historial y mandar el mail correspondiente.
   - Cierra cuando: un cambio en el panel se ve en "Mis compras" en menos de 30 s, con el mail en Mailpit.
-- [ ] **F14·7 [t3d] Orden de producción desde un ítem**
+- [ ] **F14·7 [t3d] Desde un pedido se genera su orden de producción con los colores elegidos**
+  - Para qué: fabricar exactamente lo que pidió el cliente sin volver a cargarlo.
   - Qué hacer: botón "Generar orden de producción" en el ítem, que precarga producto, cantidad y `filamentOverrides`, armados con las piezas de cada opción de color y el color elegido. Vincula el ítem con la orden. Requiere F2·3 y F2·5.
   - Cierra cuando: la orden generada para una Trapecio Marrón 280 tiene el color Marrón en todas sus piezas de PLA.
-- [ ] **F14·8 [t3d] Clientes web**
-  - Qué hacer: `/tienda-online/clientes` con lista y detalle (sus pedidos).
+- [ ] **F14·8 [t3d] El admin ve los pedidos web de cada cliente**
+  - Para qué: conocer a quién compra por la web y cuánto.
+  - Qué hacer: pestaña **Pedidos web** en el detalle de `/clientes/[id]` y columna con la cantidad de pedidos web en el listado. El precio de esos pedidos sigue siendo el publicado (D4).
   - Cierra cuando: un cliente con dos compras las muestra a las dos.
-- [ ] **F14·9 [sf] Mails del pedido**
+- [ ] **F14·9 [sf] El cliente y la tienda reciben los mails de cada pedido**
+  - Para qué: avisos automáticos en cada paso de la compra.
   - Qué hacer: portar y ajustar `server/mail/templates.ts` (pedido recibido con instrucciones de transferencia, pago confirmado, cada cambio de preparación y cancelación) y el aviso de pedido nuevo a `notification_email`.
   - Cierra cuando: e2e encuentra los mails en Mailpit con el número y el código correctos.
 
@@ -1343,22 +1446,34 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 
 ---
 
-### F15 — Solicitudes de personalización · 8–12 h
+### F15 — Solicitudes de personalización · 10–15 h
 
 > **Objetivo:** que las solicitudes del formulario "Personalización" lleguen al sistema y se puedan
 > convertir en una cotización a medida.
 
-- [ ] **F15·1 [sf] Guardar y avisar**
-  - Qué hacer: el formulario actual guarda la solicitud y su adjunto en `sf-private` y crea un evento `quote_request.created` en el outbox. El worker lo entrega como multipart, y al confirmarse la entrega se borra el adjunto local.
-  - Cierra cuando: con tienda3d apagado, la solicitud llega al prenderlo.
-- [ ] **F15·2 [t3d] Recepción**
-  - Qué hacer: `WebQuoteRequest`, con el adjunto en `t3d-private` (mismas validaciones que en `domain/quotes.ts`: extensiones y 20 MB) y deduplicación por id.
+- [ ] **F15·1 [sf] El cliente pide una personalización desde su cuenta**
+  - Para qué: que cada pedido de cotización quede asociado a un cliente y se pueda seguir.
+  - Qué hacer:
+    - `/personalizacion` pide sesión (D16): sin cuenta lleva a ingresar o registrarse y vuelve al formulario; con cuenta, precarga nombre, email y teléfono.
+    - La solicitud se guarda vinculada al cliente, con su adjunto en `sf-private`, y crea un evento `quote_request.created` en el outbox.
+    - El worker la entrega como multipart y, al confirmarse la entrega, borra el adjunto local.
+  - Cierra cuando: sin sesión no se puede enviar; con tienda3d apagado, la solicitud llega al prenderlo.
+- [ ] **F15·2 [t3d] El sistema recibe las solicitudes con su archivo adjunto**
+  - Para qué: tener en el taller la idea y el archivo del cliente.
+  - Qué hacer: `WebQuoteRequest` vinculada al `Customer` del cliente (por `externalId`), con el adjunto en `t3d-private` (mismas validaciones que en `domain/quotes.ts`: extensiones y 20 MB) y deduplicación por id.
   - Cierra cuando: hay tests de duplicado y de adjunto inválido.
-- [ ] **F15·3 [t3d] Panel**
+- [ ] **F15·3 [t3d] Una solicitud se convierte en cotización a medida**
+  - Para qué: cotizar sin volver a cargar los datos del cliente.
   - Qué hacer: `/tienda-online/solicitudes` (lista, estado, nota y descarga del adjunto con `ecommerce:orders`) y el botón **"Crear cotización a medida"**, que abre `/cotizaciones/nueva-a-medida` con el nombre, el contacto y la idea precargados.
-  - Cierra cuando: de una solicitud sale una cotización `R-AAAA-NNNN` vinculada.
+  - Cierra cuando: de una solicitud sale una cotización `R-AAAA-NNNN` vinculada a la solicitud y al cliente.
+- [ ] **F15·4 [sf][t3d] El cliente ve el estado de sus solicitudes en Mi cuenta**
+  - Para qué: que sepa si su pedido de personalización está en análisis o ya fue cotizado, sin preguntar.
+  - Qué hacer:
+    - [t3d] Emitir `quote_request.status_changed` por outbox cuando el admin cambia el estado de una solicitud (nueva, en análisis, cotizada, descartada).
+    - [sf] `/mi-cuenta/solicitudes` con la lista, el estado y la fecha de cada una.
+  - Cierra cuando: un cambio de estado en el panel se ve en Mi cuenta en menos de 30 s.
 
-**Verificación:** e2e del formulario hasta el panel.
+**Verificación:** e2e del formulario hasta el panel y de vuelta a Mi cuenta.
 
 ---
 
@@ -1367,7 +1482,8 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 > **Objetivo:** demostrar que el ecosistema funciona completo y seguro en local, y tener los datos
 > para decidir el despliegue.
 
-- [ ] **F16·1 E2e del ecosistema**
+- [ ] **F16·1 [infra][sf] El ecosistema completo pasa sus pruebas de punta a punta**
+  - Para qué: saber que todo funciona junto antes de decidir el despliegue.
   - Qué hacer: suite Playwright en [infra] (o en [sf] con una URL configurable) contra el perfil de producción:
     - catálogo: publicar, ocultar y cambiar precio;
     - cuentas;
@@ -1376,7 +1492,8 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
     - solicitud de personalización;
     - caídas: tienda3d apagado durante el checkout (mensaje claro) y storefront apagado durante un cambio de estado (llega al volver).
   - Cierra cuando: la suite está en verde dos veces seguidas desde un ecosistema limpio.
-- [ ] **F16·2 Seguridad**
+- [ ] **F16·2 [infra] El ecosistema pasa una revisión de seguridad**
+  - Para qué: no exponer datos ni rutas internas al publicarlo.
   - Qué hacer:
     - Tests de contrato del lector (F10·3).
     - `docker inspect` sin secretos y solo Caddy con puertos publicados.
@@ -1385,13 +1502,16 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
     - **OWASP ZAP baseline** (gratuito) contra `tienda.localhost` y `sistema.localhost`.
     - gitleaks en los tres repos.
   - Cierra cuando: ZAP no tiene alertas *High* y las *Medium* están resueltas o justificadas.
-- [ ] **F16·3 Simulacro de desastre**
+- [ ] **F16·3 [infra] Se probó recuperar todo desde un backup**
+  - Para qué: saber que funciona y cuánto tarda antes de necesitarlo.
   - Qué hacer: backup → borrar volúmenes → restaurar (F3·7). Medir el tiempo.
   - Cierra cuando: la restauración funciona y el tiempo queda en la bitácora.
-- [ ] **F16·4 Medición de recursos**
+- [ ] **F16·4 [infra] Sabemos cuántos recursos consume el ecosistema**
+  - Para qué: elegir el tamaño y el costo del servidor.
   - Qué hacer: `docker stats` en reposo y con una carga simple (k6 o autocannon: 20 usuarios navegando y 2 compras por minuto durante 10 min).
   - Cierra cuando: hay RAM y CPU pico por servicio, con una recomendación de tamaño de EC2 y arquitectura (D11).
-- [ ] **F16·5 Decisión de despliegue**
+- [ ] **F16·5 [t3d] Está decidido si se despliega y por qué**
+  - Para qué: cerrar la etapa local con una decisión informada.
   - Qué hacer: checklist con las e2e en verde, seguridad, restauración, la estimación de costo mensual con los tamaños medidos y los pendientes conocidos.
   - Cierra cuando: la decisión ("sí" / "todavía no" y por qué) está en la bitácora.
 
@@ -1461,7 +1581,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 | El sistema tiene 1 solo color de filamento cargado. | No se puede publicar nada con colores. | F9·1 antes de F9·2. |
 | F-30 no tiene una solución conocida todavía. | Sin imagen de producción de la web no hay prueba integral ni EC2. | F2·1 es lo primero de F2; si se traba, construir la web del sistema con `next start` sobre el build completo como plan B. |
 | El checkout depende de que tienda3d responda (D2). | Si el sistema se cae, no se vende. | Los dos corren en el mismo host; mensaje claro y monitoreo en F17·6. |
-| Datos personales en dos bases (sitio y copia en el sistema). | Más superficie ante una filtración. | Copia mínima (D4), backups cifrados y sin datos de clientes en la base del sistema más allá de lo necesario para gestionar. |
+| Datos personales en dos bases (cuentas en el sitio y clientes en el sistema, D4). | Más superficie ante una filtración. | El sistema guarda solo nombre, email, teléfono y documento (nunca contraseñas); backups cifrados. |
 | El panel de gestión pasa de estar solo en el taller a estar en internet. | Más exposición. | D8 (capa extra gratuita), bloqueo por intentos y cookies `Secure`. |
 | Tamaño del trabajo (≈200–300 h en local). | Mucho tiempo sin nada utilizable. | Fases con valor propio: al terminar F12, el catálogo ya sale del sistema; F13–F15 se pueden priorizar. |
 | Una sola instancia (límites, sesiones y crons en memoria o en la base). | No escala horizontalmente. | Aceptado para este volumen; si hace falta, Redis para límites y *leader election* para crons. |
@@ -1486,3 +1606,4 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 | Fecha | Fase | Nota |
 | --- | --- | --- |
 | 2026-10-26 | — | Plan creado a partir del relevamiento de los dos sistemas y la base local en uso. Decisiones T1–T11 de Pablo; D1–D12 propuestas, a confirmar en F0·3. |
+| 2026-10-27 | F0 | Decisiones definidas (§3): D4 cambia a clientes del sistema y D16 pide cuenta para las solicitudes; el resto, como se proponía. Sin GitHub Actions: verificación con hooks locales. Rama `unificacion` en [t3d] y [sf], rama por defecto mientras dure el trabajo. Títulos de tareas reescritos como resultados, con su "Para qué", para el tablero. |
