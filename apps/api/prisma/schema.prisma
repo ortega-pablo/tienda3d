@@ -234,6 +234,13 @@ model Material {
   keychainDefaultFilament  KeychainDefaults[]        @relation("KeychainDefaultFilament")
   keychainDefaultMaterials KeychainDefaultMaterial[]
 
+  // Tienda online: como línea de filamento de una opción de color, como color
+  // ofrecido, como color elegido en una variante y como color de una foto.
+  webColorLines        WebColorOption[]      @relation("WebColorLine")
+  webColorValues       WebColorValue[]
+  webVariantSelections WebVariantSelection[]
+  webImages            WebImage[]            @relation("WebImageColor")
+
   @@index([type])
   @@index([isActive])
   @@index([parentId])
@@ -400,6 +407,11 @@ model Product {
   quoteItems       QuoteItem[]
   customerProducts CustomerProduct[]
 
+  // Tienda online (plan de unificación, F5).
+  webMember       WebProductMember?
+  webPrice        WebPrice?
+  webPriceHistory WebPriceHistory[]
+
   @@index([machineId])
   @@index([categoryId])
   @@map("products")
@@ -418,6 +430,9 @@ model ProductPiece {
   /// INDIVIDUAL en productos STANDARD. En KEYCHAIN conviven piezas INDIVIDUAL
   /// (base para escala 1-4) y BATCH (base de tanda para escalas 5+).
   scope             PieceScope @default(INDIVIDUAL)
+
+  /// Opciones de color de la tienda online que pintan esta pieza.
+  webColorOptions WebColorOptionPiece[]
 
   @@index([productId])
   @@map("product_pieces")
@@ -919,4 +934,311 @@ model KeychainDefaultMaterial {
   @@unique([defaultsId, materialId])
   @@index([defaultsId])
   @@map("keychain_default_materials")
+}
+
+// ============================================================
+// Tienda online (plan de unificación, F5)
+// ============================================================
+//
+// Una "publicación" (WebProduct) es lo que el cliente ve como un producto en
+// tiendaplastik.com. Agrupa uno o más productos del sistema (miembros, por
+// ejemplo los tamaños), ofrece un subconjunto de los colores del filamento que
+// usan sus piezas y opciones informativas (por ejemplo "Tipo de hoja"). Cada
+// combinación vendible es una WebVariant con su SKU.
+//
+// El sitio lee esto a través de las vistas del esquema storefront_v1 (F10),
+// nunca de estas tablas.
+
+enum WebProductStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+}
+
+enum WebAvailability {
+  /// Se fabrica al comprar: plazo y máximo por compra.
+  MADE_TO_ORDER
+  /// Solo se vende lo que hay en stock de producto terminado.
+  STOCK_ONLY
+  /// Se vende el stock y, agotado, se fabrica a pedido.
+  STOCK_THEN_ORDER
+}
+
+enum WebPriceState {
+  OK
+  /// Sin precio publicable (Venta Directa deshabilitada o sin markup): `reason` dice por qué.
+  NO_PRICE
+}
+
+model WebProduct {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  name           String
+  summary        String           @default("")
+  /// Formato de texto simple del sitio: párrafos, **negrita**, *itálica*, listas con "- ".
+  description    String           @default("")
+  seoTitle       String?
+  seoDescription String?
+  /// Nombre de la opción que eligen los miembros: "Tamaño", "Modelo"…
+  optionLabel    String           @default("Modelo")
+  status         WebProductStatus @default(DRAFT)
+  publishedAt    DateTime?
+  featured       Boolean          @default(false)
+  sortOrder      Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  members      WebProductMember[]
+  colorOptions WebColorOption[]
+  attributes   WebAttribute[]
+  variants     WebVariant[]
+  images       WebImage[]
+  categories   WebProductCategory[]
+  slugHistory  WebProductSlug[]
+
+  @@index([status, sortOrder])
+  @@map("web_products")
+}
+
+/// Producto del sistema que es una variante (tamaño, modelo) de una publicación.
+model WebProductMember {
+  id           String     @id @default(cuid())
+  webProductId String
+  webProduct   WebProduct @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  /// Un producto del sistema está en una sola publicación (D14).
+  productId    String     @unique
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// "280", "390"; vacío si la publicación tiene un solo miembro.
+  valueLabel   String     @default("")
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+
+  variants WebVariant[]
+
+  @@index([webProductId])
+  @@map("web_product_members")
+}
+
+/// Colores que ofrece la web de una línea de filamento (T8): un subconjunto de
+/// sus colores (Material hijos), aplicado a ciertas piezas de los miembros.
+model WebColorOption {
+  id             String     @id @default(cuid())
+  webProductId   String
+  webProduct     WebProduct @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  label          String     @default("Color")
+  /// Material padre (FILAMENT, parentId null).
+  filamentLineId String
+  filamentLine   Material   @relation("WebColorLine", fields: [filamentLineId], references: [id], onDelete: Restrict)
+  sortOrder      Int        @default(0)
+
+  values     WebColorValue[]
+  pieces     WebColorOptionPiece[]
+  selections WebVariantSelection[]
+
+  @@index([webProductId])
+  @@map("web_color_options")
+}
+
+model WebColorValue {
+  optionId   String
+  option     WebColorOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  /// Material hijo de la línea de la opción.
+  materialId String
+  material   Material       @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  sortOrder  Int            @default(0)
+
+  @@id([optionId, materialId])
+  @@map("web_color_values")
+}
+
+/// Piezas de los miembros que toman el color de la opción.
+model WebColorOptionPiece {
+  optionId String
+  option   WebColorOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  pieceId  String
+  piece    ProductPiece   @relation(fields: [pieceId], references: [id], onDelete: Cascade)
+
+  @@id([optionId, pieceId])
+  @@map("web_color_option_pieces")
+}
+
+/// Opción informativa sin producto del sistema detrás (D6), por ejemplo "Tipo de hoja".
+model WebAttribute {
+  id           String     @id @default(cuid())
+  webProductId String
+  webProduct   WebProduct @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  label        String
+  sortOrder    Int        @default(0)
+
+  values WebAttributeValue[]
+
+  @@index([webProductId])
+  @@map("web_attributes")
+}
+
+model WebAttributeValue {
+  id          String       @id @default(cuid())
+  attributeId String
+  attribute   WebAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  slug        String
+  label       String
+  sortOrder   Int          @default(0)
+  /// Un valor usado por variantes no se borra: se desactiva.
+  isActive    Boolean      @default(true)
+
+  selections WebVariantSelection[]
+
+  @@unique([attributeId, slug])
+  @@map("web_attribute_values")
+}
+
+/// Combinación vendible: miembro × colores × opciones informativas.
+model WebVariant {
+  id            String           @id @default(cuid())
+  webProductId  String
+  webProduct    WebProduct       @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  memberId      String
+  member        WebProductMember @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  /// "<SKU del miembro>-VNN" (D15). Inmutable.
+  sku           String           @unique
+  /// Clave canónica de la combinación, única dentro de la publicación.
+  selectionKey  String
+  isActive      Boolean          @default(true)
+  availability  WebAvailability  @default(MADE_TO_ORDER)
+  stockQuantity Int              @default(0)
+  maxPerOrder   Int?
+  leadTimeDays  Int?
+  imageId       String?
+  image         WebImage?        @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  /// SKU que tenía en WooCommerce, como referencia de la migración.
+  legacySku     String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  selections WebVariantSelection[]
+
+  @@unique([webProductId, selectionKey])
+  @@index([memberId])
+  @@map("web_variants")
+}
+
+model WebVariantSelection {
+  id               String             @id @default(cuid())
+  variantId        String
+  variant          WebVariant         @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  colorOptionId    String?
+  colorOption      WebColorOption?    @relation(fields: [colorOptionId], references: [id], onDelete: Restrict)
+  materialId       String?
+  material         Material?          @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  attributeValueId String?
+  attributeValue   WebAttributeValue? @relation(fields: [attributeValueId], references: [id], onDelete: Restrict)
+
+  @@index([variantId])
+  @@map("web_variant_selections")
+}
+
+model WebImage {
+  id              String     @id @default(cuid())
+  webProductId    String
+  webProduct      WebProduct @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  /// Ruta dentro del volumen media (catalog/<webProductId>/<uuid>.webp).
+  path            String
+  alt             String     @default("")
+  width           Int
+  height          Int
+  position        Int        @default(0)
+  /// Foto de un color en particular (se muestra al elegirlo).
+  colorMaterialId String?
+  colorMaterial   Material?  @relation("WebImageColor", fields: [colorMaterialId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+
+  variants WebVariant[]
+
+  @@index([webProductId, position])
+  @@map("web_images")
+}
+
+/// Categorías de la vidriera, aparte de las del sistema que definen el markup (D13).
+model WebCategory {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  name        String
+  description String        @default("")
+  parentId    String?
+  parent      WebCategory?  @relation("WebCategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    WebCategory[] @relation("WebCategoryTree")
+  imagePath   String?
+  sortOrder   Int           @default(0)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  products WebProductCategory[]
+
+  @@index([parentId])
+  @@map("web_categories")
+}
+
+model WebProductCategory {
+  webProductId  String
+  webProduct    WebProduct  @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  webCategoryId String
+  webCategory   WebCategory @relation(fields: [webCategoryId], references: [id], onDelete: Restrict)
+
+  @@id([webProductId, webCategoryId])
+  @@index([webCategoryId])
+  @@map("web_product_categories")
+}
+
+/// Slugs viejos de una publicación: el sitio redirige al actual (F12·4).
+model WebProductSlug {
+  slug         String     @id
+  webProductId String
+  webProduct   WebProduct @relation(fields: [webProductId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@index([webProductId])
+  @@map("web_product_slugs")
+}
+
+/// Precio publicado de un producto del sistema: Venta Directa a cliente normal,
+/// cantidad 1 (T5). Lo calcula el sistema (F7), nunca se carga a mano.
+model WebPrice {
+  productId  String        @id
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price      Decimal?      @db.Decimal(14, 2)
+  state      WebPriceState
+  reason     String?
+  inputsHash String
+  computedAt DateTime
+
+  @@map("web_prices")
+}
+
+model WebPriceHistory {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  previous  Decimal? @db.Decimal(14, 2)
+  price     Decimal? @db.Decimal(14, 2)
+  changedAt DateTime @default(now())
+  cause     String
+
+  @@index([productId, changedAt])
+  @@map("web_price_history")
+}
+
+/// Condiciones de venta de la tienda. Fila única (id = 1).
+model EcommerceSettings {
+  id                       Int      @id @default(1)
+  shippingFlatRate         Decimal? @db.Decimal(14, 2)
+  freeShippingFrom         Decimal? @db.Decimal(14, 2)
+  pickupEnabled            Boolean  @default(true)
+  pickupInstructions       String   @default("")
+  bankTransferEnabled      Boolean  @default(false)
+  bankTransferInstructions String   @default("")
+  notificationEmail        String   @default("")
+  updatedAt                DateTime @updatedAt
+
+  @@map("ecommerce_settings")
 }
