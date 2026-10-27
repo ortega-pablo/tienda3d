@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { ProductionStatus, StockMovementType } from '@prisma/client';
 import type { TestingModule } from '@nestjs/testing';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { CostingService } from '../costing/costing.service';
 import { ProductionsService } from './productions.service';
 import { bootTestApp, seedFixtures, truncateAll, type Fixtures } from '../../../test/harness';
 
@@ -69,9 +70,7 @@ describe('[int] Flujo de producción', () => {
     expect(await stockOf(fx.materialId)).toBeCloseTo(before - 6, 5);
     // Dos líneas por consumo: el filamento de la pieza y el insumo de la receta.
     // Lo relevante es que sean las de UNA sola ejecución, no las de dos.
-    expect(
-      await prisma.stockMovement.count({ where: { productionId: order.id } }),
-    ).toBe(2);
+    expect(await prisma.stockMovement.count({ where: { productionId: order.id } })).toBe(2);
   });
 
   it('si el consumo falla, revierte también el cambio de estado', async () => {
@@ -102,5 +101,96 @@ describe('[int] Flujo de producción', () => {
     const codes = orders.map((o) => o.code);
     expect(new Set(codes).size).toBe(15);
     expect(codes.every((c) => /^OP-\d{4}-\d{4}$/.test(c))).toBe(true);
+  });
+});
+
+/**
+ * F2·5: una orden de llaveros fabrica solo las piezas de su escala, igual que
+ * la cotización. Antes se sumaban las piezas INDIVIDUAL y las de tanda.
+ */
+describe('[int] Producción de llaveros', () => {
+  let moduleRef: TestingModule;
+  let prisma: PrismaService;
+  let service: ProductionsService;
+  let costing: CostingService;
+  let close: () => Promise<void>;
+  let fx: Fixtures;
+  let llaveroId: string;
+
+  beforeAll(async () => {
+    ({ moduleRef, prisma, close } = await bootTestApp());
+    service = moduleRef.get(ProductionsService);
+    costing = moduleRef.get(CostingService);
+  });
+
+  afterAll(async () => {
+    await close();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(prisma);
+    fx = await seedFixtures(prisma);
+    await prisma.keychainScaleTier.createMany({
+      data: [
+        { minQty: 1, maxQty: 4, markupPct: 150, sortOrder: 1 },
+        { minQty: 5, maxQty: 24, markupPct: 120, sortOrder: 2 },
+        { minQty: 25, maxQty: 49, markupPct: 100, sortOrder: 3 },
+        { minQty: 50, maxQty: 99, markupPct: 90, sortOrder: 4 },
+        { minQty: 100, maxQty: null, markupPct: 80, sortOrder: 5 },
+      ],
+    });
+    const llavero = await prisma.product.create({
+      data: {
+        name: 'Llavero test',
+        sku: 'PTK-TEST-000009',
+        kind: 'KEYCHAIN',
+        categoryId: fx.categoryId,
+        pieces: {
+          create: [
+            {
+              name: 'Individual',
+              grams: 10,
+              printMinutes: 30,
+              defaultFilamentId: fx.filamentId,
+              scope: 'INDIVIDUAL',
+            },
+            {
+              name: 'Tanda de 5',
+              grams: 40,
+              printMinutes: 100,
+              defaultFilamentId: fx.filamentId,
+              scope: 'BATCH',
+            },
+          ],
+        },
+      },
+    });
+    llaveroId = llavero.id;
+  });
+
+  const gramosDeFilamento = async (quantity: number) => {
+    const lines = await service.previewConsumption(llaveroId, quantity);
+    const filament = lines.find((l) => l.materialId === fx.filamentId)!;
+    return Math.round(filament.recipeQty * 1000 * 1000) / 1000;
+  };
+
+  it('de 1 a 4 unidades consume solo la pieza individual', async () => {
+    expect(await gramosDeFilamento(1)).toBe(10);
+    expect(await gramosDeFilamento(4)).toBe(40);
+  });
+
+  it('desde 5 unidades consume la tanda repartida por unidad', async () => {
+    // 40 g la tanda ÷ 5 llaveros = 8 g por llavero.
+    expect(await gramosDeFilamento(10)).toBe(80);
+  });
+
+  it('el costo guardado en la orden es el de la escala, como en la cotización', async () => {
+    const uno = await service.create({ productId: llaveroId, quantity: 1 }, fx.userId);
+    const diez = await service.create({ productId: llaveroId, quantity: 10 }, fx.userId);
+
+    const individual = await costing.forProduct(llaveroId, { pieceScope: 'INDIVIDUAL' });
+    const tanda = await costing.forProduct(llaveroId, { pieceScope: 'BATCH', divideBy: 5 });
+    expect(uno.totalCostSnapshot).toBeCloseTo(individual.costWithProvisions * 1, 2);
+    expect(diez.totalCostSnapshot).toBeCloseTo(tanda.costWithProvisions * 10, 2);
   });
 });

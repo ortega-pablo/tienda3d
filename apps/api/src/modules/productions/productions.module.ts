@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { DocumentCodeService } from '@/common/utils/document-code';
 import { CostingModule } from '../costing/costing.module';
+import { KeychainScaleTiersModule } from '../keychain-scale-tiers/keychain-scale-tiers.module';
 import { ProductionsController } from './productions.controller';
 import { ProductionsService } from './productions.service';
 import { StockMovementsController } from './stock-movements.controller';
 import { StockMovementsService } from './stock-movements.service';
 
 @Module({
-  imports: [CostingModule],
+  imports: [CostingModule, KeychainScaleTiersModule],
   controllers: [ProductionsController, StockMovementsController],
   providers: [ProductionsService, StockMovementsService, DocumentCodeService],
   exports: [ProductionsService, StockMovementsService],

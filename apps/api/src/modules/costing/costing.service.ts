@@ -218,7 +218,7 @@ export class CostingService {
   async forKeychainBases(
     productId: string,
   ): Promise<{ batchSize: number; individual: CostingResult; batchUnit: CostingResult }> {
-    const batchSize = await this.loadKeychainBatchSize();
+    const batchSize = await this.keychainBatchSize();
     const [individual, batchUnit] = await Promise.all([
       this.forProduct(productId, { pieceScope: PieceScope.INDIVIDUAL }),
       this.forProduct(productId, { pieceScope: PieceScope.BATCH, divideBy: batchSize }),
@@ -226,7 +226,8 @@ export class CostingService {
     return { batchSize, individual, batchUnit };
   }
 
-  private async loadKeychainBatchSize(): Promise<number> {
+  /** Llaveros que entran en una tanda (`keychain_batch_size`, 5 por defecto). */
+  async keychainBatchSize(): Promise<number> {
     const param = await this.prisma.globalParam.findUnique({
       where: { key: 'keychain_batch_size' },
     });
