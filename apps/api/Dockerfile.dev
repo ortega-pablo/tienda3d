@@ -26,4 +26,4 @@ RUN cd apps/api && pnpm prisma:generate
 
 EXPOSE 3001
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "cd apps/api && pnpm prisma:generate && pnpm prisma migrate deploy && pnpm dev"]
+CMD ["sh", "-c", "cd apps/api && pnpm prisma:generate && pnpm dev"]

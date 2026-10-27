@@ -19,12 +19,20 @@ Ver [PLAN.md](PLAN.md) para el modelo de negocio y la arquitectura completa.
 cp .env.example .env
 # editar .env: cambiar POSTGRES_PASSWORD, API_JWT_SECRET, API_REFRESH_SECRET
 
-# 2. Levantar todo (db + api + web)
+# 2. Levantar todo (db + migrate + api + web). El servicio `migrate` aplica las
+#    migraciones antes de que arranque la API.
 docker compose up --build
 
-# 3. Inicializar DB y seed (solo la primera vez)
-docker compose exec api sh -c "cd apps/api && pnpm prisma migrate deploy && pnpm prisma:seed"
+# 3. Seed (solo la primera vez)
+docker compose run --rm -e RUN_SEED=true migrate
 ```
+
+**Migraciones y permisos de la base.** La API no migra al arrancar: lo hace el servicio `migrate`
+(`apps/api/scripts/migrate.sh`) con el dueño del esquema (`MIGRATION_DATABASE_URL`). Si se define
+`APP_DB_ROLE`, después aplica `apps/api/prisma/grants.sql`: el rol de la API puede leer y escribir
+datos pero no cambiar la estructura (es como corre en el ecosistema de `tienda-plastik-infra`). En
+este compose standalone hay un solo usuario y `APP_DB_ROLE` no se usa. La suite de integración corre
+siempre con un rol sin privilegios.
 
 Endpoints:
 

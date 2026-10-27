@@ -19,10 +19,31 @@ services:
     networks:
       - tienda3d_net
 
+  # Migraciones con el dueño del esquema, antes de la API (que no migra al
+  # arrancar). En este compose standalone hay un solo usuario de base; en el
+  # ecosistema (tienda-plastik-infra) migra el dueño y la API usa un rol sin
+  # DDL (APP_DB_ROLE + prisma/grants.sql).
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: tienda3d-api:local
+    container_name: tienda3d_migrate
+    restart: "no"
+    command: ["sh", "scripts/with-secrets.sh", "sh", "scripts/migrate.sh"]
+    environment:
+      MIGRATION_DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - tienda3d_net
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+    image: tienda3d-api:local
     container_name: tienda3d_api
     restart: unless-stopped
     environment:
@@ -37,8 +58,8 @@ services:
     ports:
       - "${API_PORT:-3001}:3001"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
