@@ -183,7 +183,7 @@ export class ProductsService {
     return this.toDto(p, includeNotes);
   }
 
-  async create(input: ProductInput): Promise<ProductDto> {
+  async create(input: ProductInput, includeNotes = false): Promise<ProductDto> {
     if (!input.machineId) {
       throw new BadRequestException(
         'Asigná la máquina (impresora) en la que se fabrica este producto.',
@@ -248,10 +248,16 @@ export class ProductsService {
       },
     });
     // El creador (si es admin) recibe las notas de vuelta; si no, quedan null.
-    return this.get(product.id, true);
+    return this.get(product.id, includeNotes);
   }
 
-  async update(id: string, input: ProductInput): Promise<ProductDto> {
+  /**
+   * Reemplaza la ficha del producto, pero lo que el payload no trae se conserva:
+   * `isActive` omitido no reactiva un producto archivado y `channels` omitido
+   * no toca sus canales (antes se re-habilitaban Directa y Efectivo, y la
+   * tienda online publicaría un canal que se quiso apagar).
+   */
+  async update(id: string, input: ProductInput, includeNotes = false): Promise<ProductDto> {
     const exists = await this.prisma.product.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Producto inexistente');
     // El SKU es inmutable: se asigna al crear y nunca cambia (incluso si el
@@ -278,7 +284,7 @@ export class ProductsService {
     const kind = exists.kind;
     this.assertPieceScopes(kind, input.pieces);
 
-    const channelsToPersist = await this.resolveChannels(input.channels);
+    const channelsToPersist = input.channels ?? [];
     await this.validateChannels(channelsToPersist);
 
     await this.prisma.$transaction(async (tx) => {
@@ -292,7 +298,7 @@ export class ProductsService {
           // undefined para usuarios no administrativos.
           ...(input.notes !== undefined ? { notes: input.notes } : {}),
           imageUrl: input.imageUrl ?? null,
-          isActive: input.isActive ?? true,
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           marketingMonthly: input.marketingMonthly,
           estimatedUnitsMonth: input.estimatedUnitsMonth,
           assemblyMinutes: input.assemblyMinutes,
@@ -345,7 +351,7 @@ export class ProductsService {
         });
       }
     });
-    return this.get(id, true);
+    return this.get(id, includeNotes);
   }
 
   async remove(id: string): Promise<void> {
