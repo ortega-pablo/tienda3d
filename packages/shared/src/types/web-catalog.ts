@@ -1,4 +1,8 @@
-import type { WebProductStatusValue } from '../schemas/web-catalog';
+import type {
+  WebAvailabilityValue,
+  WebProductStatusValue,
+  WebSaleStateValue,
+} from '../schemas/web-catalog';
 
 /** Producto del sistema que es variante (tamaño, modelo) de una publicación. */
 export interface WebProductMemberDto {
@@ -56,6 +60,46 @@ export interface WebAttributeDto {
   values: WebAttributeValueDto[];
 }
 
+/** Un valor elegido de la combinación: un color o un valor de una opción informativa. */
+export interface WebVariantOptionDto {
+  kind: 'color' | 'attribute';
+  /** Opción de color o atributo. */
+  optionId: string;
+  /** Material (color) o valor del atributo. */
+  valueId: string;
+  label: string;
+  colorHex: string | null;
+}
+
+/** Combinación vendible, con su SKU `<SKU del producto>-VNN` (D15). */
+export interface WebVariantDto {
+  id: string;
+  sku: string;
+  memberId: string;
+  memberLabel: string;
+  isActive: boolean;
+  /** La sacó de venta el admin: regenerar no la reactiva. */
+  pausedByAdmin: boolean;
+  availability: WebAvailabilityValue;
+  stockQuantity: number;
+  maxPerOrder: number | null;
+  leadTimeDays: number | null;
+  imageId: string | null;
+  legacySku: string | null;
+  options: WebVariantOptionDto[];
+  /** Cómo se vende hoy (D9). */
+  sale: { state: WebSaleStateValue; maxQuantity: number };
+}
+
+export interface WebVariantsRegenerateResultDto {
+  created: number;
+  kept: number;
+  reactivated: number;
+  paused: number;
+  deactivated: number;
+  product: WebProductDto;
+}
+
 export interface WebProductDto {
   id: string;
   slug: string;
@@ -72,6 +116,7 @@ export interface WebProductDto {
   members: WebProductMemberDto[];
   colorOptions: WebColorOptionDto[];
   attributes: WebAttributeDto[];
+  variants: WebVariantDto[];
   /** Slugs anteriores, que el sitio redirige al actual. */
   previousSlugs: string[];
   createdAt: string;

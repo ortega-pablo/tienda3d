@@ -5,11 +5,13 @@ import {
   webProductCreateSchema,
   webProductMembersSchema,
   webProductUpdateSchema,
+  webVariantUpdateSchema,
   type WebAttributesInput,
   type WebColorOptionsInput,
   type WebProductCreateInput,
   type WebProductMembersInput,
   type WebProductUpdateInput,
+  type WebVariantUpdateInput,
 } from '@tienda3d/shared';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
@@ -19,6 +21,7 @@ import type { AccessPayload } from '../auth/auth.service';
 import { WebAttributesService } from './web-attributes.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
+import { WebVariantsService } from './web-variants.service';
 
 /** Gestión de la tienda online. Solo el rol admin tiene ecommerce:* (F4·1). */
 @UseGuards(PermissionsGuard)
@@ -28,6 +31,7 @@ export class WebCatalogController {
     private readonly products: WebProductsService,
     private readonly colorOptions: WebColorOptionsService,
     private readonly attributes: WebAttributesService,
+    private readonly variants: WebVariantsService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -89,5 +93,21 @@ export class WebCatalogController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.attributes.set(id, body.attributes, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Post('products/:id/variants/regenerate')
+  regenerateVariants(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    return this.variants.regenerate(id, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Patch('variants/:id')
+  updateVariant(
+    @Param('id') id: string,
+    @Body(ZodValidation(webVariantUpdateSchema)) body: WebVariantUpdateInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.variants.update(id, body, user.sub);
   }
 }

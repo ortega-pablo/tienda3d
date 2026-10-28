@@ -1047,6 +1047,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - `PATCH /web-catalog/variants/:id` para activa, disponibilidad (D9), stock, máximo por pedido, plazo y foto.
     - Portar las reglas de disponibilidad de `storefront/src/domain/catalog.ts` (`variantAvailability`) a un dominio puro con tests.
   - Cierra cuando: regenerar la Trapecio (2 miembros × 4 colores) da 8 variantes; quitar un color desactiva 2 y conservarlo no cambia los SKU.
+  - Hecho así: dominios puros `domain/variant-plan.ts` (plan por `selectionKey` + `nextVariantSkus`) y `domain/availability.ts` (D9: `IN_STOCK` / `MADE_TO_ORDER` / `OUT_OF_STOCK` y tope por pedido, 20 por defecto como el sitio). Regenerar reactiva las variantes que vuelven a la matriz (por ejemplo, un color re-agregado) salvo las que el admin sacó de venta a mano (`pausedByAdmin`, migración nueva); prender a mano una variante cuya combinación ya no existe se rechaza. Un color inactivo en Insumos sale de la matriz. Tope de 200 combinaciones por publicación. El DTO de la publicación trae las variantes con su estado de venta.
 - [ ] **F5·6 [t3d] Las categorías de la tienda se gestionan aparte de las de precios**
   - Para qué: ordenar la vidriera sin cambiar ningún precio.
   - Qué hacer: CRUD `/web-catalog/categories` (dos niveles, slug, descripción, foto y orden) y la asignación a publicaciones.
