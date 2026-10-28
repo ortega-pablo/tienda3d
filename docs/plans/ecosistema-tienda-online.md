@@ -1287,6 +1287,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: que un reintento no duplique pedidos ni clientes.
   - Qué hacer: tabla `inbound_events`. Los endpoints de §5.5 deduplican por `eventId` o `externalId`.
   - Cierra cuando: mandar dos veces el mismo evento produce un solo efecto (test).
+  - Hecho así: tabla `inbound_events` (`source` + `key` únicos, respuesta guardada) e `InboundEventsService.once(fuente, clave, efecto)`, global: reserva la clave y aplica el efecto en la misma transacción. Un reintento devuelve la respuesta guardada; dos llamadas simultáneas dan un solo efecto (la segunda espera el índice único); si el efecto falla, la clave no queda tomada. Los endpoints de §5.5 (F13–F15) lo usan con `eventId` o `externalId`.
 - [ ] **F11·5 [sf][infra] El sitio recibe avisos y reintenta los suyos**
   - Para qué: que del lado del sitio tampoco se pierda ni se duplique nada.
   - Qué hacer:

@@ -1286,3 +1286,18 @@ model OutboxEvent {
   @@index([deliveredAt, failedAt, nextAttemptAt])
   @@map("outbox_events")
 }
+
+/// Lo que el sitio ya le pidió al sistema (plan F11·4): un reintento con la misma
+/// clave (eventId o externalId) no repite el efecto y recibe la misma respuesta.
+model InboundEvent {
+  id        String   @id @default(cuid())
+  /// Quién y qué: "storefront:orders", "storefront:customers"…
+  source    String
+  /// eventId o externalId que mandó el sitio.
+  key       String
+  response  Json?
+  createdAt DateTime @default(now())
+
+  @@unique([source, key])
+  @@map("inbound_events")
+}
