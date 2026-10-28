@@ -208,6 +208,12 @@ export const NAVIGATION: NavGroup[] = [
         icon: FolderTree,
         permissions: ['ecommerce:read'],
       },
+      {
+        label: 'Ajustes de la tienda',
+        href: '/tienda-online/ajustes',
+        icon: Cog,
+        permissions: ['ecommerce:settings'],
+      },
     ],
   },
 ];

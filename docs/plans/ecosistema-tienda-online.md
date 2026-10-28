@@ -1182,7 +1182,8 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 - [ ] **F8·6 [t3d] El admin cambia las condiciones de venta de la tienda**
   - Para qué: actualizar envíos, retiro y transferencia sin depender de un desarrollador.
   - Qué hacer: `/tienda-online/ajustes` (envíos, retiro, transferencia y email de avisos).
-  - Cierra cuando: guardar cambia lo que muestra el checkout (después de F12).
+  - Cierra cuando: el formulario guarda y valida contra la API (recorrido en el ecosistema). ~~guardar cambia lo que muestra el checkout (después de F12)~~ → pasa a la verificación de F12, que es cuando el sitio lee `store_settings`.
+  - Hecho así: formulario con `useEditMode` (Editar / Cancelar / Guardar) visible con `ecommerce:settings`; los montos se escriben como en Argentina ("4.500" son cuatro mil quinientos, "4.500,50" con decimales). Recorrido con Playwright: transferencia sin datos rechazada con el mensaje de la API, guardado y persistido al recargar ([captura](anexos/capturas/f8-6-ajustes.jpg)). Al pasar, `handleApiError` muestra el detalle de validación de la API cuando es un mensaje propio en castellano (antes solo "Validación fallida"); los mensajes por defecto de zod, en inglés, siguen mostrando el genérico.
 - [ ] **F8·7 [t3d] Las pantallas de la tienda usan los mismos tipos que la API**
   - Para qué: que un cambio en la API que rompa el panel se detecte al compilar.
   - Qué hacer: las pantallas nuevas usan los DTOs de `packages/shared` y no los redeclaran.
@@ -1333,7 +1334,7 @@ contenedor apagado.
   - Qué hacer: las líneas guardan ids de `storefront_v1.variants`, y precio, disponibilidad y máximo salen de la vista (D3: precio de cantidad 1).
   - Cierra cuando: ocultar un producto en el panel lo saca del carrito con aviso ("ya no está disponible").
 
-**Verificación:** verificación mínima de [sf], y e2e de catálogo y carrito adaptadas al ecosistema.
+**Verificación:** verificación mínima de [sf], y e2e de catálogo y carrito adaptadas al ecosistema. Además, cambiar un ajuste en `/tienda-online/ajustes` cambia lo que muestra el checkout (criterio que viene de F8·6).
 Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
 
 ---
