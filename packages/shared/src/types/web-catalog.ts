@@ -1,5 +1,6 @@
 import type {
   WebAvailabilityValue,
+  WebPriceStateValue,
   WebProductStatusValue,
   WebSaleStateValue,
 } from '../schemas/web-catalog';
@@ -181,6 +182,26 @@ export interface EcommerceSettingsDto {
   bankTransferInstructions: string;
   notificationEmail: string;
   updatedAt: string | null;
+}
+
+export interface WebPriceHistoryEntryDto {
+  changedAt: string;
+  previous: number | null;
+  price: number | null;
+  /** Qué lo cambió: "Precio de insumo", "Markup de categoría", "Alta en la tienda"… */
+  cause: string;
+}
+
+/** Precio publicado de un producto del sistema (Venta Directa, cliente normal, cantidad 1). */
+export interface WebPriceDto {
+  productId: string;
+  state: WebPriceStateValue | null;
+  price: number | null;
+  /** Por qué no hay precio y cómo resolverlo. */
+  reason: string | null;
+  computedAt: string | null;
+  /** Los últimos cambios, del más nuevo al más viejo. */
+  history: WebPriceHistoryEntryDto[];
 }
 
 export interface WebProductSummaryDto {
