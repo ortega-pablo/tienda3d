@@ -30,6 +30,7 @@ import { RolesModule } from './modules/roles/roles.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { UsersModule } from './modules/users/users.module';
 import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
+import { StorefrontIntegrationModule } from './modules/storefront-integration/storefront-integration.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
     ChannelsModule,
     CategoriesModule,
     WebCatalogModule,
+    StorefrontIntegrationModule,
     ProductsModule,
     CustomersModule,
     QuotesModule,
