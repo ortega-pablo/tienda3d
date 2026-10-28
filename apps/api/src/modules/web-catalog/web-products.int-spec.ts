@@ -171,4 +171,23 @@ describe('[int] Publicaciones de la tienda online', () => {
     });
     expect(entradas.map((e) => e.action)).toEqual(['create']);
   });
+
+  it('el listado trae el rango de precios y las alertas (F7·4)', async () => {
+    await service.create(
+      {
+        name: 'Trapecio',
+        members: [
+          { productId: fx.productId, valueLabel: '280' },
+          { productId: trapecio390, valueLabel: '390' },
+        ],
+      },
+      fx.userId,
+    );
+
+    const [fila] = await service.list();
+    // Los dos tienen precio (entrar a la tienda lo calcula); el 390 pesa más.
+    expect(fila!.priceMin).not.toBeNull();
+    expect(fila!.priceMax).toBeGreaterThan(fila!.priceMin!);
+    expect(fila!.alerts).toEqual(['NO_IMAGES', 'NO_VARIANTS']);
+  });
 });

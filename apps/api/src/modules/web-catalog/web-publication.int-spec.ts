@@ -4,6 +4,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { CatalogEvents } from './catalog-events';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
+import { WebPriceService } from './web-price.service';
 import { WebPublicationService } from './web-publication.service';
 import { WebVariantsService } from './web-variants.service';
 import { bootTestApp, seedFixtures, truncateAll, type Fixtures } from '../../../test/harness';
@@ -102,7 +103,7 @@ describe('[int] Publicar y ocultar en la tienda online', () => {
         missing: [
           'Tiene descripción',
           'Tiene al menos una foto',
-          'Tiene al menos una variante activa con precio',
+          'Tiene al menos una variante activa con precio — No hay variantes activas: generá las variantes.',
         ],
       },
     });
@@ -165,5 +166,61 @@ describe('[int] Publicar y ocultar en la tienda online', () => {
 
   it('un borrador no se puede ocultar', async () => {
     await expect(service.hide(pubId, fx.userId)).rejects.toThrow(/nunca se publicó/);
+  });
+
+  describe('sin precio (F7·4)', () => {
+    let sinMarkup: string;
+    beforeEach(async () => {
+      // Una categoría sin markup, ni propio ni heredado: el producto no tiene precio.
+      sinMarkup = (
+        await prisma.category.create({ data: { name: 'Sin markup', slug: 'sin-markup' } })
+      ).id;
+      await prisma.product.update({ where: { id: fx.productId }, data: { categoryId: sinMarkup } });
+    });
+
+    it('un producto sin markup no se puede publicar y el mensaje dice cómo resolverlo', async () => {
+      await products.update(pubId, { description: 'Maceta facetada.' }, fx.userId);
+      await prisma.webImage.create({
+        data: { webProductId: pubId, path: 'catalog/maceta.webp', width: 800, height: 800 },
+      });
+      await moduleRef
+        .get(WebColorOptionsService)
+        .set(
+          pubId,
+          [{ label: 'Color', filamentLineId: fx.filamentId, colorIds: [negro] }],
+          fx.userId,
+        );
+      await moduleRef.get(WebVariantsService).regenerate(pubId, fx.userId);
+      await moduleRef.get(WebPriceService).refresh(fx.productId, 'Producto editado');
+
+      const error = await service.publish(pubId, fx.userId).catch((e: unknown) => e);
+      expect(error).toMatchObject({ status: 422 });
+      const { message } = (error as { response: { message: string } }).response;
+      expect(message).toMatch(/«Producto test»: La categoría no tiene markup/);
+      expect(message).toMatch(/cargalo en Categorías/);
+
+      // Resuelto el markup y recalculado el precio, se publica.
+      await prisma.category.update({ where: { id: sinMarkup }, data: { baseMarkupPct: 60 } });
+      await moduleRef.get(WebPriceService).refresh(fx.productId, 'Markup de categoría');
+      expect((await service.publish(pubId, fx.userId)).status).toBe('PUBLISHED');
+    });
+
+    it('el listado y la ficha marcan el producto sin precio y por qué', async () => {
+      await moduleRef.get(WebPriceService).refresh(fx.productId, 'Producto editado');
+
+      const [fila] = await products.list();
+      expect(fila).toMatchObject({
+        priceMin: null,
+        priceMax: null,
+        activeVariantCount: 0,
+        alerts: ['NO_PRICE', 'NO_IMAGES', 'NO_VARIANTS'],
+      });
+      const ficha = await products.get(pubId);
+      expect(ficha.members[0]).toMatchObject({
+        priceState: 'NO_PRICE',
+        price: null,
+        priceReason: expect.stringMatching(/no tiene markup/),
+      });
+    });
   });
 });

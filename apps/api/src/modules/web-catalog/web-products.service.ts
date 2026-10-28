@@ -4,10 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ChannelKind, Prisma } from '@prisma/client';
+import { ChannelKind, Prisma, WebPriceState } from '@prisma/client';
 import type {
   WebProductCreateInput,
   WebProductDto,
+  WebProductAlert,
   WebProductMemberInput,
   WebProductSummaryDto,
   WebProductUpdateInput,
@@ -22,7 +23,15 @@ import { WebPriceService } from './web-price.service';
 const DETAIL_INCLUDE = {
   members: {
     orderBy: { sortOrder: 'asc' },
-    include: { product: { select: { name: true, sku: true } } },
+    include: {
+      product: {
+        select: {
+          name: true,
+          sku: true,
+          webPrice: { select: { state: true, price: true, reason: true } },
+        },
+      },
+    },
   },
   colorOptions: {
     orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }],
@@ -85,17 +94,47 @@ export class WebProductsService {
   async list(): Promise<WebProductSummaryDto[]> {
     const rows = await this.prisma.webProduct.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { members: true, variants: true } } },
+      include: {
+        _count: { select: { members: true, variants: true, images: true } },
+        members: {
+          where: { isActive: true },
+          select: { product: { select: { webPrice: { select: { state: true, price: true } } } } },
+        },
+        variants: { where: { isActive: true }, select: { id: true } },
+        colorOptions: {
+          where: { isActive: true },
+          select: { values: { select: { material: { select: { isActive: true } } } } },
+        },
+      },
     });
-    return rows.map((p) => ({
-      id: p.id,
-      slug: p.slug,
-      name: p.name,
-      status: p.status,
-      memberCount: p._count.members,
-      variantCount: p._count.variants,
-      updatedAt: p.updatedAt.toISOString(),
-    }));
+    return rows.map((p) => {
+      const prices = p.members
+        .map((m) => m.product.webPrice)
+        .filter((w) => w?.state === WebPriceState.OK && w.price != null)
+        .map((w) => Number(w!.price));
+      const alerts: WebProductAlert[] = [];
+      if (p.members.some((m) => m.product.webPrice?.state !== WebPriceState.OK)) {
+        alerts.push('NO_PRICE');
+      }
+      if (p.colorOptions.some((o) => o.values.some((v) => !v.material.isActive))) {
+        alerts.push('INACTIVE_COLOR');
+      }
+      if (p._count.images === 0) alerts.push('NO_IMAGES');
+      if (p.variants.length === 0) alerts.push('NO_VARIANTS');
+      return {
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        status: p.status,
+        memberCount: p._count.members,
+        variantCount: p._count.variants,
+        activeVariantCount: p.variants.length,
+        priceMin: prices.length ? Math.min(...prices) : null,
+        priceMax: prices.length ? Math.max(...prices) : null,
+        alerts,
+        updatedAt: p.updatedAt.toISOString(),
+      };
+    });
   }
 
   async get(id: string): Promise<WebProductDto> {
@@ -320,6 +359,9 @@ function toDto(p: WebProductWithDetail): WebProductDto {
       valueLabel: m.valueLabel,
       sortOrder: m.sortOrder,
       isActive: m.isActive,
+      priceState: m.product.webPrice?.state ?? null,
+      price: m.product.webPrice?.price == null ? null : Number(m.product.webPrice.price),
+      priceReason: m.product.webPrice?.reason ?? null,
     })),
     colorOptions: p.colorOptions.map((o) => ({
       id: o.id,
