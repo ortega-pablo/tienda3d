@@ -11,9 +11,12 @@ import type {
   WebProductMemberInput,
   WebProductSummaryDto,
   WebProductUpdateInput,
+  WebVariantDto,
+  WebVariantOptionDto,
 } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { variantAvailability } from './domain/availability';
 
 const DETAIL_INCLUDE = {
   members: {
@@ -41,6 +44,19 @@ const DETAIL_INCLUDE = {
   attributes: {
     orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }],
     include: { values: { orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }] } },
+  },
+  variants: {
+    orderBy: [{ isActive: 'desc' }, { sku: 'asc' }],
+    include: {
+      member: { select: { valueLabel: true, product: { select: { name: true } } } },
+      selections: {
+        orderBy: { id: 'asc' },
+        include: {
+          material: { select: { name: true, color: true, colorHex: true } },
+          attributeValue: { select: { label: true, attributeId: true } },
+        },
+      },
+    },
   },
   slugHistory: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.WebProductInclude;
@@ -326,9 +342,56 @@ function toDto(p: WebProductWithDetail): WebProductDto {
         isActive: v.isActive,
       })),
     })),
+    variants: p.variants.map(toVariantDto),
     previousSlugs: p.slugHistory.map((s) => s.slug),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
+  };
+}
+
+function toVariantDto(v: WebProductWithDetail['variants'][number]): WebVariantDto {
+  const options: WebVariantOptionDto[] = v.selections.flatMap((s): WebVariantOptionDto[] => {
+    if (s.colorOptionId && s.materialId && s.material) {
+      return [
+        {
+          kind: 'color',
+          optionId: s.colorOptionId,
+          valueId: s.materialId,
+          label: s.material.color ?? s.material.name,
+          colorHex: s.material.colorHex,
+        },
+      ];
+    }
+    if (s.attributeValueId && s.attributeValue) {
+      return [
+        {
+          kind: 'attribute',
+          optionId: s.attributeValue.attributeId,
+          valueId: s.attributeValueId,
+          label: s.attributeValue.label,
+          colorHex: null,
+        },
+      ];
+    }
+    return [];
+  });
+  // Primero los colores, después las opciones informativas.
+  options.sort((a, b) => Number(a.kind === 'attribute') - Number(b.kind === 'attribute'));
+  return {
+    id: v.id,
+    sku: v.sku,
+    memberId: v.memberId,
+    memberLabel: v.member.valueLabel || v.member.product.name,
+    isActive: v.isActive,
+    pausedByAdmin: v.pausedByAdmin,
+    availability: v.availability,
+    stockQuantity: v.stockQuantity,
+    maxPerOrder: v.maxPerOrder,
+    leadTimeDays: v.leadTimeDays,
+    imageId: v.imageId,
+    legacySku: v.legacySku,
+    options,
+    sale: variantAvailability(v),
   };
 }
 

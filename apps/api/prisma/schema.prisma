@@ -1108,6 +1108,8 @@ model WebVariant {
   /// Clave canónica de la combinación, única dentro de la publicación.
   selectionKey  String
   isActive      Boolean          @default(true)
+  /// El admin la sacó de venta a mano: regenerar no la reactiva.
+  pausedByAdmin Boolean          @default(false)
   availability  WebAvailability  @default(MADE_TO_ORDER)
   stockQuantity Int              @default(0)
   maxPerOrder   Int?

@@ -112,3 +112,21 @@ export const webAttributesSchema = z.object({
   attributes: z.array(webAttributeInputSchema).max(5),
 });
 export type WebAttributesInput = z.infer<typeof webAttributesSchema>;
+
+/** Si una variante se puede comprar ahora (resultado de D9, no se guarda). */
+export const webSaleStateSchema = z.enum(['IN_STOCK', 'MADE_TO_ORDER', 'OUT_OF_STOCK']);
+export type WebSaleStateValue = z.infer<typeof webSaleStateSchema>;
+
+/** Edición en línea de una variante desde el panel. */
+export const webVariantUpdateSchema = z
+  .object({
+    isActive: z.boolean(),
+    availability: webAvailabilitySchema,
+    stockQuantity: z.number().int().min(0).max(100_000),
+    maxPerOrder: z.number().int().min(1).max(999).nullable(),
+    leadTimeDays: z.number().int().min(0).max(365).nullable(),
+    imageId: z.string().min(1).nullable(),
+  })
+  .partial()
+  .strict();
+export type WebVariantUpdateInput = z.infer<typeof webVariantUpdateSchema>;
