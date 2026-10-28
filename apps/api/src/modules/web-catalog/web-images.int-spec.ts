@@ -2,18 +2,19 @@ import type { INestApplication } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import request from 'supertest';
-import type { WebProductDto } from '@tienda3d/shared';
+import type { WebCategoryDto, WebProductDto } from '@tienda3d/shared';
 import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { StorageService } from '@/common/storage/storage.service';
 import { AppModule } from '@/app.module';
 import { MaterialType, MaterialUnit } from '@prisma/client';
+import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
 import { seedFixtures, truncateAll, type Fixtures } from '../../../test/harness';
@@ -251,6 +252,62 @@ describe('[int] Fotos de la tienda online', () => {
 
       await media(imagen!.path, sinPermiso).expect(403);
       await request(app.getHttpServer()).get(`/web-catalog/media/${imagen!.path}`).expect(401);
+    });
+  });
+
+  describe('foto de una categoría (F6·4)', () => {
+    let categoryId: string;
+    beforeEach(async () => {
+      categoryId = (await app.get(WebCategoriesService).create({ name: 'Lámparas' }, fx.userId)).id;
+    });
+
+    const subirFoto = (data: Buffer, filename = 'tarjeta.jpg') =>
+      request(app.getHttpServer())
+        .post(`/web-catalog/categories/${categoryId}/image`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', data, { filename });
+    const existe = (path: string) =>
+      access(join(base, 'media', path)).then(
+        () => true,
+        () => false,
+      );
+
+    it('sube y reemplaza, y el archivo viejo se borra', async () => {
+      const primera = (await subirFoto(await jpg(1200, 800)).expect(201)).body as WebCategoryDto;
+      expect(primera.imagePath).toMatch(
+        new RegExp(`^categories/${categoryId}/[0-9a-f-]{36}\\.webp$`),
+      );
+      expect(await existe(primera.imagePath!)).toBe(true);
+
+      const segunda = (await subirFoto(await jpg(900, 900)).expect(201)).body as WebCategoryDto;
+      expect(segunda.imagePath).not.toBe(primera.imagePath);
+      expect(await existe(segunda.imagePath!)).toBe(true);
+      expect(await existe(primera.imagePath!)).toBe(false);
+    });
+
+    it('quitarla o borrar la categoría borra el archivo', async () => {
+      const con = (await subirFoto(await jpg(400, 300)).expect(201)).body as WebCategoryDto;
+      const sin = await request(app.getHttpServer())
+        .delete(`/web-catalog/categories/${categoryId}/image`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect((sin.body as WebCategoryDto).imagePath).toBeNull();
+      expect(await existe(con.imagePath!)).toBe(false);
+
+      const otra = (await subirFoto(await jpg(400, 300)).expect(201)).body as WebCategoryDto;
+      await request(app.getHttpServer())
+        .delete(`/web-catalog/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+      expect(await existe(otra.imagePath!)).toBe(false);
+    });
+
+    it('rechaza lo que no es una foto y no toca la que había', async () => {
+      const con = (await subirFoto(await jpg(400, 300)).expect(201)).body as WebCategoryDto;
+      await subirFoto(Buffer.from('texto'), 'falsa.jpg').expect(400);
+      const leida = await prisma.webCategory.findUniqueOrThrow({ where: { id: categoryId } });
+      expect(leida.imagePath).toBe(con.imagePath);
+      expect(await existe(con.imagePath!)).toBe(true);
     });
   });
 });
