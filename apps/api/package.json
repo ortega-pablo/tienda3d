@@ -22,7 +22,8 @@
     "integration:revoke": "tsx scripts/integration-key.ts revoke",
     "integration:list": "tsx scripts/integration-key.ts list",
     "integration:register": "tsx scripts/integration-key.ts register",
-    "store:colors": "tsx scripts/store-colors.ts"
+    "store:colors": "tsx scripts/store-colors.ts",
+    "catalog:import": "node dist/modules/catalog-import/import-storefront-catalog.cli.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
