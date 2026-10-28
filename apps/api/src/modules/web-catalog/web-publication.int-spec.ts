@@ -223,4 +223,12 @@ describe('[int] Publicar y ocultar en la tienda online', () => {
       });
     });
   });
+
+  it('desde un producto del sistema se encuentra su publicación (F8·2)', async () => {
+    expect((await products.findByProduct(fx.productId))?.id).toBe(pubId);
+    const suelto = await prisma.product.create({
+      data: { name: 'Suelto', sku: 'PTK-TEST-000077', categoryId: fx.categoryId },
+    });
+    expect(await products.findByProduct(suelto.id)).toBeNull();
+  });
 });

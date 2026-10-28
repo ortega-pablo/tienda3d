@@ -152,6 +152,15 @@ export class WebProductsService {
     return toDto(product);
   }
 
+  /** La publicación en la que está un producto del sistema, si está en alguna. */
+  async findByProduct(productId: string): Promise<WebProductDto | null> {
+    const member = await this.prisma.webProductMember.findUnique({
+      where: { productId },
+      select: { webProductId: true },
+    });
+    return member ? this.get(member.webProductId) : null;
+  }
+
   async create(input: WebProductCreateInput, actorId: string): Promise<WebProductDto> {
     const slug = input.slug ?? slugify(input.name);
     if (!slug) throw new BadRequestException('El nombre no genera un slug válido: cargalo a mano.');

@@ -214,6 +214,14 @@ export interface WebPriceDto {
 /** Lo que el listado de publicaciones marca (F7·4, F8·3). */
 export type WebProductAlert = 'NO_PRICE' | 'INACTIVE_COLOR' | 'NO_IMAGES' | 'NO_VARIANTS';
 
+/** La tienda vista desde la ficha de un producto del sistema (F8·2). */
+export interface SystemProductWebDto {
+  /** La publicación en la que está; null si todavía no se vende en la web. */
+  publication: WebProductDto | null;
+  checklist: WebPublishChecklistDto | null;
+  price: WebPriceDto;
+}
+
 export interface WebProductSummaryDto {
   id: string;
   slug: string;

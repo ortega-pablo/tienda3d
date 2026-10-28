@@ -27,6 +27,7 @@ import {
   webProductUpdateSchema,
   webVariantUpdateSchema,
   type EcommerceSettingsInput,
+  type SystemProductWebDto,
   type WebAttributesInput,
   type WebCategoryCreateInput,
   type WebCategoryUpdateInput,
@@ -295,5 +296,20 @@ export class WebCatalogController {
   @Get('prices/:productId/history')
   priceHistory(@Param('productId') productId: string) {
     return this.prices.history(productId);
+  }
+
+  /** La tienda desde la ficha de un producto del sistema (F8·2). */
+  @Permissions('ecommerce:read')
+  @Get('by-product/:productId')
+  async byProduct(@Param('productId') productId: string): Promise<SystemProductWebDto> {
+    const [publication, price] = await Promise.all([
+      this.products.findByProduct(productId),
+      this.prices.history(productId, 5),
+    ]);
+    return {
+      publication,
+      checklist: publication ? await this.publication.checklist(publication.id) : null,
+      price,
+    };
   }
 }
