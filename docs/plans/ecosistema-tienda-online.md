@@ -1089,6 +1089,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - `PATCH …/images/:imageId` (alt, posición, color) y `DELETE` (borra la fila y el archivo).
     - El límite JSON global de `1mb` no aplica a esta ruta.
   - Cierra cuando: hay tests con un JPG real, un archivo `.jpg` que en realidad es texto (rechazado) y uno de 16 MB (rechazado).
+  - Hecho así: `FilesInterceptor` (campo `files`, hasta 10, 15 MB c/u, en memoria). `common/storage/images.ts` reconoce JPG/PNG/WebP por sus primeros bytes y convierte con `sharp` (gira según EXIF, máximo 2000 px sin agrandar, WebP calidad 82, sin metadatos, tope de 60 MP contra bombas de descompresión); lo reusa F6·4. Si una foto del lote no sirve, no se guarda ninguna. Tope de 30 fotos por publicación. Reordenar mueve la foto y renumera la galería; la foto de un color tiene que ser de un color ofrecido. `sharp` probado en la imagen Alpine de la API.
 - [ ] **F6·3 [t3d] El panel muestra las fotos subidas**
   - Para qué: ver la galería mientras se arma la publicación.
   - Qué hacer: `GET /web-catalog/media/*` autenticado (`ecommerce:read`), con `Cache-Control` privado.

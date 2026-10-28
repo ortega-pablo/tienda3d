@@ -4,6 +4,7 @@ import { WebCatalogController } from './web-catalog.controller';
 import { WebAttributesService } from './web-attributes.service';
 import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
+import { WebImagesService } from './web-images.service';
 import { WebProductsService } from './web-products.service';
 import { WebPublicationService } from './web-publication.service';
 import { WebSettingsService } from './web-settings.service';
@@ -20,6 +21,7 @@ import { WebVariantsService } from './web-variants.service';
     WebCategoriesService,
     WebPublicationService,
     WebSettingsService,
+    WebImagesService,
     // El outbox real llega con F11·3.
     { provide: CatalogEvents, useClass: NoopCatalogEvents },
   ],

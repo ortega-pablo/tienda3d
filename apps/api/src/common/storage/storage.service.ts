@@ -1,11 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
 
 /** `media` se publica (el sitio lo lee); `private` no sale nunca del sistema. */
 export type StorageArea = 'media' | 'private';
+
+/** Carpeta raíz de cada área (`MEDIA_DIR`, `PRIVATE_DIR`). */
+export type StorageRoots = Record<StorageArea, string>;
+export const STORAGE_ROOTS = Symbol('STORAGE_ROOTS');
 
 /** Extensiones que el sistema guarda. Las fotos se convierten a WebP (F6·2). */
 const EXTENSIONS = new Set(['webp', 'pdf', 'json']);
@@ -23,13 +26,10 @@ const RELATIVE_PATH = /^(?:[a-z0-9][a-z0-9_-]{0,63}\/)*[a-z0-9][a-z0-9_-]{0,63}\
  */
 @Injectable()
 export class StorageService {
-  private readonly roots: Record<StorageArea, string>;
+  private readonly roots: StorageRoots;
 
-  constructor(config: ConfigService) {
-    this.roots = {
-      media: resolve(config.getOrThrow<string>('MEDIA_DIR')),
-      private: resolve(config.getOrThrow<string>('PRIVATE_DIR')),
-    };
+  constructor(@Inject(STORAGE_ROOTS) roots: StorageRoots) {
+    this.roots = { media: resolve(roots.media), private: resolve(roots.private) };
   }
 
   /** Guarda un archivo nuevo y devuelve su ruta relativa a la raíz del área. */

@@ -196,3 +196,16 @@ export const ecommerceSettingsSchema = z
     message: 'La tienda tiene que ofrecer retiro o envío.',
   });
 export type EcommerceSettingsInput = z.infer<typeof ecommerceSettingsSchema>;
+
+/** Datos editables de una foto de la galería (F6·2). El archivo no se reemplaza: se sube otra. */
+export const webImageUpdateSchema = z
+  .object({
+    alt: z.string().trim().max(200),
+    /** Lugar en la galería (0 = portada); las demás se corren. */
+    position: z.number().int().min(0),
+    /** Foto de un color: se muestra al elegirlo. Tiene que ser un color ofrecido. */
+    colorMaterialId: z.string().min(1).nullable(),
+  })
+  .partial()
+  .strict();
+export type WebImageUpdateInput = z.infer<typeof webImageUpdateSchema>;

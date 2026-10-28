@@ -8,13 +8,17 @@ import {
   Patch,
   Post,
   Put,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ecommerceSettingsSchema,
   webAttributesSchema,
   webCategoryCreateSchema,
   webCategoryUpdateSchema,
+  webImageUpdateSchema,
   webColorOptionsSchema,
   webProductCreateSchema,
   webProductCategoriesSchema,
@@ -25,6 +29,7 @@ import {
   type WebAttributesInput,
   type WebCategoryCreateInput,
   type WebCategoryUpdateInput,
+  type WebImageUpdateInput,
   type WebColorOptionsInput,
   type WebProductCreateInput,
   type WebProductCategoriesInput,
@@ -35,11 +40,13 @@ import {
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
+import { IMAGE_UPLOAD } from '@/common/storage/images';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
 import { WebAttributesService } from './web-attributes.service';
 import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
+import { WebImagesService } from './web-images.service';
 import { WebProductsService } from './web-products.service';
 import { WebPublicationService } from './web-publication.service';
 import { WebSettingsService } from './web-settings.service';
@@ -57,6 +64,7 @@ export class WebCatalogController {
     private readonly categories: WebCategoriesService,
     private readonly publication: WebPublicationService,
     private readonly settings: WebSettingsService,
+    private readonly images: WebImagesService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -211,5 +219,42 @@ export class WebCatalogController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.settings.save(body, user.sub);
+  }
+
+  /** Multipart en memoria (sin `dest`): el archivo se procesa antes de tocar el disco. */
+  @Permissions('ecommerce:write')
+  @Post('products/:id/images')
+  @UseInterceptors(
+    FilesInterceptor('files', IMAGE_UPLOAD.maxFiles, {
+      limits: { fileSize: IMAGE_UPLOAD.maxBytes, files: IMAGE_UPLOAD.maxFiles },
+    }),
+  )
+  uploadImages(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[] | undefined,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.images.upload(id, files ?? [], user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Patch('products/:id/images/:imageId')
+  updateImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Body(ZodValidation(webImageUpdateSchema)) body: WebImageUpdateInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.images.update(id, imageId, body, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Delete('products/:id/images/:imageId')
+  removeImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.images.remove(id, imageId, user.sub);
   }
 }
