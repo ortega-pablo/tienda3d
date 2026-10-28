@@ -4,11 +4,11 @@ Lo lee la skill `/mec-global:tablero`. La mecánica está en la skill; acá, lo 
 
 ## Coordenadas
 
-| | |
-|---|---|
-| Tablero | <https://github.com/users/ortega-pablo/projects/2> |
-| Owner / número | ortega-pablo / 2 |
-| Repo del tablero | ortega-pablo/tienda3d |
+|                  |                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| Tablero          | <https://github.com/users/ortega-pablo/projects/2>                                           |
+| Owner / número   | ortega-pablo / 2                                                                             |
+| Repo del tablero | ortega-pablo/tienda3d                                                                        |
 | Repos vinculados | ortega-pablo/tienda3d · ortega-pablo/tienda-plastik-page · ortega-pablo/tienda-plastik-infra |
 
 ## Fuente
@@ -24,10 +24,10 @@ contradice, el tablero está desactualizado.
 
 ## Tipos de item
 
-| Tipo | Dónde vive el issue | De dónde sale | Cuándo nace |
-|---|---|---|---|
-| Fase | ortega-pablo/tienda3d | una fila de la tabla de fases de §6 (F0–F20) | F0–F16 ya; F17–F20 cuando F16·5 decide "sí" |
-| Tarea | el repo donde aterriza su PR, según la etiqueta del título: `[t3d]` → tienda3d, `[sf]` → tienda-plastik-page, `[infra]` → tienda-plastik-infra. Si tiene varias, el de la primera | un bloque `- [ ] **F<n>·<m> [repo] …**` de §6 | cuando tiene "Cierra cuando" |
+| Tipo  | Dónde vive el issue                                                                                                                                                               | De dónde sale                                 | Cuándo nace                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------- |
+| Fase  | ortega-pablo/tienda3d                                                                                                                                                             | una fila de la tabla de fases de §6 (F0–F20)  | F0–F16 ya; F17–F20 cuando F16·5 decide "sí" |
+| Tarea | el repo donde aterriza su PR, según la etiqueta del título: `[t3d]` → tienda3d, `[sf]` → tienda-plastik-page, `[infra]` → tienda-plastik-infra. Si tiene varias, el de la primera | un bloque `- [ ] **F<n>·<m> [repo] …**` de §6 | cuando tiene "Cierra cuando"                |
 
 ## Qué nunca va al tablero
 
@@ -48,16 +48,16 @@ Tarea → sub-issue de su fase (cross-repo). La fase sigue a sus hijos.
 
 ## Los campos
 
-| Campo | Valores | Para qué |
-|---|---|---|
-| `Status` | Por hacer · En curso · En revisión · Bloqueada · Descartada · Hecha | |
-| `Tipo` | Fase · Tarea | |
-| `Fase` | F0 … F20 | agrupar |
-| `Documento` | texto: `docs/plans/ecosistema-tienda-online.md §6 F<n>` | |
-| `Repositorio` | texto: `owner/repo` | dónde aterriza la tarea |
-| `Rama` | texto | la rama donde se mergea (`unificacion` o `main` en infra) |
-| `Depende de` | texto: prefijos | dependencias declaradas en el plan |
-| `Release` | texto | en qué release llegó |
+| Campo         | Valores                                                             | Para qué                                                  |
+| ------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
+| `Status`      | Por hacer · En curso · En revisión · Bloqueada · Descartada · Hecha |                                                           |
+| `Tipo`        | Fase · Tarea                                                        |                                                           |
+| `Fase`        | F0 … F20                                                            | agrupar                                                   |
+| `Documento`   | texto: `docs/plans/ecosistema-tienda-online.md §6 F<n>`             |                                                           |
+| `Repositorio` | texto: `owner/repo`                                                 | dónde aterriza la tarea                                   |
+| `Rama`        | texto                                                               | la rama donde se mergea (`unificacion` o `main` en infra) |
+| `Depende de`  | texto: prefijos                                                     | dependencias declaradas en el plan                        |
+| `Release`     | texto                                                               | en qué release llegó                                      |
 
 `Bloqueada`: la frena una decisión abierta de §3 (D8, D11, D12) o una respuesta de la dueña.
 `Descartada`: no se hizo; nunca cuenta como `Hecha`.
@@ -66,19 +66,29 @@ Tarea → sub-issue de su fase (cross-repo). La fase sigue a sus hijos.
 
 reloj: sí
 
-| Campo | Rol |
-|---|---|
-| `Inicio` | la fecha en que pasó a En curso |
+| Campo               | Rol                                                  |
+| ------------------- | ---------------------------------------------------- |
+| `Inicio`            | la fecha en que pasó a En curso                      |
 | `hs mín` / `hs máx` | el rango estimado; vacío hasta que Pablo lo confirme |
-| `hs reales` | acumulador, admite decimales |
+| `hs reales`         | acumulador, admite decimales                         |
 
 Las tareas las ejecuta Claude: el tramo imputado es el tiempo transcurrido entre el arranque y el
 paso a revisión, y el comentario del tramo lo dice ("⏱ … · ejecutado por Claude").
 
 ## Workflows nativos encendidos
 
-Ninguno confirmado todavía. Hasta que Pablo los active en la web, la skill empuja `Status` a mano
-en cada alta y en cada cierre.
+Activados por Pablo en la web el 2026-10-28:
+
+- **Item added to project** → `Status = Por hacer`.
+- **Item closed** → `Status = Hecha`.
+- **Pull request merged** → `Status = Hecha`.
+- **Auto-add sub-issues to project**.
+
+Vistas: **Por fase** (agrupada por Fase, con las sumas de hs mín/máx/reales) y **Por responsable**
+(agrupada por Assignees); la "View 1" de fábrica se borró.
+
+La skill igual fija `Status` y los demás campos en cada paso (arranque, revisión, cierre): los
+workflows cubren lo que se toca desde la web.
 
 ## Reglas propias
 

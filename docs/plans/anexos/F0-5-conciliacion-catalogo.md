@@ -3,9 +3,10 @@
 Pedido de confirmación de D12, que bloquea F9 (migración del catálogo al sistema). Sale de §4.8 del
 plan: la comparación entre lo que publica hoy la web y lo que tiene cargado el sistema.
 
-- **Estado:** listo para enviar. Lo manda Pablo por WhatsApp o mail.
-- **Cuando responda:** registrar las respuestas en la tabla del final y desbloquear F9·1–F9·3 en el
-  tablero.
+- **Estado:** respondido por Pablo el 2026-10-28 (tabla del final). Lo que depende de la base real
+  del sistema se concilia al final del proyecto.
+- **Dato clave:** la base de tienda3d de este equipo **no es la del sistema en uso**. La real la tiene
+  Camila; Pablo le pide un dump al final y recién ahí se comparan tienda y sistema con datos reales.
 
 ---
 
@@ -49,11 +50,11 @@ plan: la comparación entre lo que publica hoy la web y lo que tiene cargado el 
 
 ## Respuestas
 
-| # | Pregunta | Respuesta | Fecha |
-| --- | --- | --- | --- |
-| 1a | Monocromático: TPK = PTK (mismo producto) | | |
-| 1b | Noche / Día y Riso: cargar en el sistema o dejar de vender | | |
-| 1c | Trapecio: 380 o 390 | | |
-| 2 | Colores: línea de filamento y disponibilidad | | |
-| 3 | Precios: revisa la comparación antes de publicar (F9·3) | | |
-| 4 | Productos del sistema a publicar | | |
+| #   | Pregunta                                                   | Respuesta                                                                                                                                                         | Fecha      |
+| --- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1a  | Monocromático: TPK = PTK (mismo producto)                  | Se concilia al final, contra el dump de la base real (F9·3).                                                                                                      | 2026-10-28 |
+| 1b  | Noche / Día y Riso: cargar en el sistema o dejar de vender | Ídem: al final, con la base real.                                                                                                                                 | 2026-10-28 |
+| 1c  | Trapecio: 380 o 390                                        | Ídem: al final, con la base real.                                                                                                                                 | 2026-10-28 |
+| 2   | Colores: línea de filamento y disponibilidad               | Se amplían los colores del sistema: la tienda **no ofrece colores que no estén en el sistema**. Por ahora en PLA Genérico; la línea real se confirma con el dump. | 2026-10-28 |
+| 3   | Precios: revisa la comparación antes de publicar (F9·3)    | OK.                                                                                                                                                               | 2026-10-28 |
+| 4   | Productos del sistema a publicar                           | Los publica la dueña después, desde el panel del sistema.                                                                                                         | 2026-10-28 |
