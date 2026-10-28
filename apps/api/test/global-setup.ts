@@ -2,7 +2,13 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
-import { TEST_APP_ROLE, TEST_APP_ROLE_SQL, TEST_DATABASE_URL } from './db-url';
+import {
+  TEST_APP_ROLE,
+  TEST_APP_ROLE_SQL,
+  TEST_DATABASE_URL,
+  TEST_READER_ROLE,
+  TEST_READER_ROLE_SQL,
+} from './db-url';
 
 /**
  * Aplica las migraciones sobre la base de tests, una vez por corrida.
@@ -23,7 +29,12 @@ export default async function globalSetup(): Promise<void> {
   const owner = new PrismaClient({ datasources: { db: { url: TEST_DATABASE_URL } } });
   try {
     await owner.$executeRawUnsafe(TEST_APP_ROLE_SQL);
-    for (const statement of grantStatements(TEST_APP_ROLE)) {
+    for (const statement of grantStatements('grants.sql', 'app_role', TEST_APP_ROLE)) {
+      await owner.$executeRawUnsafe(statement);
+    }
+    // El lector del sitio, como lo deja scripts/migrate.sh con READER_DB_ROLE.
+    for (const statement of TEST_READER_ROLE_SQL) await owner.$executeRawUnsafe(statement);
+    for (const statement of grantStatements('grants-reader.sql', 'reader_role', TEST_READER_ROLE)) {
       await owner.$executeRawUnsafe(statement);
     }
   } finally {
@@ -31,9 +42,9 @@ export default async function globalSetup(): Promise<void> {
   }
 }
 
-/** Las sentencias de prisma/grants.sql con el rol reemplazado (sin psql en el host). */
-function grantStatements(role: string): string[] {
-  const sql = readFileSync(join(__dirname, '..', 'prisma', 'grants.sql'), 'utf8');
+/** Las sentencias de un prisma/grants*.sql con el rol reemplazado (sin psql en el host). */
+export function grantStatements(file: string, variable: string, role: string): string[] {
+  const sql = readFileSync(join(__dirname, '..', 'prisma', file), 'utf8');
   return sql
     .split('\n')
     .filter((line) => !line.trim().startsWith('--'))
@@ -41,5 +52,5 @@ function grantStatements(role: string): string[] {
     .split(';')
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((s) => s.replaceAll(':"app_role"', `"${role}"`));
+    .map((s) => s.replaceAll(`:"${variable}"`, `"${role}"`));
 }

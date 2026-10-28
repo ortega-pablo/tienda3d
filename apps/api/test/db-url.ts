@@ -29,3 +29,32 @@ export const TEST_APP_ROLE_SQL = `DO $$ BEGIN
     CREATE ROLE ${TEST_APP_ROLE} LOGIN PASSWORD '${TEST_APP_PASSWORD}';
   END IF;
 END $$`;
+
+/**
+ * Rol con el que el sitio lee el catálogo (storefront_reader), con los mismos
+ * ajustes que le pone la infraestructura (db/init/00-roles.sh). Lo crea el
+ * globalSetup y le aplica prisma/grants-reader.sql (F10·2).
+ */
+export const TEST_READER_ROLE = 'storefront_reader_test';
+const TEST_READER_PASSWORD = 'reader-test-solo-lectura';
+
+export const TEST_READER_DATABASE_URL = (() => {
+  const url = new URL(TEST_DATABASE_URL);
+  url.username = TEST_READER_ROLE;
+  url.password = TEST_READER_PASSWORD;
+  url.search = '';
+  return url.toString();
+})();
+
+export const TEST_READER_ROLE_SQL = [
+  `DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${TEST_READER_ROLE}') THEN
+    CREATE ROLE ${TEST_READER_ROLE} LOGIN PASSWORD '${TEST_READER_PASSWORD}';
+  END IF;
+END $$`,
+  `ALTER ROLE ${TEST_READER_ROLE} SET default_transaction_read_only = on`,
+  `ALTER ROLE ${TEST_READER_ROLE} SET statement_timeout = '5s'`,
+  `ALTER ROLE ${TEST_READER_ROLE} SET idle_in_transaction_session_timeout = '10s'`,
+  `ALTER ROLE ${TEST_READER_ROLE} SET search_path = storefront_v1`,
+  `ALTER ROLE ${TEST_READER_ROLE} CONNECTION LIMIT 10`,
+];

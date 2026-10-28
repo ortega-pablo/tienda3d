@@ -1234,6 +1234,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: que una actualización del sistema no corte la lectura de la tienda.
   - Qué hacer: `db/grants.sql` idempotente, corrido por `tienda3d-migrate` después de `migrate deploy`, con `GRANT USAGE` + `SELECT ON ALL TABLES IN SCHEMA storefront_v1` y los ajustes del rol de §5.3. El rol lo crea el init de infra (F3·2); los tests lo crean en su setup.
   - Cierra cuando: después de una migración nueva, el lector sigue leyendo sin pasos manuales.
+  - Hecho así: `prisma/grants-reader.sql` (al lado de `grants.sql`, no en `db/`): `USAGE` + `SELECT` en `storefront_v1`, default privileges para las vistas nuevas y `REVOKE` de todo `public`. `scripts/migrate.sh` lo aplica si está `READER_DB_ROLE` (en [infra], `tienda3d-migrate` lo pasa). Los tests crean `storefront_reader_test` con los mismos ajustes de rol y prueban que una vista nueva se lee sin tocar nada y que una recreada vuelve a leerse al reaplicar. En el ecosistema, como `storefront_reader`: `search_path = storefront_v1`, lee las vistas y `public` da _permission denied_.
 - [ ] **F10·3 [t3d] Hay pruebas automáticas de que el usuario de lectura no ve nada más**
   - Para qué: detectar cualquier fuga de datos antes de que llegue a producción.
   - Qué hacer: `apps/api/test/storefront-contract.int-spec.ts` conecta como `storefront_reader` y verifica:
