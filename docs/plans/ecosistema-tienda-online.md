@@ -1340,6 +1340,7 @@ contenedor apagado.
   - Para qué: no perder visitas ni posicionamiento en Google.
   - Qué hacer: un slug que figura en `slug_redirects` responde 308 al nuevo.
   - Cierra cuando: cambiar el slug en el panel no rompe el link viejo.
+  - Hecho así: en `proxy.ts` y no en la página, porque la ficha se transmite en streaming y ahí la redirección saldría con estado 200. El proxy lee `slug_redirects` entera con un pool de una conexión y la guarda un minuto (`src/server/catalog/slug-redirects.ts`; si la base no responde, la ficha sigue andando y el slug viejo da 404); la regla es pura (`productRedirectPath`). Para eso el pool del lector pasó a `src/server/catalog/pool.ts`, sin `server-only`, como el worker. Probado en el ecosistema: cambiar el slug del Army desde la API del panel hizo que el viejo respondiera 308 al nuevo, conservando la consulta (`?utm_source=…`); después se volvió al slug original. El contrato decía 301: queda 308, que también es permanente.
 - [ ] **F12·5 [sf] El sitio deja de tener catálogo y panel propios**
   - Para qué: que no haya dos lugares donde editar un producto.
   - Qué hacer:
