@@ -122,6 +122,17 @@ export interface WebProductCategoryDto {
   name: string;
 }
 
+/** Foto de la galería, ya convertida a WebP. `path` es relativo al volumen `media`. */
+export interface WebImageDto {
+  id: string;
+  path: string;
+  alt: string;
+  width: number;
+  height: number;
+  position: number;
+  colorMaterialId: string | null;
+}
+
 export interface WebProductDto {
   id: string;
   slug: string;
@@ -140,6 +151,7 @@ export interface WebProductDto {
   attributes: WebAttributeDto[];
   variants: WebVariantDto[];
   categories: WebProductCategoryDto[];
+  images: WebImageDto[];
   /** Slugs anteriores, que el sitio redirige al actual. */
   previousSlugs: string[];
   createdAt: string;

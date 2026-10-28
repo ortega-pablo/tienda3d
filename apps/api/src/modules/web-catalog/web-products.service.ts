@@ -62,6 +62,7 @@ const DETAIL_INCLUDE = {
     orderBy: { webCategory: { sortOrder: 'asc' } },
     include: { webCategory: { select: { slug: true, name: true } } },
   },
+  images: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
   slugHistory: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.WebProductInclude;
 
@@ -351,6 +352,15 @@ function toDto(p: WebProductWithDetail): WebProductDto {
       id: c.webCategoryId,
       slug: c.webCategory.slug,
       name: c.webCategory.name,
+    })),
+    images: p.images.map((i) => ({
+      id: i.id,
+      path: i.path,
+      alt: i.alt,
+      width: i.width,
+      height: i.height,
+      position: i.position,
+      colorMaterialId: i.colorMaterialId,
     })),
     previousSlugs: p.slugHistory.map((s) => s.slug),
     createdAt: p.createdAt.toISOString(),

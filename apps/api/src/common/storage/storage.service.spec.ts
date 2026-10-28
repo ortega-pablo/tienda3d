@@ -1,4 +1,3 @@
-import { ConfigService } from '@nestjs/config';
 import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,9 +11,7 @@ describe('StorageService', () => {
     base = await mkdtemp(join(tmpdir(), 'storage-spec-'));
     // Un secreto fuera de las raíces, al lado: lo que un ../ querría leer.
     await writeFile(join(base, 'secreto.json'), '{"clave":"no"}');
-    storage = new StorageService(
-      new ConfigService({ MEDIA_DIR: join(base, 'media'), PRIVATE_DIR: join(base, 'private') }),
-    );
+    storage = new StorageService({ media: join(base, 'media'), private: join(base, 'private') });
   });
 
   afterEach(async () => {
