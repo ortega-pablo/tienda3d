@@ -109,11 +109,11 @@ Definidas por Pablo el 2026-10-27. Las tareas del plan ya están escritas con es
 
 **Siguen abiertas** (no bloquean empezar):
 
-| ID  | Pregunta                                               | Propuesta                                                                                                                                                      | Se define en |
-| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| D8  | En EC2, ¿el panel de gestión queda abierto a internet? | Con una capa extra gratuita: Cloudflare Access o Tailscale.                                                                                                    | F17          |
-| D11 | ¿EC2 ARM (Graviton) o x86?                             | Según las mediciones de F16·4. ARM es más barato; `argon2` y `sharp` tienen binarios para arm64, pero las imágenes hay que construirlas para esa arquitectura. | F16·4        |
-| D12 | Conciliación del catálogo actual con la dueña (§4.8).  | Respuesta de la dueña al pedido de F0·5.                                                                                                                       | bloquea F9   |
+| ID  | Pregunta                                               | Propuesta                                                                                                                                                                                                                                                                                                                                                                                   | Se define en                      |
+| --- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| D8  | En EC2, ¿el panel de gestión queda abierto a internet? | Con una capa extra gratuita: Cloudflare Access o Tailscale.                                                                                                                                                                                                                                                                                                                                 | F17                               |
+| D11 | ¿EC2 ARM (Graviton) o x86?                             | Según las mediciones de F16·4. ARM es más barato; `argon2` y `sharp` tienen binarios para arm64, pero las imágenes hay que construirlas para esa arquitectura.                                                                                                                                                                                                                              | F16·4                             |
+| D12 | Conciliación del catálogo actual con la dueña (§4.8).  | **Definida 2026-10-28** ([anexo](anexos/F0-5-conciliacion-catalogo.md)): los colores se amplían en el sistema y la tienda solo ofrece los que existen ahí; precios OK; los productos nuevos los publica la dueña desde el sistema; las diferencias (TPK/PTK, Noche/Día, Riso, 380/390) se concilian al final contra un dump de la base real, porque la de este equipo no es la del sistema. | F9·1–F9·2 en local; F9·3 al final |
 
 ---
 
@@ -687,6 +687,7 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permi
   - Para qué: publicar la tienda nueva con los productos, colores y precios que ella reconoce.
   - Qué hacer: armar el pedido con las 4 diferencias de §4.8 (TPK/PTK, Noche/Día, Riso, 380 vs 390), los 11 colores y a qué línea de filamento pertenecen, y el aviso de que los precios cambian (T5).
   - Cierra cuando: el pedido está enviado; su respuesta desbloquea F9.
+  - Hecho así: respondido por Pablo el 2026-10-28 (ver D12 y el anexo). La comparación con datos reales queda para el final, con el dump de la base del sistema que tiene Camila.
 
 **Verificación:** las cinco tareas cerradas.
 
@@ -737,6 +738,7 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permi
     - `ALTER USER` del Postgres local con la clave nueva y cambio de la clave del admin desde el panel.
     - Mover los dos valores a archivos de secretos.
     - **Pedir OK antes**, porque toca la base en uso.
+    - **Se hace con el despliegue** (decisión de Pablo, 2026-10-28).
   - Cierra cuando: el `.env` de [t3d] no contiene `changeme` ni `admin123`, y el login funciona con la clave nueva.
 - [ ] **F1·6 [infra] Hay un procedimiento escrito para cambiar cada clave**
   - Para qué: poder rotar una clave comprometida en minutos y sin cortar el servicio.
@@ -1197,11 +1199,12 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 ### F9 — Migración del catálogo actual · 6–10 h
 
 > **Objetivo:** que todo lo que hoy muestra el sitio exista en el sistema, conciliado con la dueña.
-> **Bloqueada por D12** (respuesta de F0·5).
+> D12 definida el 2026-10-28. **F9·1 y F9·2 se corren solo en local** (OK de Pablo: la base de este
+> equipo no es la del sistema en uso). **F9·3 espera el dump de la base real** (Camila), al final.
 
 - [ ] **F9·1 [t3d] El sistema tiene cargados los colores que se venden hoy**
   - Para qué: ofrecer en la tienda los mismos colores que ya conocen los clientes.
-  - Qué hacer: cargar como hijos de la línea que indique la dueña (por defecto "PLA Genérico") los colores de §4.8 que falten, con su `colorHex`, desde el panel de Insumos o con un script idempotente.
+  - Qué hacer: cargar como hijos de la línea que indique la dueña (por defecto "PLA Genérico") los colores de §4.8 que falten, con su `colorHex`, desde el panel de Insumos o con un script idempotente. La tienda no ofrece colores que no estén en el sistema (D12).
   - Cierra cuando: `GET /materials?type=FILAMENT` devuelve los 11 colores.
 - [ ] **F9·2 [t3d] El catálogo actual de la web pasa al sistema sin perder nada**
   - Para qué: lanzar la tienda nueva con los mismos productos, fotos y textos.
@@ -1213,7 +1216,9 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Cierra cuando: el dry-run no tiene errores, y la importación deja publicaciones y variantes equivalentes a §4.8 (13 y 52, salvo lo que cambie la conciliación).
 - [ ] **F9·3 [t3d] La dueña ve cómo cambia cada precio antes de publicar**
   - Para qué: ajustar markups en el sistema si algún precio nuevo no le cierra.
-  - Qué hacer: comparar por variante el precio web actual contra el precio publicado nuevo (Venta Directa), con la diferencia en pesos y en porcentaje.
+  - Qué hacer:
+    - **Al final, con el dump de la base real del sistema** (lo pide Pablo a Camila): restaurarlo en el ecosistema, volver a correr F9·1 y F9·2 contra esos datos y conciliar las diferencias de §4.8 (TPK/PTK, Noche/Día, Riso, 380/390).
+    - Comparar por variante el precio web actual contra el precio publicado nuevo (Venta Directa), con la diferencia en pesos y en porcentaje.
   - Cierra cuando: el reporte está entregado y la dueña confirma o pide ajustar markups o categorías **en el sistema** (no en la web).
 
 **Verificación:** recorrido del panel con las 13 publicaciones en estado `HIDDEN`, y el listado de F8·3 las muestra con sus alertas (criterio que viene de F8·3). Se publican recién en F12.
@@ -1644,3 +1649,4 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 | 2026-10-28 | F7   | Fase cerrada: precio web = Venta Directa a cliente normal, cantidad 1, del mismo cálculo que el panel de precios; motivos de `NO_PRICE` con cómo resolverlos; recálculo automático con `@AffectsPrices` en las 15 escrituras de §4.3 (debounce de 2 s, cron de 10 min y botón), historial con causa y alertas en el listado. Los criterios "el panel muestra" de F7·3 y F7·4 se cumplen con las pantallas de F8 (F8·4 y F8·3).                                                                                                                                                                                                                                                                                                                                                  |
 | 2026-10-28 | F8   | Fase cerrada: panel "Tienda online" en tienda3d (listado de publicaciones con alertas, editor con cinco pestañas, sección en la ficha del producto con el interruptor "Visible en la tienda", categorías y ajustes). Recorridos automatizados con Playwright en el ecosistema, sin errores de consola, con capturas en `anexos/capturas/`. F8·4 se hizo antes que F8·2 (el criterio de F8·2 necesitaba el editor). Los criterios que dependían de otras fases pasaron a ellas: las 13 publicaciones migradas a F9 y el checkout a F12. Correcciones al pasar: `formatDateTime` de 24 h (es-AR mostraba 13:14 como 01:14), montos en formato argentino, detalle de validación en los toasts, y en [infra] el watch de la API de desarrollo ve los cambios de `@tienda3d/shared`. |
 | 2026-10-28 | F10  | Fase cerrada: esquema `storefront_v1` con ocho vistas `security_barrier` que muestran solo lo publicado y vendible, permisos del lector reaplicados en cada migración (`grants-reader.sql` + `READER_DB_ROLE` en infra) y tests de contrato como el lector (lee las vistas, no ve `public`, no escribe, columnas fijadas en el test). Probado en el ecosistema con el `storefront_reader` real. Contrato documentado en `docs/contrato-storefront-v1.md`, con los vectores de la firma de F11.                                                                                                                                                                                                                                                                                  |
+| 2026-10-28 | D12  | Respuestas de Pablo al pedido de F0·5: colores se amplían en el sistema (la tienda solo ofrece los del sistema), precios OK, productos nuevos los publica la dueña desde el sistema. La base de tienda3d de este equipo no es la del sistema en uso: F9·1 y F9·2 se corren en local con su OK, y la conciliación con datos reales (F9·3) se hace al final con un dump de Camila. F1·5 (rotar claves de la base) pasa al despliegue. Workflows del tablero activados.                                                                                                                                                                                                                                                                                                            |
