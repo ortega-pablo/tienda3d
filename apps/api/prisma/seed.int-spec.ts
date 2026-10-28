@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
-import { PrismaClient } from '@prisma/client';
+import { ChannelKind, PrismaClient, TaxMode } from '@prisma/client';
 import { TEST_DATABASE_URL } from '../test/db-url';
+import { truncateAll } from '../test/harness';
 
 /**
  * El seed corre sobre bases EXISTENTES: el README lo documenta como operación
@@ -114,5 +115,69 @@ describe('[int] Idempotencia del seed', () => {
     });
     expect(design.value).toBe('7500');
     expect(labor.value).toBe('9999');
+  });
+});
+
+/**
+ * El ecosistema corre el seed en cada arranque (RUN_SEED=true). Al copiar la
+ * base local al ecosistema (F9), el seed renombró "Contado S/F" a "Efectivo" y
+ * agregó el producto de demo: con la base real habría pasado en producción.
+ */
+describe('[int] Seed sobre la base del taller', () => {
+  const prisma = new PrismaClient({ datasources: { db: { url: TEST_DATABASE_URL } } });
+  const runSeed = () =>
+    execSync('npx tsx prisma/seed.ts', {
+      env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL, SEED_ADMIN_PASSWORD: 'test1234' },
+      stdio: 'pipe',
+      encoding: 'utf8',
+    });
+  const channel = (slug: string) => prisma.channel.findUniqueOrThrow({ where: { slug } });
+
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  it('en una base nueva carga los canales y el producto de demo', async () => {
+    runSeed();
+    const channels = await prisma.channel.findMany({ select: { slug: true } });
+    expect(channels.map((c) => c.slug).sort()).toEqual(['directa', 'efectivo', 'mercadolibre']);
+    expect(await prisma.product.count({ where: { sku: 'CDR-A5-8D' } })).toBe(1);
+  });
+
+  it('no pisa los canales que el taller cambió ni agrega datos de demo', async () => {
+    runSeed();
+    await prisma.product.deleteMany();
+    await prisma.channel.update({
+      where: { slug: 'efectivo' },
+      data: { name: 'Contado S/F', unifiedRegimePct: 0, taxMode: TaxMode.DETAILED },
+    });
+    await prisma.channel.update({ where: { slug: 'mercadolibre' }, data: { isActive: false } });
+    // Un Mayorista que ya no es de sistema y alguien reactivó a mano.
+    await prisma.channel.create({
+      data: { name: 'Mayorista', slug: 'mayorista', kind: ChannelKind.CUSTOM, isActive: true },
+    });
+    const category = await prisma.category.findFirstOrThrow();
+    await prisma.product.create({
+      data: { name: 'Lina', sku: 'PTK-PROD-000005', categoryId: category.id },
+    });
+
+    expect(runSeed()).toMatch(/Demo data skipped/);
+
+    const efectivo = await channel('efectivo');
+    expect(efectivo).toMatchObject({
+      name: 'Contado S/F',
+      taxMode: TaxMode.DETAILED,
+      isSystem: true,
+      kind: ChannelKind.CASH,
+    });
+    expect(efectivo.unifiedRegimePct?.toNumber()).toBe(0);
+    expect((await channel('mercadolibre')).isActive).toBe(false);
+    expect((await channel('mayorista')).isActive).toBe(true);
+    const products = await prisma.product.findMany({ select: { sku: true } });
+    expect(products).toEqual([{ sku: 'PTK-PROD-000005' }]);
   });
 });
