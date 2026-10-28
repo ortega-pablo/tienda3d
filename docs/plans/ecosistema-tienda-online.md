@@ -1172,6 +1172,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - **Categorías**.
     - **Publicación**: checklist, historial de precios y link a la vista en el sitio.
   - Cierra cuando: se arma la Trapecio (2 productos del sistema, 4 colores, fotos por color) de punta a punta, y la pestaña Publicación muestra los últimos cambios de precio con su causa (criterio que viene de F7·3).
+  - Hecho así: se hizo antes que F8·2, porque el criterio de F8·2 ("se completa…") necesita este editor. Recorrido automatizado con Playwright en el ecosistema (`sistema.localhost`), sin errores de consola: alta desde el listado, 2 productos del sistema con etiqueta "Tamaño", 4 colores, 8 variantes con SKU `-V01…-V04` por producto, 2 fotos asociadas a Blanco y Negro, descripción con vista previa, publicar (checklist completo) y ocultar; la pestaña Publicación muestra el historial de precios con su causa. Capturas: [variantes](anexos/capturas/f8-4-1-variantes.jpg), [fotos](anexos/capturas/f8-4-2-fotos.jpg), [publicación](anexos/capturas/f8-4-5-publicada.jpg). Al pasar se corrigió `formatDateTime` del panel: el formato es-AR por defecto es de 12 h sin "a. m./p. m." y las 13:14 se veían como 01:14 en todo el sistema (ahora `hourCycle: 'h23'`).
 - [ ] **F8·5 [t3d] El admin organiza las categorías de la tienda**
   - Para qué: definir cómo se navega la vidriera.
   - Qué hacer: `/tienda-online/categorias` con árbol, alta y edición en diálogo, foto y orden.

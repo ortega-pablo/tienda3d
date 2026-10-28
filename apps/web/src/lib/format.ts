@@ -40,8 +40,16 @@ export function formatDate(value: DateInput, opts?: Intl.DateTimeFormatOptions):
   return new Date(value).toLocaleDateString('es-AR', { timeZone: AR_TIMEZONE, ...opts });
 }
 
-/** Fecha y hora en es-AR, SIEMPRE en zona horaria de Argentina. */
+/**
+ * Fecha y hora en es-AR, SIEMPRE en zona horaria de Argentina y con reloj de
+ * 24 h: el formato es-AR por defecto es de 12 h sin "a. m./p. m." (las 13:14
+ * salían como 01:14).
+ */
 export function formatDateTime(value: DateInput, opts?: Intl.DateTimeFormatOptions): string {
   if (value == null || value === '') return '';
-  return new Date(value).toLocaleString('es-AR', { timeZone: AR_TIMEZONE, ...opts });
+  return new Date(value).toLocaleString('es-AR', {
+    timeZone: AR_TIMEZONE,
+    hourCycle: 'h23',
+    ...opts,
+  });
 }
