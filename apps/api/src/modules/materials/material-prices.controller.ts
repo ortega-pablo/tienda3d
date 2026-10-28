@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -27,15 +28,12 @@ const createSchema = z
     notes: z.string().max(2000).nullable().optional(),
     setCurrent: z.boolean().optional(),
   })
-  .refine(
-    (v) =>
-      v.price != null || (v.packSize != null && v.packPrice != null),
-    { message: 'Cargá precio por unidad, o cantidad + precio del paquete.' },
-  )
-  .refine(
-    (v) => !(v.price != null && (v.packSize != null || v.packPrice != null)),
-    { message: 'No combines precio por unidad con paquete.' },
-  );
+  .refine((v) => v.price != null || (v.packSize != null && v.packPrice != null), {
+    message: 'Cargá precio por unidad, o cantidad + precio del paquete.',
+  })
+  .refine((v) => !(v.price != null && (v.packSize != null || v.packPrice != null)), {
+    message: 'No combines precio por unidad con paquete.',
+  });
 
 @UseGuards(PermissionsGuard)
 @Controller('materials/:materialId/prices')
@@ -49,6 +47,7 @@ export class MaterialPricesController {
   }
 
   @Permissions('material:write')
+  @AffectsPrices('Precio de insumo')
   @Post()
   create(
     @Param('materialId') materialId: string,
@@ -58,12 +57,14 @@ export class MaterialPricesController {
   }
 
   @Permissions('material:write')
+  @AffectsPrices('Precio de insumo')
   @Patch(':priceId/current')
   setCurrent(@Param('materialId') materialId: string, @Param('priceId') priceId: string) {
     return this.prices.setCurrent(materialId, priceId);
   }
 
   @Permissions('material:write')
+  @AffectsPrices('Precio de insumo')
   @Delete(':priceId')
   @HttpCode(204)
   async remove(

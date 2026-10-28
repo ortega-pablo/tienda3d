@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -84,6 +85,7 @@ export class CategoriesController {
   }
 
   @Permissions('category:write')
+  @AffectsPrices('Markup de categoría')
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -120,6 +122,7 @@ export class CategoriesController {
    * Body `tiers: []` borra las propias (vuelve a heredar del padre).
    */
   @Permissions('category:write')
+  @AffectsPrices('Escalas de categoría')
   @Put(':id/tiers')
   replaceTiers(
     @Param('id') id: string,
