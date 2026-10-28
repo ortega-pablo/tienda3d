@@ -22,6 +22,15 @@ pnpm typecheck
 paso "lint"
 pnpm lint
 
+paso "tipos de la tienda (F8·7)"
+# Las pantallas usan los DTOs de @tienda3d/shared: redeclararlos en el panel
+# haría que un cambio de la API que rompe la pantalla no se vea al compilar.
+patron='(interface[[:space:]]+(Web[A-Za-z]*Dto|EcommerceSettingsDto|SystemProductWebDto)\b|type[[:space:]]+(Web[A-Za-z]*Dto|EcommerceSettingsDto|SystemProductWebDto)[[:space:]]*=)'
+if grep -rnE "$patron" apps/web/src; then
+  echo "Hay tipos de la tienda declarados en apps/web: importalos de @tienda3d/shared." >&2
+  exit 1
+fi
+
 paso "tests unitarios"
 pnpm test
 
