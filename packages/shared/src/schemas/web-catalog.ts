@@ -130,3 +130,35 @@ export const webVariantUpdateSchema = z
   .partial()
   .strict();
 export type WebVariantUpdateInput = z.infer<typeof webVariantUpdateSchema>;
+
+/**
+ * Categorías de la vidriera (plan F5·6), aparte de las de precios del sistema:
+ * dos niveles. La foto se sube aparte (F6).
+ */
+export const webCategoryCreateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  slug: webSlugSchema.optional(),
+  description: z.string().max(2000).optional(),
+  parentId: z.string().min(1).nullable().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+});
+export type WebCategoryCreateInput = z.infer<typeof webCategoryCreateSchema>;
+
+export const webCategoryUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    slug: webSlugSchema,
+    description: z.string().max(2000),
+    parentId: z.string().min(1).nullable(),
+    sortOrder: z.number().int().min(0),
+    isActive: z.boolean(),
+  })
+  .partial()
+  .strict();
+export type WebCategoryUpdateInput = z.infer<typeof webCategoryUpdateSchema>;
+
+export const webProductCategoriesSchema = z.object({
+  categoryIds: z.array(z.string().min(1)).max(10),
+});
+export type WebProductCategoriesInput = z.infer<typeof webProductCategoriesSchema>;
