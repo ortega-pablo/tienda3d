@@ -56,6 +56,7 @@ function makeService(opts: { claimedCount?: number } = {}) {
     { forProduct: jest.fn() } as never,
     audit as never,
     { next: jest.fn() } as never,
+    { list: jest.fn().mockResolvedValue([]) } as never,
   );
   // `get()` re-lee la orden al final; no aporta a lo que se está probando.
   jest.spyOn(service, 'get').mockResolvedValue({} as never);

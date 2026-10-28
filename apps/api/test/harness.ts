@@ -1,8 +1,9 @@
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
-import { MaterialType, MaterialUnit, ChannelKind, TaxMode } from '@prisma/client';
+import { MaterialType, MaterialUnit, ChannelKind, PrismaClient, TaxMode } from '@prisma/client';
 import { AppModule } from '@/app.module';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { TEST_DATABASE_URL } from './db-url';
 
 /**
  * Levanta la app REAL (AppModule completo, DI incluida) contra la base de
@@ -28,6 +29,23 @@ export async function bootTestApp(): Promise<{
 
 /** Tablas que se limpian entre tests, en orden irrelevante (CASCADE). */
 const TABLES = [
+  // Tienda online (F5)
+  'web_variant_selections',
+  'web_variants',
+  'web_color_option_pieces',
+  'web_color_values',
+  'web_color_options',
+  'web_attribute_values',
+  'web_attributes',
+  'web_images',
+  'web_product_categories',
+  'web_categories',
+  'web_product_slugs',
+  'web_product_members',
+  'web_products',
+  'web_price_history',
+  'web_prices',
+  'ecommerce_settings',
   'audit_logs',
   'stock_movements',
   'production_orders',
@@ -58,10 +76,20 @@ const TABLES = [
   'document_counters',
 ];
 
-export async function truncateAll(prisma: PrismaService): Promise<void> {
-  await prisma.$executeRawUnsafe(
-    `TRUNCATE TABLE ${TABLES.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;`,
-  );
+/**
+ * Vacía las tablas entre tests. Corre con el dueño de la base: la app se
+ * conecta con un rol sin privilegios, que no puede hacer TRUNCATE (F2·6).
+ * El parámetro se conserva para no cambiar la firma de los specs.
+ */
+export async function truncateAll(_prisma?: PrismaService): Promise<void> {
+  const owner = new PrismaClient({ datasources: { db: { url: TEST_DATABASE_URL } } });
+  try {
+    await owner.$executeRawUnsafe(
+      `TRUNCATE TABLE ${TABLES.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;`,
+    );
+  } finally {
+    await owner.$disconnect();
+  }
 }
 
 export interface Fixtures {

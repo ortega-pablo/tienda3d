@@ -7,8 +7,12 @@
  *   - Demo channels mirroring the Excel
  */
 
+// Primero: los secretos de archivo (DATABASE_URL_FILE, SEED_ADMIN_PASSWORD_FILE…).
+import '../src/common/config/load-secret-files';
 import { ChannelKind, MaterialType, MaterialUnit, PrismaClient, TaxMode } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { readSecret } from '../src/common/config/secret-files';
+import { seedAdminPasswordIssue } from '../src/common/config/validate-secrets';
 
 const prisma = new PrismaClient();
 
@@ -68,6 +72,19 @@ const PORTAL_PERMISSIONS = [
   'portal:profile:edit',
 ] as const;
 
+/**
+ * Permisos de la tienda online (plan de unificación, F4·1). Solo para el rol
+ * admin: viven aparte de PERMISSIONS para que el filtro `endsWith(':read')` no
+ * le dé `ecommerce:read` al viewer ni el operador los herede. Llegan a las
+ * bases existentes por la migración `20261027000000_ecommerce_permissions`.
+ */
+const ECOMMERCE_PERMISSIONS = [
+  'ecommerce:read',
+  'ecommerce:write',
+  'ecommerce:orders',
+  'ecommerce:settings',
+] as const;
+
 const VIEWER_PERMS = PERMISSIONS.filter((p) => p.endsWith(':read'));
 const OPERATOR_PERMS = PERMISSIONS.filter(
   (p) =>
@@ -82,7 +99,7 @@ const OPERATOR_PERMS = PERMISSIONS.filter(
 );
 
 async function seedPermissions() {
-  for (const key of [...PERMISSIONS, ...PORTAL_PERMISSIONS]) {
+  for (const key of [...PERMISSIONS, ...PORTAL_PERMISSIONS, ...ECOMMERCE_PERMISSIONS]) {
     await prisma.permission.upsert({
       where: { key },
       update: {},
@@ -125,7 +142,10 @@ async function seedRoles() {
     return role;
   };
 
-  const admin = await ensureRole('admin', 'Acceso total al sistema', PERMISSIONS);
+  const admin = await ensureRole('admin', 'Acceso total al sistema', [
+    ...PERMISSIONS,
+    ...ECOMMERCE_PERMISSIONS,
+  ]);
   const operator = await ensureRole(
     'operator',
     'Operación diaria sin tocar usuarios ni parámetros sensibles',
@@ -138,7 +158,13 @@ async function seedRoles() {
 
 async function seedAdminUser(roleId: string) {
   const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@plastik.local';
-  const password = process.env.SEED_ADMIN_PASSWORD ?? 'admin123';
+  const configured = readSecret('SEED_ADMIN_PASSWORD');
+  if (process.env.NODE_ENV === 'production') {
+    const issue = seedAdminPasswordIssue(configured);
+    if (issue) throw new Error(`No se crea el admin inicial en producción: ${issue}.`);
+  }
+  // En desarrollo se tolera la clave de ejemplo para el primer arranque.
+  const password = configured ?? 'admin123';
   const passwordHash = await argon2.hash(password);
   await prisma.user.upsert({
     where: { email },
@@ -162,13 +188,25 @@ async function seedGlobalParams() {
     ['kwh_cost', '303.98', 'Costo del kWh con todos los impuestos (ARS)'],
     ['labor_hour_cost', '5000', 'Valor hora de mano de obra (ARS)'],
     ['design_hour_cost', '0', 'Valor hora de diseño 3D (ARS) — surcharge plano por línea ADHOC'],
-    ['keychain_batch_size', '5', 'Tamaño del batch de llaveros — los inputs de la cotización son totales para esta cantidad'],
-    ['adhoc_default_markup_pct', '60', 'Markup default (%) para cotizaciones a medida sin producto ni tier de keychain. Cliente SPECIAL con customMarkupPct lo pisa.'],
+    [
+      'keychain_batch_size',
+      '5',
+      'Tamaño del batch de llaveros — los inputs de la cotización son totales para esta cantidad',
+    ],
+    [
+      'adhoc_default_markup_pct',
+      '60',
+      'Markup default (%) para cotizaciones a medida sin producto ni tier de keychain. Cliente SPECIAL con customMarkupPct lo pisa.',
+    ],
     ['contingency_pct', '5', 'Contingencia aplicada al costo de producción (%)'],
     ['reinvestment_pct', '10', 'Reinversión aplicada al costo de producción (%)'],
     ['unified_regime_pct', '4', 'Régimen unificado Mendoza (%) — modelo simple'],
     ['direct_sale_commission_pct', '6.5', 'Comisión global del canal Venta Directa (%)'],
-    ['price_rounding_step', '50', 'Paso de redondeo de los precios finales de venta (ARS). Los precios al cliente se redondean hacia arriba a este múltiplo. 0 = sin redondeo.'],
+    [
+      'price_rounding_step',
+      '50',
+      'Paso de redondeo de los precios finales de venta (ARS). Los precios al cliente se redondean hacia arriba a este múltiplo. 0 = sin redondeo.',
+    ],
     ['currency', 'ARS', 'Moneda principal del sistema'],
   ];
   // OJO: `update` NO toca `value`. Estos son valores INICIALES, no la fuente de
@@ -320,10 +358,7 @@ async function seedDemoMaterials() {
   return { pla: plaParent, plaChild: plaWhite, sheets };
 }
 
-async function seedDemoSupplierPrices(materials: {
-  pla: { id: string };
-  sheets: { id: string };
-}) {
+async function seedDemoSupplierPrices(materials: { pla: { id: string }; sheets: { id: string } }) {
   // Demo supplier so the prices below have a counterparty.
   const supplier = await prisma.supplier.upsert({
     where: { id: 'demo-supplier' },
@@ -336,10 +371,7 @@ async function seedDemoSupplierPrices(materials: {
     },
   });
 
-  const ensureCurrentPrice = async (
-    materialId: string,
-    price: number,
-  ): Promise<void> => {
+  const ensureCurrentPrice = async (materialId: string, price: number): Promise<void> => {
     const existing = await prisma.supplierMaterial.findFirst({
       where: { materialId, isCurrent: true },
     });
@@ -398,10 +430,7 @@ async function seedUnsortedCategory() {
   });
 }
 
-async function seedDemoProduct(materials: {
-  pla: { id: string };
-  sheets: { id: string };
-}) {
+async function seedDemoProduct(materials: { pla: { id: string }; sheets: { id: string } }) {
   let product = await prisma.product.findFirst({ where: { sku: 'CDR-A5-8D' } });
 
   if (!product) {
@@ -420,9 +449,27 @@ async function seedDemoProduct(materials: {
         categoryId: 'cat_unsorted',
         pieces: {
           create: [
-            { name: 'Tapa delantera', grams: 60, printMinutes: 150, defaultFilamentId: materials.pla.id, sortOrder: 0 },
-            { name: 'Tapa trasera', grams: 60, printMinutes: 150, defaultFilamentId: materials.pla.id, sortOrder: 1 },
-            { name: 'Discos (8 unid.)', grams: 15, printMinutes: 75, defaultFilamentId: materials.pla.id, sortOrder: 2 },
+            {
+              name: 'Tapa delantera',
+              grams: 60,
+              printMinutes: 150,
+              defaultFilamentId: materials.pla.id,
+              sortOrder: 0,
+            },
+            {
+              name: 'Tapa trasera',
+              grams: 60,
+              printMinutes: 150,
+              defaultFilamentId: materials.pla.id,
+              sortOrder: 1,
+            },
+            {
+              name: 'Discos (8 unid.)',
+              grams: 15,
+              printMinutes: 75,
+              defaultFilamentId: materials.pla.id,
+              sortOrder: 2,
+            },
           ],
         },
         materials: { create: [{ materialId: materials.sheets.id, quantity: 80 }] },

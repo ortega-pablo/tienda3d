@@ -1,4 +1,9 @@
-import { assertSecrets, findSecretIssues } from './validate-secrets';
+import {
+  assertSecrets,
+  databasePasswordIssue,
+  findSecretIssues,
+  seedAdminPasswordIssue,
+} from './validate-secrets';
 
 const good = {
   JWT_SECRET: 'K7d0aPq2wZ8xLm4RtV6yBn1CsE3fHj5U',
@@ -35,4 +40,36 @@ describe('validate-secrets', () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it('revisa la contraseña de la base cuando hay DATABASE_URL', () => {
+    const conBase = (password: string) =>
+      findSecretIssues({ ...good, DATABASE_URL: `postgresql://tienda3d:${password}@db:5432/tienda3d` });
+    expect(conBase('changeme')[0]).toMatchObject({ variable: 'DATABASE_URL', reason: expect.stringMatching(/ejemplo/) });
+    expect(conBase('corta')[0]!.reason).toMatch(/al menos 16/);
+    expect(conBase('Xk2pL9vQ7wR4tY8zN5m')).toEqual([]);
+  });
+
+  it('exige las credenciales de cada integración habilitada', () => {
+    const issues = findSecretIssues({ ...good, INTEGRATION_MELI_ENABLED: 'true', MELI_CLIENT_ID: 'id' });
+    expect(issues).toEqual([{ variable: 'MELI_CLIENT_SECRET', reason: expect.stringMatching(/INTEGRATION_MELI_ENABLED/) }]);
+    expect(findSecretIssues({ ...good, INTEGRATION_ARCA_ENABLED: 'false' })).toEqual([]);
+  });
 });
+
+describe('databasePasswordIssue', () => {
+  it('detecta URL sin contraseña, inválida o con caracteres codificados', () => {
+    expect(databasePasswordIssue('postgresql://u@db:5432/t')).toMatch(/no tiene contraseña/);
+    expect(databasePasswordIssue('no es url')).toMatch(/no es una URL/);
+    expect(databasePasswordIssue('postgresql://u:pl%61stik-dev@db/t')).toMatch(/ejemplo/);
+  });
+});
+
+describe('seedAdminPasswordIssue', () => {
+  it('no deja crear un admin de producción con una clave débil o pública', () => {
+    expect(seedAdminPasswordIssue(undefined)).toMatch(/no está definida/);
+    expect(seedAdminPasswordIssue('admin123')).toMatch(/ejemplo/);
+    expect(seedAdminPasswordIssue('corta1')).toMatch(/al menos 12/);
+    expect(seedAdminPasswordIssue('una-clave-larga-y-propia')).toBeNull();
+  });
+});
+

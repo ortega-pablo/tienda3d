@@ -13,11 +13,13 @@ import {
 import { MaterialType, MaterialUnit } from '@prisma/client';
 import { z } from 'zod';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
 import { MaterialsService } from './materials.service';
+import { queryBoolean } from '@/common/utils/query-boolean';
 
 const inputSchema = z.object({
   name: z.string().min(1).max(160),
@@ -56,7 +58,7 @@ const stockAdjustSchema = z.object({
 
 const listQuerySchema = z.object({
   type: z.nativeEnum(MaterialType).optional(),
-  activeOnly: z.coerce.boolean().optional(),
+  activeOnly: queryBoolean.optional(),
 });
 
 @UseGuards(PermissionsGuard)
@@ -83,6 +85,7 @@ export class MaterialsController {
   }
 
   @Permissions('material:write')
+  @AffectsPrices('Insumo editado')
   @Patch(':id')
   update(
     @Param('id') id: string,

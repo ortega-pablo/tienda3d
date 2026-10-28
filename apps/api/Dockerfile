@@ -2,6 +2,8 @@
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+# Los hooks de git (lefthook) no tienen sentido en la imagen y no hay git.
+ENV LEFTHOOK=0
 WORKDIR /app
 
 # ----- deps: install workspace dependencies -----
@@ -42,6 +44,12 @@ COPY --from=build --chown=nestjs:nodejs /app/apps/api/node_modules ./apps/api/no
 COPY --from=build --chown=nestjs:nodejs /app/packages/shared ./packages/shared
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/scripts ./apps/api/scripts
+# El seed (tsx prisma/seed.ts) importa la lectura de secretos y las reglas de
+# claves desde src/common/config: sin estos fuentes falla dentro de la imagen.
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/config ./apps/api/src/common/config
+# scripts/integration-key.ts (emitir y revocar claves de integración, F11·1).
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/integration-auth ./apps/api/src/common/integration-auth
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --chown=nestjs:nodejs package.json pnpm-workspace.yaml ./
 
@@ -49,4 +57,7 @@ USER nestjs
 WORKDIR /app/apps/api
 EXPOSE 3001
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "pnpm prisma migrate deploy && node dist/main.js"]
+# La API no migra al arrancar: lo hace el servicio `migrate` con el dueño del
+# esquema (scripts/migrate.sh) y la API se conecta con un rol sin DDL. Lee sus
+# secretos de archivo sola (NOMBRE_FILE).
+CMD ["node", "dist/main.js"]

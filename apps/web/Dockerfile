@@ -2,6 +2,8 @@
 FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+# Los hooks de git (lefthook) no tienen sentido en la imagen y no hay git.
+ENV LEFTHOOK=0
 WORKDIR /app
 
 # ----- deps -----
@@ -16,7 +18,10 @@ FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY tsconfig.base.json package.json pnpm-workspace.yaml ./
+# F-30: el lockfile también va en esta etapa. Turbopack lo usa para inferir la
+# raíz del workspace; sin él toma apps/web como raíz y no puede seguir los
+# enlaces de pnpm, que apuntan a /app/node_modules/.pnpm, fuera de esa raíz.
+COPY tsconfig.base.json package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 # shared se consume compilado (la API lo requiere en runtime), así que hay que

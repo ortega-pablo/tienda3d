@@ -1,0 +1,9 @@
+# Configuración de gitleaks (hooks locales, sin GitHub Actions). Ver scripts/hooks/gitleaks.sh.
+title = "gitleaks · tienda3d"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Falsos positivos revisados (F1·4): secretos de ejemplo de los tests de validate-secrets"
+paths = ['''^apps/api/src/common/config/validate-secrets\.spec\.ts$''']

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -23,6 +24,7 @@ export class KeychainScaleTiersController {
   }
 
   @Permissions('parameter:write')
+  @AffectsPrices('Escalas de llaveros')
   @Patch(':id')
   update(
     @Param('id') id: string,

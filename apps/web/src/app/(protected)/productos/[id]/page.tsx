@@ -1,5 +1,6 @@
+import type { SystemProductWebDto } from '@tienda3d/shared';
 import { api, ApiError } from '@/lib/api-server';
-import { requirePermission } from '@/lib/auth';
+import { hasPermission, requirePermission } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import {
   ProductEditor,
@@ -12,13 +13,14 @@ import {
   type ProductDto,
 } from './product-editor';
 import { ProductPrices, type ProductPricesResponse } from './product-prices';
+import { ProductWebSection } from './product-web-section';
 
-export default async function ProductDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  await requirePermission('product:read');
+/** Dirección pública de la tienda, para el link "Ver en la tienda". */
+const STORE_URL = process.env.STORE_PUBLIC_URL ?? 'http://tienda.localhost';
+
+export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const user = await requirePermission('product:read');
+  const seesStore = hasPermission(user, 'ecommerce:read');
   const { id } = await params;
 
   let product: ProductDto;
@@ -45,6 +47,9 @@ export default async function ProductDetailPage({
       api<MachineLite[]>('/machines'),
       api<CategoryLite[]>('/categories'),
     ]);
+  const web = seesStore
+    ? await api<SystemProductWebDto>(`/web-catalog/by-product/${id}`).catch(() => null)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -68,6 +73,17 @@ export default async function ProductDetailPage({
       />
 
       <ProductPrices prices={prices} categoryId={product.categoryId} kind={product.kind} />
+
+      {web && (
+        <ProductWebSection
+          productId={product.id}
+          productName={product.name}
+          productDescription={product.description ?? null}
+          web={web}
+          storeUrl={STORE_URL}
+          canWrite={hasPermission(user, 'ecommerce:write')}
+        />
+      )}
     </div>
   );
 }

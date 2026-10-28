@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, ProductionStatus, StockMovementType } from '@prisma/client';
+import { PieceScope, Prisma, ProductKind, ProductionStatus, StockMovementType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
 import { DocumentCodeService } from '@/common/utils/document-code';
-import { CostingService } from '../costing/costing.service';
+import { CostingService, type CostingOptions } from '../costing/costing.service';
+import { KeychainScaleTiersService } from '../keychain-scale-tiers/keychain-scale-tiers.service';
 
 export interface ProductionConsumptionLine {
   materialId: string;
@@ -47,7 +48,25 @@ export class ProductionsService {
     private readonly costing: CostingService,
     private readonly audit: AuditService,
     private readonly codes: DocumentCodeService,
+    private readonly keychainScaleTiers: KeychainScaleTiersService,
   ) {}
+
+  /**
+   * Qué piezas fabrica una orden. En un llavero depende de la escala, igual que
+   * al cotizar: de 1 a 4 unidades se imprimen las piezas INDIVIDUAL; desde 5,
+   * las de tanda, y cada unidad consume su parte (gramos ÷ keychain_batch_size).
+   * Antes se sumaban los dos juegos y se consumía y costeaba de más.
+   */
+  private async piecePlan(
+    kind: ProductKind,
+    quantity: number,
+  ): Promise<Pick<CostingOptions, 'pieceScope' | 'divideBy'>> {
+    if (kind !== ProductKind.KEYCHAIN) return {};
+    const tiers = await this.keychainScaleTiers.list();
+    const scope = KeychainScaleTiersService.resolveScope(tiers, quantity);
+    if (scope === PieceScope.INDIVIDUAL) return { pieceScope: PieceScope.INDIVIDUAL };
+    return { pieceScope: PieceScope.BATCH, divideBy: await this.costing.keychainBatchSize() };
+  }
 
   async list(): Promise<ProductionDto[]> {
     const orders = await this.prisma.productionOrder.findMany({
@@ -87,9 +106,13 @@ export class ProductionsService {
     // Validate per-piece color picks against the parent/child hierarchy.
     // Pieces whose default points to a filament parent MUST have an override
     // pointing to one of its children (the actual color we consume).
-    await this.validateFilamentOverrides(product.pieces, input.filamentOverrides);
+    const plan = await this.piecePlan(product.kind, input.quantity);
+    const plannedPieces = plan.pieceScope
+      ? product.pieces.filter((piece) => piece.scope === plan.pieceScope)
+      : product.pieces;
+    await this.validateFilamentOverrides(plannedPieces, input.filamentOverrides);
 
-    const cost = await this.costing.forProduct(input.productId);
+    const cost = await this.costing.forProduct(input.productId, plan);
     const code = await this.nextCode();
 
     const created = await this.prisma.productionOrder.create({
@@ -228,10 +251,18 @@ export class ProductionsService {
     });
     if (!product) throw new NotFoundException('Producto inexistente');
 
+    // Piezas que fabrica la orden (en llaveros, según la escala) y gramos por
+    // unidad de cada una (la tanda se reparte entre las unidades que salen).
+    const plan = await this.piecePlan(product.kind, quantity);
+    const divideBy = plan.divideBy && plan.divideBy > 0 ? plan.divideBy : 1;
+    const pieces = plan.pieceScope
+      ? product.pieces.filter((piece) => piece.scope === plan.pieceScope)
+      : product.pieces;
+
     // For each piece, the consumed filament is the override (color child) when
     // present; otherwise the default itself (legacy / non-hierarchical filament).
     const consumedIds = new Set<string>();
-    for (const piece of product.pieces) {
+    for (const piece of pieces) {
       const fid = options.filamentOverrides?.[piece.id] ?? piece.defaultFilamentId;
       if (fid) consumedIds.add(fid);
     }
@@ -246,10 +277,10 @@ export class ProductionsService {
     // Group by consumed material (the child for hierarchical filaments, the
     // raw default otherwise) so stock is decremented at the right node.
     const filamentTotals = new Map<string, number>();
-    for (const piece of product.pieces) {
+    for (const piece of pieces) {
       const fid = options.filamentOverrides?.[piece.id] ?? piece.defaultFilamentId;
       if (!fid) continue;
-      const totalGrams = (filamentTotals.get(fid) ?? 0) + dec(piece.grams) * quantity;
+      const totalGrams = (filamentTotals.get(fid) ?? 0) + (dec(piece.grams) / divideBy) * quantity;
       filamentTotals.set(fid, totalGrams);
     }
 

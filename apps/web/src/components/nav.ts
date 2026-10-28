@@ -11,11 +11,13 @@ import {
   KeyRound,
   Layers,
   LayoutDashboard,
+  LayoutGrid,
   Package,
   PackageSearch,
   Plug,
   ShieldCheck,
   ShoppingBag,
+  Store,
   Truck,
   Users,
   Zap,
@@ -31,6 +33,8 @@ export interface NavItem {
    * Match is "any of": showing the item is enough if the user has at least one.
    */
   permissions?: string[];
+  /** Solo la ruta exacta lo marca activo: un resumen cuyas subpáginas tienen entrada propia. */
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -177,6 +181,38 @@ export const NAVIGATION: NavGroup[] = [
         href: '/admin/integraciones',
         icon: Plug,
         permissions: ['user:read'],
+      },
+    ],
+  },
+  {
+    // Solo el rol admin tiene ecommerce:*. Cada sección suma su entrada al
+    // habilitarse (publicaciones, pedidos web, solicitudes, categorías, ajustes).
+    label: 'Tienda online',
+    items: [
+      {
+        label: 'Resumen',
+        href: '/tienda-online',
+        icon: Store,
+        permissions: ['ecommerce:read'],
+        exact: true,
+      },
+      {
+        label: 'Publicaciones',
+        href: '/tienda-online/publicaciones',
+        icon: LayoutGrid,
+        permissions: ['ecommerce:read'],
+      },
+      {
+        label: 'Categorías de la tienda',
+        href: '/tienda-online/categorias',
+        icon: FolderTree,
+        permissions: ['ecommerce:read'],
+      },
+      {
+        label: 'Ajustes de la tienda',
+        href: '/tienda-online/ajustes',
+        icon: Cog,
+        permissions: ['ecommerce:settings'],
       },
     ],
   },

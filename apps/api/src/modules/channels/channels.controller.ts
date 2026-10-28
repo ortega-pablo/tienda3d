@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ChannelKind, InvoiceType, TaxMode } from '@prisma/client';
 import { z } from 'zod';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -66,6 +67,7 @@ export class ChannelsController {
   }
 
   @Permissions('channel:write')
+  @AffectsPrices('Canal de venta')
   @Patch(':id')
   update(
     @Param('id') id: string,

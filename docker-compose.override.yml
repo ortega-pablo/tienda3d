@@ -1,5 +1,16 @@
 # Development overrides — auto-merged by `docker compose up`
 services:
+  # En desarrollo las migraciones salen del código montado (incluye las nuevas).
+  migrate:
+    build:
+      dockerfile: apps/api/Dockerfile.dev
+    image: tienda3d-api-dev:local
+    volumes:
+      - ./apps/api:/app/apps/api
+      - /app/node_modules
+      - /app/apps/api/node_modules
+    command: sh -c "cd apps/api && pnpm prisma:generate && sh scripts/migrate.sh"
+
   api:
     build:
       dockerfile: apps/api/Dockerfile.dev
@@ -11,11 +22,10 @@ services:
       - /app/node_modules
       - /app/apps/api/node_modules
       - /app/packages/shared/node_modules
-    # Antes de arrancar Nest en watch mode, regenera el cliente Prisma
-    # (refleja cambios del schema montado por volumen) y aplica migraciones
-    # pendientes. `migrate deploy` es idempotente: si todo está al día, no
-    # hace nada.
-    command: sh -c "pnpm --filter @tienda3d/shared build && cd apps/api && pnpm prisma:generate && pnpm prisma migrate deploy && pnpm dev"
+    # Antes de arrancar Nest en watch mode, regenera el cliente Prisma (refleja
+    # cambios del schema montado por volumen). Las migraciones las aplica el
+    # servicio `migrate`.
+    command: sh -c "pnpm --filter @tienda3d/shared build && cd apps/api && pnpm prisma:generate && pnpm dev"
 
   web:
     build:

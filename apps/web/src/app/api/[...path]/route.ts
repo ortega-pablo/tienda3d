@@ -36,6 +36,12 @@ const CLIENT_SPOOFABLE = new Set([
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
+  // La API de integración solo la llama el sitio por la red interna (F11·1):
+  // desde el panel ni existe.
+  // Primer segmento con contenido: "//integrations" no lo esquiva.
+  if (path.find(Boolean)?.toLowerCase() === 'integrations') {
+    return NextResponse.json({ message: 'No encontrado' }, { status: 404 });
+  }
   const target = `${API_BASE}/api/${path.join('/')}${req.nextUrl.search}`;
 
   const headers = new Headers();
@@ -44,6 +50,9 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     if (HOP_BY_HOP.has(name) || CLIENT_SPOOFABLE.has(name)) return;
     headers.set(key, value);
   });
+  // Id para seguir el request en los logs de la API. Si el navegador (o un
+  // proxy delante) no manda uno, lo genera el panel. La API lo valida.
+  if (!headers.has('x-request-id')) headers.set('x-request-id', crypto.randomUUID());
 
   const init: RequestInit = {
     method: req.method,

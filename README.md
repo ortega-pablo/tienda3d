@@ -19,12 +19,20 @@ Ver [PLAN.md](PLAN.md) para el modelo de negocio y la arquitectura completa.
 cp .env.example .env
 # editar .env: cambiar POSTGRES_PASSWORD, API_JWT_SECRET, API_REFRESH_SECRET
 
-# 2. Levantar todo (db + api + web)
+# 2. Levantar todo (db + migrate + api + web). El servicio `migrate` aplica las
+#    migraciones antes de que arranque la API.
 docker compose up --build
 
-# 3. Inicializar DB y seed (solo la primera vez)
-docker compose exec api sh -c "cd apps/api && pnpm prisma migrate deploy && pnpm prisma:seed"
+# 3. Seed (solo la primera vez)
+docker compose run --rm -e RUN_SEED=true migrate
 ```
+
+**Migraciones y permisos de la base.** La API no migra al arrancar: lo hace el servicio `migrate`
+(`apps/api/scripts/migrate.sh`) con el dueño del esquema (`MIGRATION_DATABASE_URL`). Si se define
+`APP_DB_ROLE`, después aplica `apps/api/prisma/grants.sql`: el rol de la API puede leer y escribir
+datos pero no cambiar la estructura (es como corre en el ecosistema de `tienda-plastik-infra`). En
+este compose standalone hay un solo usuario y `APP_DB_ROLE` no se usa. La suite de integración corre
+siempre con un rol sin privilegios.
 
 Endpoints:
 
@@ -82,10 +90,10 @@ El tema vive en un único archivo: [`apps/web/src/theme/tokens.css`](apps/web/sr
 
 Los conectores están **stubeados** y se activan con flags en `.env`:
 
-| Integración | Variable | Estado |
-|---|---|---|
-| MercadoLibre | `INTEGRATION_MELI_ENABLED` | preparado |
-| ARCA / AFIP | `INTEGRATION_ARCA_ENABLED` | preparado |
+| Integración       | Variable                       | Estado    |
+| ----------------- | ------------------------------ | --------- |
+| MercadoLibre      | `INTEGRATION_MELI_ENABLED`     | preparado |
+| ARCA / AFIP       | `INTEGRATION_ARCA_ENABLED`     | preparado |
 | WhatsApp Business | `INTEGRATION_WHATSAPP_ENABLED` | preparado |
 
 Ver el estado actual desde **Admin > Integraciones**.
@@ -110,15 +118,15 @@ docker compose exec api sh -c "cd apps/api && pnpm test"
 
 Esta arquitectura está pensada para mover sin sufrimiento.
 
-| Componente local | AWS sugerido | Notas |
-|---|---|---|
-| `db` (Postgres en contenedor) | **RDS for PostgreSQL 16** | Multi-AZ + backups automáticos. Ajustar `DATABASE_URL`. |
-| `api` (Node 20 standalone) | **ECS Fargate** o EC2 + systemd | Imagen a ECR. Lee de Secrets Manager para JWT/DB. |
-| `web` (Next.js standalone) | **ECS Fargate** detrás de **CloudFront** | `output: 'standalone'` ya configurado. |
-| Imágenes / PDFs | **S3** | Subir desde el backend (cuando se agregue uploads). |
-| Logs | **CloudWatch** vía pino | Pino emite JSON estructurado en producción. |
-| Secretos | **AWS Secrets Manager** | Inyectar como envs en la task definition. |
-| CI/CD | **GitHub Actions** + OIDC → ECR | Build de imágenes y `prisma migrate deploy` en deploy. |
+| Componente local              | AWS sugerido                             | Notas                                                   |
+| ----------------------------- | ---------------------------------------- | ------------------------------------------------------- |
+| `db` (Postgres en contenedor) | **RDS for PostgreSQL 16**                | Multi-AZ + backups automáticos. Ajustar `DATABASE_URL`. |
+| `api` (Node 20 standalone)    | **ECS Fargate** o EC2 + systemd          | Imagen a ECR. Lee de Secrets Manager para JWT/DB.       |
+| `web` (Next.js standalone)    | **ECS Fargate** detrás de **CloudFront** | `output: 'standalone'` ya configurado.                  |
+| Imágenes / PDFs               | **S3**                                   | Subir desde el backend (cuando se agregue uploads).     |
+| Logs                          | **CloudWatch** vía pino                  | Pino emite JSON estructurado en producción.             |
+| Secretos                      | **AWS Secrets Manager**                  | Inyectar como envs en la task definition.               |
+| CI/CD                         | **GitHub Actions** + OIDC → ECR          | Build de imágenes y `prisma migrate deploy` en deploy.  |
 
 Pasos de alto nivel:
 
@@ -143,3 +151,25 @@ Pendiente:
 ## Licencia
 
 Privado — uso interno de Plastik 3D.
+
+## Verificación antes de mergear (sin GitHub Actions)
+
+```bash
+pnpm verify
+```
+
+Corre typecheck, lint, tests unitarios y tests de integración. Si no hay `TEST_DATABASE_URL`, levanta un
+Postgres 16 efímero en Docker y lo borra al terminar. Es obligatorio en verde antes de mergear un PR.
+
+## Hooks de git (sin GitHub Actions)
+
+La verificación corre en la máquina, con [lefthook](https://lefthook.dev): no hay GitHub Actions.
+
+| Hook         | Qué corre                                                                                                                                |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `pre-commit` | `gitleaks` sobre lo que se está por commitear (frena el commit si encuentra una clave), `prettier` y `eslint` sobre los archivos tocados |
+| `pre-push`   | `gitleaks` sobre los commits sin subir, `typecheck` y tests unitarios: un push con un test roto se rechaza                               |
+
+Instalación: se instalan solos con `pnpm install` (lefthook es devDependency); si no, `pnpm exec lefthook install`. El escaneo usa el binario de gitleaks (`brew install gitleaks`) o, si no
+está, su imagen de Docker. Las excepciones revisadas están en `.gitleaks.toml`. Para escanear todo el
+historial: `sh scripts/hooks/gitleaks.sh history`.

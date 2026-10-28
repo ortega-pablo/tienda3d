@@ -1,0 +1,2 @@
+# Lo genera pnpm con su propio formato: prettier lo reescribía entero.
+pnpm-lock.yaml

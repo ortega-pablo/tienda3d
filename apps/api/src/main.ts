@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+// Primero: carga los secretos de archivo (NOMBRE_FILE) antes de que se importe
+// AppModule, cuyo ConfigModule lee el entorno al importarse.
+import './common/config/load-secret-files';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -12,15 +15,16 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 async function bootstrap() {
+  // Falla temprano —antes de conectarse a la base— si algún secreto es de
+  // ejemplo o es débil: firmas JWT, contraseña de la base y credenciales de las
+  // integraciones habilitadas. En producción corta; en desarrollo advierte.
+  const isProd = process.env.NODE_ENV === 'production';
+  assertSecrets(process.env, isProd);
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
   const config = app.get(ConfigService);
-  const isProd = config.get<string>('NODE_ENV') === 'production';
-
-  // Falla temprano si los secretos de firma son los del .env.example o son
-  // demasiado cortos. Antes sólo se verificaba que existieran.
-  assertSecrets(process.env, isProd);
 
   // Confía en 1 hop de proxy para resolver la IP del cliente (rate limit, logs).
   //

@@ -4,7 +4,11 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
+import { validateEnv } from './common/config/env.schema';
+import { requestId } from './common/logging/request-id';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { StorageModule } from './common/storage/storage.module';
+import { PriceInputsModule } from './common/price-inputs/price-inputs.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
@@ -25,10 +29,13 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { UsersModule } from './modules/users/users.module';
+import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
+import { StorefrontIntegrationModule } from './modules/storefront-integration/storefront-integration.module';
+import { InboundEventsModule } from './modules/inbound-events/inbound-events.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, cache: true }),
+    ConfigModule.forRoot({ isGlobal: true, cache: true, validate: validateEnv }),
     // NestJS aplica TODOS los throttlers a cada ruta, no sólo el "matching".
     // Por eso `auth` global queda generoso (similar al default) y los límites
     // estrictos contra brute-force se ponen route-by-route con @Throttle()
@@ -52,10 +59,14 @@ import { UsersModule } from './modules/users/users.module';
             ? { target: 'pino-pretty', options: { singleLine: true } }
             : undefined,
         autoLogging: true,
+        // Mismo id en los logs de los dos sistemas (ver common/logging/request-id.ts).
+        genReqId: requestId,
         redact: ['req.headers.authorization', 'req.headers.cookie'],
       },
     }),
     PrismaModule,
+    StorageModule,
+    PriceInputsModule,
     AuditModule,
     AuthModule,
     UsersModule,
@@ -66,6 +77,9 @@ import { UsersModule } from './modules/users/users.module';
     MaterialsModule,
     ChannelsModule,
     CategoriesModule,
+    WebCatalogModule,
+    StorefrontIntegrationModule,
+    InboundEventsModule,
     ProductsModule,
     CustomersModule,
     QuotesModule,

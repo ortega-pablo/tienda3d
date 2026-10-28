@@ -1,0 +1,27 @@
+# Hooks de git del repo. La verificación es local: no hay GitHub Actions.
+# Se instalan solos con `pnpm install` (lefthook es devDependency).
+# Antes de mergear un PR, además: `pnpm verify` (incluye los tests de integración).
+pre-commit:
+  parallel: true
+  commands:
+    secretos:
+      run: sh scripts/hooks/gitleaks.sh staged
+    formato:
+      glob: '*.{ts,tsx,js,mjs,json,md,yml,yaml,css}'
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    lint-api:
+      root: 'apps/api/'
+      glob: '*.ts'
+      run: pnpm exec eslint --max-warnings=0 {staged_files}
+    lint-web:
+      root: 'apps/web/'
+      glob: '*.{ts,tsx}'
+      run: pnpm exec eslint --max-warnings=0 {staged_files}
+
+pre-push:
+  commands:
+    secretos:
+      run: sh scripts/hooks/gitleaks.sh push
+    typecheck-y-tests:
+      run: pnpm --filter @tienda3d/shared build >/dev/null && pnpm typecheck && pnpm test
