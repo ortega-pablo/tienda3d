@@ -1094,6 +1094,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: ver la galería mientras se arma la publicación.
   - Qué hacer: `GET /web-catalog/media/*` autenticado (`ecommerce:read`), con `Cache-Control` privado.
   - Cierra cuando: el panel muestra una foto subida.
+  - Hecho así: `WebMediaController` sirve solo `.webp` del volumen con `resolveExisting` (mismo control de path traversal), `Cache-Control: private, max-age=86400, immutable` (el nombre es un uuid). El panel la pide como `/api/web-catalog/media/<path>` por su proxy, que ya es binario y queda fuera del límite de cuerpo de `proxy.ts`. Probado de punta a punta en el ecosistema por `sistema.localhost` con la sesión del admin: subida, WebP 2000×1333 de vuelta, el archivo en el volumen `media` y el sitio lo ve de solo lectura. En [infra], `make dev` pasa `-V` para que una dependencia nueva (sharp) llegue a los `node_modules` de desarrollo.
 - [ ] **F6·4 [t3d] Cada categoría de la tienda tiene su foto**
   - Para qué: armar las tarjetas de categoría de la vidriera.
   - Qué hacer: lo mismo en `/web-catalog/categories/:id/image`.
