@@ -14,6 +14,11 @@ export interface WebProductMemberDto {
   valueLabel: string;
   sortOrder: number;
   isActive: boolean;
+  /** Precio publicado del producto del sistema (F7); null si todavía no se calculó. */
+  priceState: WebPriceStateValue | null;
+  price: number | null;
+  /** Por qué no tiene precio y cómo resolverlo. */
+  priceReason: string | null;
 }
 
 /** Color de filamento que ofrece una opción. Si se desactiva en Insumos, deja de venderse. */
@@ -166,6 +171,8 @@ export interface WebPublishCheckDto {
   key: WebPublishCheckKey;
   ok: boolean;
   label: string;
+  /** Qué falta y cómo resolverlo, cuando no alcanza con la etiqueta. */
+  detail: string | null;
 }
 
 export interface WebPublishChecklistDto {
@@ -204,6 +211,9 @@ export interface WebPriceDto {
   history: WebPriceHistoryEntryDto[];
 }
 
+/** Lo que el listado de publicaciones marca (F7·4, F8·3). */
+export type WebProductAlert = 'NO_PRICE' | 'INACTIVE_COLOR' | 'NO_IMAGES' | 'NO_VARIANTS';
+
 export interface WebProductSummaryDto {
   id: string;
   slug: string;
@@ -211,5 +221,10 @@ export interface WebProductSummaryDto {
   status: WebProductStatusValue;
   memberCount: number;
   variantCount: number;
+  activeVariantCount: number;
+  /** Rango de los precios publicados de sus miembros con precio. */
+  priceMin: number | null;
+  priceMax: number | null;
+  alerts: WebProductAlert[];
   updatedAt: string;
 }

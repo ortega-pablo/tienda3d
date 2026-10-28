@@ -1135,6 +1135,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: que la tienda nunca muestre un producto sin precio.
   - Qué hacer: el listado de publicaciones marca las variantes sin precio y por qué ("Venta Directa deshabilitada", "La categoría no tiene markup").
   - Cierra cuando: un producto sin markup no se puede publicar y el mensaje dice cómo resolverlo.
+  - Hecho así: los motivos de `NO_PRICE` dicen qué tocar ("…: cargalo en Categorías"). El checklist suma `detail` y el 422 nombra cada producto sin precio con su motivo. El listado (`GET /web-catalog/products`) trae `priceMin`/`priceMax`, `activeVariantCount` y `alerts` (`NO_PRICE`, `INACTIVE_COLOR`, `NO_IMAGES`, `NO_VARIANTS`), y cada miembro de la ficha su `priceState`, `price` y `priceReason`: F8·3 solo los muestra.
 
 **Verificación:** verificación mínima de [t3d].
 

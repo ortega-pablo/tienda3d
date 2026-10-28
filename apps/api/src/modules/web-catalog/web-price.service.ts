@@ -43,20 +43,26 @@ export class WebPriceService {
 
     const direct = channels.filter((c) => c.channelKind === ChannelKind.DIRECT_SALE);
     const block = direct.find((c) => c.channelSlug === DIRECT_SALE_SLUG) ?? direct[0];
-    if (!block) return noPrice('Venta Directa deshabilitada para el producto.');
+    if (!block) {
+      return noPrice(
+        'Venta Directa deshabilitada para el producto: habilitala en la ficha del producto (Canales).',
+      );
+    }
 
     // Sin escalas, el precio base; con escalas (o en un llavero), la de cantidad 1.
     const line = block.base ?? block.tiers.find((t) => t.minQty === 1)?.line;
     if (!line) {
       return noPrice(
         block.tiers.length
-          ? 'Las escalas de Venta Directa no arrancan en 1 unidad.'
-          : 'La categoría no tiene markup (ni propio ni heredado).',
+          ? 'Las escalas de Venta Directa de su categoría no arrancan en 1 unidad: agregá una desde 1 en Categorías.'
+          : 'La categoría no tiene markup (ni propio ni heredado): cargalo en Categorías.',
       );
     }
-    if (line.missingCommission) return noPrice('Falta la comisión de Venta Directa.');
+    if (line.missingCommission) {
+      return noPrice('Falta la comisión de Venta Directa: cargala en Canales.');
+    }
     if (!Number.isFinite(line.finalPrice) || line.finalPrice <= 0) {
-      return noPrice('El cálculo no da un precio positivo.');
+      return noPrice('El cálculo no da un precio positivo: revisá los costos del producto.');
     }
 
     const price = Math.round(line.finalPrice * 100) / 100;

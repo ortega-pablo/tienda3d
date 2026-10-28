@@ -37,7 +37,9 @@ export class WebPublicationService {
 
       const checklist = await this.check(tx, webProductId);
       if (!checklist.ready) {
-        const missing = checklist.checks.filter((c) => !c.ok).map((c) => c.label);
+        const missing = checklist.checks
+          .filter((c) => !c.ok)
+          .map((c) => (c.detail ? `${c.label} — ${c.detail}` : c.label));
         throw new UnprocessableEntityException({
           message: `Falta para publicar: ${missing.join('; ')}.`,
           missing,
@@ -115,6 +117,14 @@ export class WebPublicationService {
         slug: true,
         description: true,
         _count: { select: { images: true } },
+        members: {
+          where: { isActive: true },
+          select: {
+            product: {
+              select: { name: true, webPrice: { select: { state: true, reason: true } } },
+            },
+          },
+        },
       },
     });
     if (!product) throw new NotFoundException('Publicación inexistente');
@@ -133,18 +143,46 @@ export class WebPublicationService {
       },
     });
 
+    // Qué producto del sistema no tiene precio y cómo resolverlo (F7·4).
+    const withoutPrice = product.members
+      .filter((m) => m.product.webPrice?.state !== WebPriceState.OK)
+      .map(
+        (m) =>
+          `«${m.product.name}»: ${m.product.webPrice?.reason ?? 'el precio no se calculó todavía; tocá "Recalcular precios".'}`,
+      );
+    const variantDetail =
+      sellable > 0
+        ? null
+        : product.members.length === 0
+          ? 'La publicación no tiene productos del sistema.'
+          : withoutPrice.length
+            ? withoutPrice.join(' ')
+            : 'No hay variantes activas: generá las variantes.';
+
     const checks: WebPublishChecklistDto['checks'] = [
-      { key: 'slug', ok: product.slug.length > 0, label: 'Tiene una dirección (slug)' },
+      {
+        key: 'slug',
+        ok: product.slug.length > 0,
+        label: 'Tiene una dirección (slug)',
+        detail: null,
+      },
       {
         key: 'description',
         ok: product.description.trim().length > 0,
         label: 'Tiene descripción',
+        detail: null,
       },
-      { key: 'image', ok: product._count.images > 0, label: 'Tiene al menos una foto' },
+      {
+        key: 'image',
+        ok: product._count.images > 0,
+        label: 'Tiene al menos una foto',
+        detail: null,
+      },
       {
         key: 'variant',
         ok: sellable > 0,
         label: 'Tiene al menos una variante activa con precio',
+        detail: variantDetail,
       },
     ];
     return { ready: checks.every((c) => c.ok), checks };
