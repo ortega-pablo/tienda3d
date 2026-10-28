@@ -163,11 +163,9 @@ describe('[int] Recálculo automático de los precios web', () => {
       orderBy: { changedAt: 'asc' },
     });
     expect(historial.map((h) => h.cause)).toEqual(['Alta en la tienda', 'Precio de insumo']);
+    // Lo disparó un cambio del sistema: se revalida todo el catálogo.
     expect(changed).toHaveBeenCalledTimes(1);
-    expect(changed.mock.calls[0]![1]).toEqual({
-      scope: 'product',
-      ids: expect.arrayContaining(['maceta', 'lampara']),
-    });
+    expect(changed.mock.calls[0]![1]).toEqual({ scope: 'catalog', ids: [] });
   });
 
   it('una ráfaga de cambios corre un solo recálculo', async () => {

@@ -15,9 +15,13 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { toWebImage } from '@/common/storage/images';
 import { StorageService } from '@/common/storage/storage.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { CatalogEvents, type CatalogChanged } from './catalog-events';
 import { slugify, WebProductsService } from './web-products.service';
 
 type Tx = Prisma.TransactionClient;
+
+/** Un cambio de categorías cambia la navegación de toda la tienda. */
+const NAVIGATION: CatalogChanged = { scope: 'catalog', ids: [] };
 
 const COUNTS = { _count: { select: { products: true, children: true } } } as const;
 type CategoryWithCounts = Prisma.WebCategoryGetPayload<{ include: typeof COUNTS }>;
@@ -31,6 +35,7 @@ export class WebCategoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly events: CatalogEvents,
     private readonly products: WebProductsService,
     private readonly storage: StorageService,
   ) {}
@@ -50,6 +55,7 @@ export class WebCategoriesService {
     const created = await this.prisma.$transaction(async (tx) => {
       await this.assertSlugAvailable(tx, slug);
       if (input.parentId) await this.assertParent(tx, input.parentId);
+      await this.events.changed(tx, NAVIGATION);
       return tx.webCategory.create({
         data: {
           name: input.name,
@@ -94,6 +100,7 @@ export class WebCategoriesService {
         }
         await this.assertParent(tx, input.parentId);
       }
+      await this.events.changed(tx, NAVIGATION);
       return tx.webCategory.update({ where: { id }, data: input, include: COUNTS });
     });
 
@@ -124,7 +131,10 @@ export class WebCategoriesService {
       );
     }
 
-    await this.prisma.webCategory.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webCategory.delete({ where: { id } });
+      await this.events.changed(tx, NAVIGATION);
+    });
     if (category.imagePath) await this.storage.delete('media', category.imagePath);
     await this.audit.record({
       actorId,
@@ -152,10 +162,9 @@ export class WebCategoriesService {
     const path = await this.storage.save('media', `categories/${id}`, 'webp', image.data);
     let updated: CategoryWithCounts;
     try {
-      updated = await this.prisma.webCategory.update({
-        where: { id },
-        data: { imagePath: path },
-        include: COUNTS,
+      updated = await this.prisma.$transaction(async (tx) => {
+        await this.events.changed(tx, NAVIGATION);
+        return tx.webCategory.update({ where: { id }, data: { imagePath: path }, include: COUNTS });
       });
     } catch (error) {
       await this.storage.delete('media', path);
@@ -177,10 +186,9 @@ export class WebCategoriesService {
   async removeImage(id: string, actorId: string): Promise<WebCategoryDto> {
     const before = await this.prisma.webCategory.findUnique({ where: { id } });
     if (!before) throw new NotFoundException('Categoría inexistente');
-    const updated = await this.prisma.webCategory.update({
-      where: { id },
-      data: { imagePath: null },
-      include: COUNTS,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.events.changed(tx, NAVIGATION);
+      return tx.webCategory.update({ where: { id }, data: { imagePath: null }, include: COUNTS });
     });
     if (before.imagePath) {
       await this.storage.delete('media', before.imagePath);
@@ -212,12 +220,13 @@ export class WebCategoriesService {
       throw new BadRequestException(`Categoría inexistente: ${missing.join(', ')}`);
     }
 
-    await this.prisma.$transaction([
-      this.prisma.webProductCategory.deleteMany({ where: { webProductId } }),
-      this.prisma.webProductCategory.createMany({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webProductCategory.deleteMany({ where: { webProductId } });
+      await tx.webProductCategory.createMany({
         data: ids.map((webCategoryId) => ({ webProductId, webCategoryId })),
-      }),
-    ]);
+      });
+      await this.events.productChanged(tx, webProductId);
+    });
 
     await this.audit.record({
       actorId,

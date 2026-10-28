@@ -3,6 +3,7 @@ import { MaterialType, Prisma } from '@prisma/client';
 import type { WebColorOptionInput, WebProductDto } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { CatalogEvents } from './catalog-events';
 import { WebProductsService } from './web-products.service';
 
 type Tx = Prisma.TransactionClient;
@@ -25,6 +26,7 @@ export class WebColorOptionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly events: CatalogEvents,
     private readonly products: WebProductsService,
   ) {}
 
@@ -38,6 +40,7 @@ export class WebColorOptionsService {
     await this.prisma.$transaction(async (tx) => {
       const resolved = await this.resolve(tx, webProductId, options);
       await this.replace(tx, webProductId, resolved);
+      await this.events.productChanged(tx, webProductId);
     });
 
     await this.audit.record({

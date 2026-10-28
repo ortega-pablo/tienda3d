@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PricingModule } from '../pricing/pricing.module';
-import { CatalogEvents, NoopCatalogEvents } from './catalog-events';
+import { OutboxModule } from '../outbox/outbox.module';
+import { CatalogEvents, OutboxCatalogEvents } from './catalog-events';
 import { WebCatalogController } from './web-catalog.controller';
 import { WebAttributesService } from './web-attributes.service';
 import { WebCategoriesService } from './web-categories.service';
@@ -16,7 +17,7 @@ import { WebVariantsService } from './web-variants.service';
 
 /** Tienda online: catálogo web gestionado desde el sistema (plan de unificación, F5). */
 @Module({
-  imports: [PricingModule],
+  imports: [PricingModule, OutboxModule],
   controllers: [WebCatalogController, WebMediaController],
   providers: [
     WebProductsService,
@@ -30,8 +31,7 @@ import { WebVariantsService } from './web-variants.service';
     WebPriceService,
     WebPriceRecalcService,
     { provide: RECALC_TIMER, useValue: realTimer },
-    // El outbox real llega con F11·3.
-    { provide: CatalogEvents, useClass: NoopCatalogEvents },
+    { provide: CatalogEvents, useClass: OutboxCatalogEvents },
   ],
   exports: [WebProductsService],
 })

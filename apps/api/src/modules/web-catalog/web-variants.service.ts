@@ -12,6 +12,7 @@ import type {
 } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { CatalogEvents } from './catalog-events';
 import { variantMatrix, type MatrixCombination } from './domain/variant-matrix';
 import { nextVariantSkus, planVariants } from './domain/variant-plan';
 import { WebProductsService } from './web-products.service';
@@ -30,6 +31,7 @@ export class WebVariantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly events: CatalogEvents,
     private readonly products: WebProductsService,
   ) {}
 
@@ -67,6 +69,7 @@ export class WebVariantsService {
           });
         }
         await this.create(tx, webProductId, plan.create);
+        await this.events.productChanged(tx, webProductId);
         return plan;
       })
       .catch((error: unknown) => {
@@ -124,7 +127,10 @@ export class WebVariantsService {
       }
     }
 
-    await this.prisma.webVariant.update({ where: { id: variantId }, data });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webVariant.update({ where: { id: variantId }, data });
+      await this.events.productChanged(tx, before.webProductId);
+    });
     await this.audit.record({
       actorId,
       entity: 'WebVariant',

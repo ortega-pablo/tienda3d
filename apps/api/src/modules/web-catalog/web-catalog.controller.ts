@@ -50,6 +50,7 @@ import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebImagesService } from './web-images.service';
 import { WebProductsService } from './web-products.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { WebPriceRecalcService } from './web-price-recalc.service';
 import { WebPriceService } from './web-price.service';
 import { WebPublicationService } from './web-publication.service';
@@ -71,6 +72,7 @@ export class WebCatalogController {
     private readonly images: WebImagesService,
     private readonly priceRecalc: WebPriceRecalcService,
     private readonly prices: WebPriceService,
+    private readonly outbox: OutboxService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -311,5 +313,12 @@ export class WebCatalogController {
       checklist: publication ? await this.publication.checklist(publication.id) : null,
       price,
     };
+  }
+
+  /** Avisos al sitio atrasados, para la alerta del panel (F11·3). */
+  @Permissions('ecommerce:read')
+  @Get('outbox')
+  outboxStatus() {
+    return this.outbox.status();
   }
 }

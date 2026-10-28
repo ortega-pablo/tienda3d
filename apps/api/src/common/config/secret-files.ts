@@ -18,6 +18,8 @@ export const SECRET_VARIABLES = [
   'ARCA_CERT',
   'ARCA_KEY',
   'WHATSAPP_TOKEN',
+  // Firma de los avisos al sitio (F11·3).
+  'EVENTS_SECRET_T3D_TO_SF',
 ] as const;
 
 /** Valor de un secreto: el contenido de `NOMBRE_FILE` si está definido, si no `NOMBRE`. */
