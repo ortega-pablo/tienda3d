@@ -31,6 +31,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { UsersModule } from './modules/users/users.module';
 import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
 import { StorefrontIntegrationModule } from './modules/storefront-integration/storefront-integration.module';
+import { InboundEventsModule } from './modules/inbound-events/inbound-events.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { StorefrontIntegrationModule } from './modules/storefront-integration/st
     CategoriesModule,
     WebCatalogModule,
     StorefrontIntegrationModule,
+    InboundEventsModule,
     ProductsModule,
     CustomersModule,
     QuotesModule,
