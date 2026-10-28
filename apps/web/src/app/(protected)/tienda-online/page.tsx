@@ -27,6 +27,7 @@ const SECCIONES: Array<{ titulo: string; detalle: string; href?: string }> = [
   {
     titulo: 'Ajustes de la tienda',
     detalle: 'Envíos, retiro por el taller, datos de transferencia y email de avisos.',
+    href: '/tienda-online/ajustes',
   },
 ];
 

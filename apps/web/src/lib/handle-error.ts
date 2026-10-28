@@ -41,9 +41,33 @@ export function handleApiError(err: unknown, opts: HandleErrorOptions = {}): str
   return message;
 }
 
+/**
+ * Los errores de validación de los pipes zod traen el detalle en
+ * `details.issues` (o `details.fields`); el "Validación fallida" solo no dice
+ * qué corregir.
+ */
+const ZOD_DEFAULT =
+  /^(Required|Invalid|Expected|String must|Number must|Array must|Unrecognized|Too (small|big))/;
+
+function validationDetail(details: unknown): string | null {
+  if (typeof details !== 'object' || details === null) return null;
+  const list =
+    (details as { issues?: unknown; fields?: unknown }).issues ??
+    (details as { fields?: unknown }).fields;
+  if (!Array.isArray(list)) return null;
+  const messages = list
+    .map((i) => (typeof i === 'object' && i && 'message' in i ? String(i.message) : ''))
+    // Los mensajes por defecto de zod están en inglés: mejor el genérico.
+    .filter((m) => m && !ZOD_DEFAULT.test(m));
+  return messages.length ? [...new Set(messages)].join(' · ') : null;
+}
+
 function resolveMessage(err: unknown, fallback?: string): string {
   if (err instanceof ApiError) {
     // Prefer the message the backend sent. Fall back to code-driven default.
+    // Los pipes zod responden 400 (BAD_REQUEST), no VALIDATION: se mira el detalle.
+    const detail = validationDetail(err.details);
+    if (detail) return detail;
     return err.message || CODE_MESSAGES[err.code] || fallback || 'Error';
   }
   if (err instanceof Error) {
