@@ -1244,6 +1244,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - (d) las columnas de cada vista coinciden con un snapshot;
     - (e) lo oculto no aparece.
   - Cierra cuando: los tests están en verde en `pnpm verify`.
+  - Hecho así: `test/storefront-contract.int-spec.ts` como `storefront_reader_test`: (a) lee las ocho vistas sin calificar el esquema (search_path); (b) _permission denied_ en `users`, `supplier_materials`, `customers`, `quotes`, `web_products` y `web_prices`; (c) no escribe ni en tablas ni a través de vistas, ni crea objetos; (d) las columnas y tipos de cada vista están escritos en el test (no un snapshot autogenerado, para que cambiar el contrato sea explícito); (e) un borrador listo para vender no aparece, publicado sí y oculto de nuevo no.
 - [ ] **F10·4 [t3d][sf] El contrato de lectura está documentado**
   - Para qué: que el sitio pueda evolucionar leyendo solo ese documento.
   - Qué hacer: escribir `docs/contrato-storefront-v1.md` (vistas, columnas, semántica, versionado y vectores de prueba de la firma de F11) y reemplazar `storefront/docs/integracion-tienda3d.md` por un link a él.
