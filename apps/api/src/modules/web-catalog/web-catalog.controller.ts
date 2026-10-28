@@ -1,14 +1,31 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import {
   webAttributesSchema,
+  webCategoryCreateSchema,
+  webCategoryUpdateSchema,
   webColorOptionsSchema,
   webProductCreateSchema,
+  webProductCategoriesSchema,
   webProductMembersSchema,
   webProductUpdateSchema,
   webVariantUpdateSchema,
   type WebAttributesInput,
+  type WebCategoryCreateInput,
+  type WebCategoryUpdateInput,
   type WebColorOptionsInput,
   type WebProductCreateInput,
+  type WebProductCategoriesInput,
   type WebProductMembersInput,
   type WebProductUpdateInput,
   type WebVariantUpdateInput,
@@ -19,6 +36,7 @@ import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
 import { WebAttributesService } from './web-attributes.service';
+import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
 import { WebVariantsService } from './web-variants.service';
@@ -32,6 +50,7 @@ export class WebCatalogController {
     private readonly colorOptions: WebColorOptionsService,
     private readonly attributes: WebAttributesService,
     private readonly variants: WebVariantsService,
+    private readonly categories: WebCategoriesService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -109,5 +128,47 @@ export class WebCatalogController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.variants.update(id, body, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Put('products/:id/categories')
+  setProductCategories(
+    @Param('id') id: string,
+    @Body(ZodValidation(webProductCategoriesSchema)) body: WebProductCategoriesInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.categories.setProductCategories(id, body.categoryIds, user.sub);
+  }
+
+  @Permissions('ecommerce:read')
+  @Get('categories')
+  listCategories() {
+    return this.categories.list();
+  }
+
+  @Permissions('ecommerce:write')
+  @Post('categories')
+  createCategory(
+    @Body(ZodValidation(webCategoryCreateSchema)) body: WebCategoryCreateInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.categories.create(body, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Patch('categories/:id')
+  updateCategory(
+    @Param('id') id: string,
+    @Body(ZodValidation(webCategoryUpdateSchema)) body: WebCategoryUpdateInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.categories.update(id, body, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Delete('categories/:id')
+  @HttpCode(204)
+  removeCategory(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    return this.categories.remove(id, user.sub);
   }
 }

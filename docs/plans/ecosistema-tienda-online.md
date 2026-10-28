@@ -1052,6 +1052,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: ordenar la vidriera sin cambiar ningún precio.
   - Qué hacer: CRUD `/web-catalog/categories` (dos niveles, slug, descripción, foto y orden) y la asignación a publicaciones.
   - Cierra cuando: no se puede borrar una categoría con publicaciones o hijas (test).
+  - Hecho así: `GET/POST /web-catalog/categories`, `PATCH/DELETE /web-catalog/categories/:id` y `PUT /web-catalog/products/:id/categories`. La foto la sube F6·4 (acá solo se expone `imagePath`). Dos niveles: la madre tiene que ser de primer nivel y una categoría con hijas no puede pasar a ser hija.
 - [ ] **F5·7 [t3d] El admin publica u oculta un producto con un botón**
   - Para qué: controlar qué ve el cliente, con un aviso de lo que falta antes de publicar.
   - Qué hacer:

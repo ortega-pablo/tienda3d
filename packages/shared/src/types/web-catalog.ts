@@ -100,6 +100,28 @@ export interface WebVariantsRegenerateResultDto {
   product: WebProductDto;
 }
 
+/** Categoría de la vidriera; `parentId` null es de primer nivel. */
+export interface WebCategoryDto {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  parentId: string | null;
+  imagePath: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  productCount: number;
+  childCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebProductCategoryDto {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export interface WebProductDto {
   id: string;
   slug: string;
@@ -117,6 +139,7 @@ export interface WebProductDto {
   colorOptions: WebColorOptionDto[];
   attributes: WebAttributeDto[];
   variants: WebVariantDto[];
+  categories: WebProductCategoryDto[];
   /** Slugs anteriores, que el sitio redirige al actual. */
   previousSlugs: string[];
   createdAt: string;
