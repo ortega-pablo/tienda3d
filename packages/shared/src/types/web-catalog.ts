@@ -160,6 +160,17 @@ export interface WebPublishChecklistDto {
   checks: WebPublishCheckDto[];
 }
 
+export interface EcommerceSettingsDto {
+  shippingFlatRate: number | null;
+  freeShippingFrom: number | null;
+  pickupEnabled: boolean;
+  pickupInstructions: string;
+  bankTransferEnabled: boolean;
+  bankTransferInstructions: string;
+  notificationEmail: string;
+  updatedAt: string | null;
+}
+
 export interface WebProductSummaryDto {
   id: string;
   slug: string;

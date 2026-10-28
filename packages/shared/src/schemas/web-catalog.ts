@@ -162,3 +162,37 @@ export const webProductCategoriesSchema = z.object({
   categoryIds: z.array(z.string().min(1)).max(10),
 });
 export type WebProductCategoriesInput = z.infer<typeof webProductCategoriesSchema>;
+
+/** Monto en pesos con hasta dos decimales (se guarda como Decimal(14,2)). */
+const moneySchema = z
+  .number()
+  .min(0, 'El monto no puede ser negativo')
+  .max(100_000_000)
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Hasta dos decimales');
+
+/**
+ * Condiciones de venta de la tienda (plan F5·8): envío, retiro, transferencia
+ * y el email que recibe los avisos de pedidos. Se guarda entero.
+ */
+export const ecommerceSettingsSchema = z
+  .object({
+    /** Envío con tarifa plana; null = no se ofrece envío. */
+    shippingFlatRate: moneySchema.nullable(),
+    /** Desde este total el envío es gratis; null = nunca. */
+    freeShippingFrom: moneySchema.nullable(),
+    pickupEnabled: z.boolean(),
+    pickupInstructions: z.string().trim().max(2000),
+    bankTransferEnabled: z.boolean(),
+    bankTransferInstructions: z.string().trim().max(4000),
+    notificationEmail: z.union([z.literal(''), z.string().trim().email('Email inválido').max(254)]),
+  })
+  .strict()
+  .refine((s) => !s.bankTransferEnabled || s.bankTransferInstructions.length > 0, {
+    path: ['bankTransferInstructions'],
+    message: 'Con transferencia habilitada, cargá los datos para pagar (CBU o alias).',
+  })
+  .refine((s) => s.pickupEnabled || s.shippingFlatRate !== null, {
+    path: ['pickupEnabled'],
+    message: 'La tienda tiene que ofrecer retiro o envío.',
+  });
+export type EcommerceSettingsInput = z.infer<typeof ecommerceSettingsSchema>;
