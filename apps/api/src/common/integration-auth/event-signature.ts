@@ -7,7 +7,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  *   X-TP-Signature: v1=<hex(HMAC-SHA256(secreto, timestamp + "." + cuerpo))>
  *
  * El cuerpo son los bytes exactos que viajan (UTF-8). La misma función vive en
- * el sitio (storefront/src/server/events/signature.ts) y las dos pasan los
+ * el sitio (storefront/src/domain/event-signature.ts) y las dos pasan los
  * vectores de docs/contrato-storefront-v1.md.
  */
 

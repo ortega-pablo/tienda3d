@@ -36,7 +36,8 @@ export const envSchema = z
     PRIVATE_DIR: z.string().min(1).default('./storage/private'),
 
     /** Adónde se entregan los avisos al sitio (F11·3), por la red interna. */
-    STOREFRONT_EVENTS_URL: z.string().url().default('http://storefront:3100/api/internal/events'),
+    // Con la barra final: el sitio usa trailingSlash y sin ella responde con un 308.
+    STOREFRONT_EVENTS_URL: z.string().url().default('http://storefront:3100/api/internal/events/'),
     /** Secreto para firmarlos; sin él, los avisos quedan pendientes. */
     EVENTS_SECRET_T3D_TO_SF: optional,
 

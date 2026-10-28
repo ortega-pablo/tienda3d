@@ -2,7 +2,7 @@ import { EVENT_WINDOW_SECONDS, signEvent, verifyEvent } from './event-signature'
 
 /**
  * Vectores de docs/contrato-storefront-v1.md (calculados con Node y verificados
- * con openssl). El sitio prueba los mismos en tests/unit/event-signature.test.ts.
+ * con openssl). El sitio prueba los mismos en storefront/tests/unit/event-signature.test.ts.
  */
 const VECTORS = [
   {

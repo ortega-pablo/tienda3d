@@ -521,7 +521,7 @@ y precio calculado:
 - **Rotación:** se admiten dos claves activas a la vez durante el cambio.
 - **Exposición:** la ruta es `@Public` para el JWT, pero lleva su propio guard y su propio límite. El proxy de `tienda3d-web` y Caddy devuelven 404 a `/api/integrations/*`: solo se llega por la red interna.
 
-**De tienda3d al storefront.** Eventos a `http://storefront:3100/api/internal/events`:
+**De tienda3d al storefront.** Eventos a `http://storefront:3100/api/internal/events/` (con barra final: el sitio usa `trailingSlash`):
 
 | Evento                                                      | Efecto en el sitio                                                     |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -1295,6 +1295,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - Worker `src/worker/index.ts` (mismo `Dockerfile`, comando `node dist/worker.js` o `pnpm worker`) con su outbox, el envío de mails pendientes y la limpieza de sesiones y tokens vencidos.
     - Servicio `storefront-worker` en el compose de infra.
   - Cierra cuando: con tienda3d apagado, un `customer.upserted` queda pendiente y se entrega al prenderlo; una firma inválida da 401.
+  - Hecho así: en [sf], tablas `inbound_events` (dedup por `X-TP-Event-Id`) y `outbox_events` (llamadas a la API de integración con `Idempotency-Key`), `POST /api/internal/events` (firma y ventana de F11·2 con `src/domain/inbound-event.ts`; un tipo desconocido se confirma y se ignora; si el manejador falla no se registra y tienda3d reintenta), `enqueueCall(tx, …)` para F13–F15 y el worker `pnpm worker` (`src/worker/`, sin `server-only`: su propio cliente de base) que entrega con la clave del sitio, con el backoff de `src/domain/outbox.ts`, y borra sesiones del panel vencidas. La firma pasó a `src/domain/event-signature.ts` (es pura). En [infra], servicio `storefront-worker` (imagen `tools`; en desarrollo, el código montado), `EVENTS_SECRET_T3D_TO_SF_FILE` en el sitio y `STOREFRONT_API_KEY_FILE` en `tienda3d-migrate`, que registra su hash con `integration-key.ts register` ([t3d] `migrate.sh`). El `customer.upserted` se probó contra un tienda3d de mentira que se apaga y se prende (el endpoint real llega en F13). Los mails pendientes pasan al worker con los pedidos (F14): hoy el sitio los manda en el momento.
 - [ ] **F11·6 [sf] Un cambio en el panel se ve en la tienda en segundos**
   - Para qué: que lo publicado sea lo que ve el cliente.
   - Qué hacer: `catalog.changed` → `revalidateTag(CATALOG_TAG | productTag(slug) | SETTINGS_TAG)`, con un `cacheLife` de respaldo de 5 minutos.

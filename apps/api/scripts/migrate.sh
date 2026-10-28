@@ -8,6 +8,8 @@
 #                            prisma/grants.sql. Si no, no se tocan permisos.
 #   READER_DB_ROLE           rol con el que el sitio lee el catálogo: si está, se le
 #                            aplican los de prisma/grants-reader.sql (solo storefront_v1).
+#   STOREFRONT_API_KEY_FILE  clave con la que el sitio llama a la API de integración
+#                            (secreto de infra): se registra su hash si no estaba (F11·5).
 #   RUN_SEED=true            corre también el seed (primer arranque de una base).
 #
 #   sh scripts/with-secrets.sh sh scripts/migrate.sh
@@ -32,6 +34,10 @@ fi
 if [ -n "${READER_DB_ROLE:-}" ]; then
   psql "${url%%\?*}" -v ON_ERROR_STOP=1 -q -v reader_role="$READER_DB_ROLE" -f prisma/grants-reader.sql
   echo "Permisos de lectura del sitio aplicados al rol $READER_DB_ROLE."
+fi
+
+if [ -n "${STOREFRONT_API_KEY_FILE:-}" ]; then
+  DATABASE_URL="$url" "$bin/tsx" scripts/integration-key.ts register storefront < "$STOREFRONT_API_KEY_FILE"
 fi
 
 if [ "${RUN_SEED:-false}" = "true" ]; then
