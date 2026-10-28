@@ -17,6 +17,7 @@ import type {
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
 import { variantAvailability } from './domain/availability';
+import { WebPriceService } from './web-price.service';
 
 const DETAIL_INCLUDE = {
   members: {
@@ -78,6 +79,7 @@ export class WebProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly prices: WebPriceService,
   ) {}
 
   async list(): Promise<WebProductSummaryDto[]> {
@@ -124,6 +126,7 @@ export class WebProductsService {
       return product;
     });
 
+    await this.refreshPrices(input.members ?? []);
     await this.audit.record({
       actorId,
       entity: 'WebProduct',
@@ -174,6 +177,7 @@ export class WebProductsService {
 
     const before = await this.prisma.webProductMember.findMany({ where: { webProductId: id } });
     await this.prisma.$transaction((tx) => this.replaceMembers(tx, id, members));
+    await this.refreshPrices(members);
 
     await this.audit.record({
       actorId,
@@ -191,6 +195,11 @@ export class WebProductsService {
   }
 
   // ----- internals -----
+
+  /** Un producto que entra a la tienda queda con su precio calculado (F7·2). */
+  private async refreshPrices(members: WebProductMemberInput[]) {
+    for (const member of members) await this.prices.refresh(member.productId, 'Alta en la tienda');
+  }
 
   /**
    * Reemplaza los miembros de la publicación. Los que ya no vienen se borran,

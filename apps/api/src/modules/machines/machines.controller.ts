@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -50,12 +51,14 @@ export class MachinesController {
   }
 
   @Permissions('machine:write')
+  @AffectsPrices('Máquinas')
   @Post()
   create(@Body(ZodValidation(inputSchema)) body: z.infer<typeof inputSchema>) {
     return this.machines.create(body);
   }
 
   @Permissions('machine:write')
+  @AffectsPrices('Máquinas')
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -65,12 +68,14 @@ export class MachinesController {
   }
 
   @Permissions('machine:write')
+  @AffectsPrices('Máquinas')
   @Patch(':id/activate')
   activate(@Param('id') id: string) {
     return this.machines.activate(id);
   }
 
   @Permissions('machine:write')
+  @AffectsPrices('Máquinas')
   @Delete(':id')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {

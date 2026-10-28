@@ -7,6 +7,7 @@ import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebImagesService } from './web-images.service';
 import { WebMediaController } from './web-media.controller';
+import { RECALC_TIMER, realTimer, WebPriceRecalcService } from './web-price-recalc.service';
 import { WebPriceService } from './web-price.service';
 import { WebProductsService } from './web-products.service';
 import { WebPublicationService } from './web-publication.service';
@@ -27,6 +28,8 @@ import { WebVariantsService } from './web-variants.service';
     WebSettingsService,
     WebImagesService,
     WebPriceService,
+    WebPriceRecalcService,
+    { provide: RECALC_TIMER, useValue: realTimer },
     // El outbox real llega con F11·3.
     { provide: CatalogEvents, useClass: NoopCatalogEvents },
   ],

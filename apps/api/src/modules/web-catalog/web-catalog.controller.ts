@@ -49,6 +49,7 @@ import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebImagesService } from './web-images.service';
 import { WebProductsService } from './web-products.service';
+import { WebPriceRecalcService } from './web-price-recalc.service';
 import { WebPublicationService } from './web-publication.service';
 import { WebSettingsService } from './web-settings.service';
 import { WebVariantsService } from './web-variants.service';
@@ -66,6 +67,7 @@ export class WebCatalogController {
     private readonly publication: WebPublicationService,
     private readonly settings: WebSettingsService,
     private readonly images: WebImagesService,
+    private readonly priceRecalc: WebPriceRecalcService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -276,5 +278,13 @@ export class WebCatalogController {
   @Delete('categories/:id/image')
   removeCategoryImage(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
     return this.categories.removeImage(id, user.sub);
+  }
+
+  /** Botón "Recalcular precios" del panel (F7·2). */
+  @Permissions('ecommerce:write')
+  @Post('prices/recompute')
+  @HttpCode(200)
+  recomputePrices() {
+    return this.priceRecalc.recomputeAll('Recálculo manual');
   }
 }

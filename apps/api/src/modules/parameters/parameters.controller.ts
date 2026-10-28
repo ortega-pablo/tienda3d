@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -33,6 +34,7 @@ export class ParametersController {
   }
 
   @Permissions('parameter:write')
+  @AffectsPrices('Parámetros globales')
   @Patch()
   update(
     @Body(ZodValidation(patchSchema)) body: z.infer<typeof patchSchema>,

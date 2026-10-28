@@ -8,6 +8,7 @@ import { validateEnv } from './common/config/env.schema';
 import { requestId } from './common/logging/request-id';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { StorageModule } from './common/storage/storage.module';
+import { PriceInputsModule } from './common/price-inputs/price-inputs.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
@@ -63,6 +64,7 @@ import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
     }),
     PrismaModule,
     StorageModule,
+    PriceInputsModule,
     AuditModule,
     AuthModule,
     UsersModule,

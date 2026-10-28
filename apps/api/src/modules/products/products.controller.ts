@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
+import { AffectsPrices } from '@/common/price-inputs/affects-prices.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
@@ -172,6 +173,7 @@ export class ProductsController {
   }
 
   @Permissions('product:write')
+  @AffectsPrices('Producto editado')
   @Put(':id')
   update(
     @Param('id') id: string,
@@ -189,6 +191,7 @@ export class ProductsController {
   }
 
   @Permissions('product:write')
+  @AffectsPrices('Producto archivado')
   @Delete(':id')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {

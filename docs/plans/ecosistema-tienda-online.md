@@ -1125,6 +1125,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - Sumar un cron de respaldo cada 10 min y un botón "Recalcular precios" (`ecommerce:write`).
     - Si algún precio cambió, registrar `WebPriceHistory` y emitir `catalog.changed`.
   - Cierra cuando: cambiar el precio vigente de "PLA Genérico" actualiza en menos de 5 s el precio publicado de todos los productos que lo usan (test de integración con el reloj controlado).
+  - Hecho así: las 15 escrituras de §4.3 llevan `@AffectsPrices('<causa>')`; un interceptor global avisa al `PriceInputsBus` (rxjs) cuando el handler termina bien, así los módulos de costos no dependen de la tienda. `WebPriceRecalcService` escucha con debounce de 2 s (junta las causas), corre un recálculo a la vez, tiene el cron de 10 min y el botón `POST /web-catalog/prices/recompute`. Avisa `catalog.changed` con los slugs de las publicaciones afectadas. El reloj del debounce es inyectable (`RECALC_TIMER`) para el test. Agregar un producto a una publicación le calcula el precio en el momento.
 - [ ] **F7·3 [t3d] Se ve el historial de precios de cada producto**
   - Para qué: saber cuándo y por qué cambió un precio.
   - Qué hacer: `GET /web-catalog/prices/:productId/history`.
