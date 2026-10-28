@@ -283,22 +283,25 @@ async function seedChannels() {
       unifiedRegimePct: 4, // CASH applies regime by default; admin can toggle "sin factura"
     },
   ];
+  // Como con los parámetros: `update` solo asegura lo estructural (lo que el
+  // panel no deja cambiar en un canal de sistema). Nombre, comisiones,
+  // impuestos y activo son del taller: el ecosistema corre el seed en cada
+  // arranque, y pisarlos renombraba "Contado S/F" a "Efectivo".
   for (const c of systemChannels) {
     await prisma.channel.upsert({
       where: { slug: c.slug },
-      update: { ...c, isSystem: true, isActive: true, taxMode: TaxMode.SIMPLE },
+      update: { isSystem: true, kind: c.kind },
       create: { ...c, isSystem: true, taxMode: TaxMode.SIMPLE },
     });
   }
 
   // Soft-deactivate the legacy "Mayorista" channel without deleting it so
-  // historical quotes that reference it stay readable.
-  await prisma.channel
-    .update({
-      where: { slug: 'mayorista' },
-      data: { isActive: false, isSystem: false, kind: ChannelKind.CUSTOM },
-    })
-    .catch(() => undefined);
+  // historical quotes that reference it stay readable. Una sola vez: si
+  // después alguien lo reactiva, queda reactivado.
+  await prisma.channel.updateMany({
+    where: { slug: 'mayorista', isSystem: true },
+    data: { isActive: false, isSystem: false, kind: ChannelKind.CUSTOM },
+  });
 }
 
 async function seedDemoMaterials() {
@@ -537,12 +540,18 @@ async function main() {
   console.log('✔ Machine (Bambu Lab A1)');
   await seedChannels();
   console.log('✔ Channels (Directa / MELI / Efectivo) + Mayorista deactivated');
-  const materials = await seedDemoMaterials();
-  console.log('✔ Demo materials');
-  await seedDemoSupplierPrices(materials);
-  console.log('✔ Demo supplier prices');
-  await seedDemoProduct(materials);
-  console.log('✔ Demo product (Cuaderno A5)');
+  // Los datos de demo son para una base nueva. En la del taller agregarían un
+  // producto, un proveedor y precios que nadie cargó.
+  if ((await prisma.product.count()) === 0) {
+    const materials = await seedDemoMaterials();
+    console.log('✔ Demo materials');
+    await seedDemoSupplierPrices(materials);
+    console.log('✔ Demo supplier prices');
+    await seedDemoProduct(materials);
+    console.log('✔ Demo product (Cuaderno A5)');
+  } else {
+    console.log('… Demo data skipped (la base ya tiene productos)');
+  }
   console.log('✅ Seed complete');
 }
 

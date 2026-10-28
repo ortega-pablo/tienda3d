@@ -21,7 +21,8 @@
     "integration:issue-key": "tsx scripts/integration-key.ts issue",
     "integration:revoke": "tsx scripts/integration-key.ts revoke",
     "integration:list": "tsx scripts/integration-key.ts list",
-    "integration:register": "tsx scripts/integration-key.ts register"
+    "integration:register": "tsx scripts/integration-key.ts register",
+    "store:colors": "tsx scripts/store-colors.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

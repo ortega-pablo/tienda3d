@@ -50,6 +50,8 @@ COPY --from=build --chown=nestjs:nodejs /app/apps/api/scripts ./apps/api/scripts
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/config ./apps/api/src/common/config
 # scripts/integration-key.ts (emitir y revocar claves de integración, F11·1).
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/integration-auth ./apps/api/src/common/integration-auth
+# scripts/store-colors.ts y la importación del catálogo de la web (F9).
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/modules/catalog-import ./apps/api/src/modules/catalog-import
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --chown=nestjs:nodejs package.json pnpm-workspace.yaml ./
 
