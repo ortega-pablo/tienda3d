@@ -43,6 +43,8 @@ apps/api/prisma/seed.d.ts.map
 
 # Docker
 docker-data/
+# Archivos subidos en desarrollo local (MEDIA_DIR / PRIVATE_DIR por defecto)
+apps/api/storage/
 
 # Misc
 *.pem

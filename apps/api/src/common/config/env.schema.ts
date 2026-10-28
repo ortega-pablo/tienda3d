@@ -23,10 +23,17 @@ export const envSchema = z
 
     JWT_SECRET: z.string({ required_error: 'falta JWT_SECRET (o JWT_SECRET_FILE)' }).min(1),
     JWT_EXPIRES_IN: z.string().default('15m'),
-    REFRESH_SECRET: z.string({ required_error: 'falta REFRESH_SECRET (o REFRESH_SECRET_FILE)' }).min(1),
+    REFRESH_SECRET: z
+      .string({ required_error: 'falta REFRESH_SECRET (o REFRESH_SECRET_FILE)' })
+      .min(1),
     REFRESH_EXPIRES_IN: z.string().default('7d'),
 
     BRAND_LOGO_PATH: optional,
+
+    /** Fotos de la tienda (volumen `media`, el sitio lo monta de solo lectura). */
+    MEDIA_DIR: z.string().min(1).default('./storage/media'),
+    /** Archivos que no se publican (volumen `t3d-private`). */
+    PRIVATE_DIR: z.string().min(1).default('./storage/private'),
 
     INTEGRATION_MELI_ENABLED: flag,
     MELI_CLIENT_ID: optional,
