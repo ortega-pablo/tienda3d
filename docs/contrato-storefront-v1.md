@@ -153,7 +153,7 @@ Solo aparecen las activas. Una hija se muestra solo si su madre también está a
 | Columna        | Tipo | Qué es                                             |
 | -------------- | ---- | -------------------------------------------------- |
 | `old_slug`     | text | Una dirección vieja de una publicación visible.    |
-| `product_slug` | text | La actual: redirigir con 301 a `/producto/<esta>`. |
+| `product_slug` | text | La actual: redirigir con 308 a `/producto/<esta>`. |
 
 ### `store_settings`
 
