@@ -1335,6 +1335,7 @@ contenedor apagado.
   - Para qué: cargar cada foto una sola vez.
   - Qué hacer: `/media/[...path]` lee de `MEDIA_DIR` (montado `:ro`) con `Cache-Control` largo y `next/image` sobre esas rutas.
   - Cierra cuando: las fotos subidas en el panel se ven en el sitio.
+  - Hecho así: `/media/catalog/<id>/<uuid>.webp` y `/media/categories/<id>/<uuid>.webp` se leen de `MEDIA_DIR` (el volumen `media`, montado `:ro`, que [infra] ya pasaba) con `Cache-Control: public, max-age=31536000, immutable`; la ruta se valida con una regla pura (`src/domain/media.ts`: tres segmentos, carpeta conocida, solo `.webp`) y `realpath` impide salir del volumen. Las rutas de dos segmentos siguen sirviendo las fotos propias del sitio hasta que se borre su panel (F12·5). `next/image` las optimiza sin configuración extra. Probado en el ecosistema: una foto subida al Army desde la API del panel se sirvió en el sitio en el momento y dio 404 al borrarla; la ficha de la Trapecio muestra sus fotos, sin errores en la consola.
 - [ ] **F12·4 [sf] Un link viejo a un producto sigue funcionando después de cambiarle el nombre**
   - Para qué: no perder visitas ni posicionamiento en Google.
   - Qué hacer: un slug que figura en `slug_redirects` responde 308 al nuevo.
