@@ -1066,6 +1066,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: cambiar las condiciones de venta sin tocar el sitio.
   - Qué hacer: `GET/PUT /web-catalog/settings` (`ecommerce:settings`) sobre `EcommerceSettings`.
   - Cierra cuando: un test cubre el guardado y la validación (montos ≥ 0, email válido).
+  - Hecho así: se guarda entero (PUT); sin fila, GET devuelve los defaults. Además de montos ≥ 0 con hasta dos decimales y email válido (o vacío), exige los datos de pago si la transferencia está habilitada y que haya retiro o envío. Avisa `catalog.changed {scope: 'settings'}`. Test por HTTP, con el 403 sin `ecommerce:settings`.
 
 **Verificación:** verificación mínima de [t3d]; `route-permissions.spec.ts` cubre las rutas nuevas.
 

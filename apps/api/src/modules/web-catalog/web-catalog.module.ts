@@ -6,6 +6,7 @@ import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
 import { WebPublicationService } from './web-publication.service';
+import { WebSettingsService } from './web-settings.service';
 import { WebVariantsService } from './web-variants.service';
 
 /** Tienda online: catálogo web gestionado desde el sistema (plan de unificación, F5). */
@@ -18,6 +19,7 @@ import { WebVariantsService } from './web-variants.service';
     WebVariantsService,
     WebCategoriesService,
     WebPublicationService,
+    WebSettingsService,
     // El outbox real llega con F11·3.
     { provide: CatalogEvents, useClass: NoopCatalogEvents },
   ],

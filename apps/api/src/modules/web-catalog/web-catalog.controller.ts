@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ecommerceSettingsSchema,
   webAttributesSchema,
   webCategoryCreateSchema,
   webCategoryUpdateSchema,
@@ -20,6 +21,7 @@ import {
   webProductMembersSchema,
   webProductUpdateSchema,
   webVariantUpdateSchema,
+  type EcommerceSettingsInput,
   type WebAttributesInput,
   type WebCategoryCreateInput,
   type WebCategoryUpdateInput,
@@ -40,6 +42,7 @@ import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
 import { WebPublicationService } from './web-publication.service';
+import { WebSettingsService } from './web-settings.service';
 import { WebVariantsService } from './web-variants.service';
 
 /** Gestión de la tienda online. Solo el rol admin tiene ecommerce:* (F4·1). */
@@ -53,6 +56,7 @@ export class WebCatalogController {
     private readonly variants: WebVariantsService,
     private readonly categories: WebCategoriesService,
     private readonly publication: WebPublicationService,
+    private readonly settings: WebSettingsService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -192,5 +196,20 @@ export class WebCatalogController {
   @HttpCode(200)
   hide(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
     return this.publication.hide(id, user.sub);
+  }
+
+  @Permissions('ecommerce:settings')
+  @Get('settings')
+  getSettings() {
+    return this.settings.get();
+  }
+
+  @Permissions('ecommerce:settings')
+  @Put('settings')
+  saveSettings(
+    @Body(ZodValidation(ecommerceSettingsSchema)) body: EcommerceSettingsInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.settings.save(body, user.sub);
   }
 }
