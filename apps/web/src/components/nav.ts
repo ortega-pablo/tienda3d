@@ -11,6 +11,7 @@ import {
   KeyRound,
   Layers,
   LayoutDashboard,
+  LayoutGrid,
   Package,
   PackageSearch,
   Plug,
@@ -32,6 +33,8 @@ export interface NavItem {
    * Match is "any of": showing the item is enough if the user has at least one.
    */
   permissions?: string[];
+  /** Solo la ruta exacta lo marca activo: un resumen cuyas subpáginas tienen entrada propia. */
+  exact?: boolean;
 }
 
 export interface NavGroup {
@@ -190,6 +193,13 @@ export const NAVIGATION: NavGroup[] = [
         label: 'Resumen',
         href: '/tienda-online',
         icon: Store,
+        permissions: ['ecommerce:read'],
+        exact: true,
+      },
+      {
+        label: 'Publicaciones',
+        href: '/tienda-online/publicaciones',
+        icon: LayoutGrid,
         permissions: ['ecommerce:read'],
       },
     ],

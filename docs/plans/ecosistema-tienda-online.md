@@ -1161,7 +1161,8 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 - [ ] **F8·3 [t3d] El admin ve todas las publicaciones con sus alertas**
   - Para qué: detectar de un vistazo qué falta publicar o corregir.
   - Qué hacer: `/tienda-online/publicaciones` con foto, nombre, estado, rango de precio, variantes activas/total, alertas (sin precio, color inactivo, sin fotos) y filtro por estado.
-  - Cierra cuando: las 13 publicaciones migradas (F9) se ven con sus alertas.
+  - Cierra cuando: las publicaciones se ven con sus alertas (probado con publicaciones de prueba en el ecosistema). ~~las 13 publicaciones migradas (F9) se ven con sus alertas~~ → pasa a la verificación de F9, que depende de D12.
+  - Hecho así: `tienda-online/publicaciones` (lista con portada por el proxy de medios, estado, alertas, rango de precio y variantes activas/total; filtro por estado y búsqueda; alta en diálogo que lleva al editor de F8·4). `GET /web-catalog/products` suma `coverImagePath`. En el menú, "Resumen" se marca solo en su ruta exacta (`exact` en `NavItem`).
 - [ ] **F8·4 [t3d] El admin arma una publicación completa: contenido, variantes, fotos y categorías**
   - Para qué: cargar y mantener un producto web sin tocar la base.
   - Qué hacer: `/tienda-online/publicaciones/[id]` con pestañas:
@@ -1210,7 +1211,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Qué hacer: comparar por variante el precio web actual contra el precio publicado nuevo (Venta Directa), con la diferencia en pesos y en porcentaje.
   - Cierra cuando: el reporte está entregado y la dueña confirma o pide ajustar markups o categorías **en el sistema** (no en la web).
 
-**Verificación:** recorrido del panel con las 13 publicaciones en estado `HIDDEN`. Se publican recién en F12.
+**Verificación:** recorrido del panel con las 13 publicaciones en estado `HIDDEN`, y el listado de F8·3 las muestra con sus alertas (criterio que viene de F8·3). Se publican recién en F12.
 
 ---
 

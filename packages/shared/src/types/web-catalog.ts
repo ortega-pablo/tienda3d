@@ -226,5 +226,7 @@ export interface WebProductSummaryDto {
   priceMin: number | null;
   priceMax: number | null;
   alerts: WebProductAlert[];
+  /** Primera foto de la galería, relativa al volumen `media`. */
+  coverImagePath: string | null;
   updatedAt: string;
 }

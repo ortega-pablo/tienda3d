@@ -1,11 +1,14 @@
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 /** Secciones de la gestión de la tienda online, en el orden en que se habilitan. */
-const SECCIONES = [
+const SECCIONES: Array<{ titulo: string; detalle: string; href?: string }> = [
   {
     titulo: 'Publicaciones',
     detalle:
       'Qué productos del sistema se venden en la web, con sus fotos, colores, opciones y el botón para publicar u ocultar.',
+    href: '/tienda-online/publicaciones',
   },
   {
     titulo: 'Categorías de la tienda',
@@ -44,7 +47,13 @@ export default function TiendaOnlinePage() {
               <CardDescription>{s.detalle}</CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Se habilita en las próximas entregas.
+              {s.href ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={s.href}>Abrir</Link>
+                </Button>
+              ) : (
+                'Se habilita en las próximas entregas.'
+              )}
             </CardContent>
           </Card>
         ))}

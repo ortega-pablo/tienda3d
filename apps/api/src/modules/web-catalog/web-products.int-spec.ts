@@ -189,5 +189,19 @@ describe('[int] Publicaciones de la tienda online', () => {
     expect(fila!.priceMin).not.toBeNull();
     expect(fila!.priceMax).toBeGreaterThan(fila!.priceMin!);
     expect(fila!.alerts).toEqual(['NO_IMAGES', 'NO_VARIANTS']);
+    expect(fila!.coverImagePath).toBeNull();
+
+    // La portada es la primera foto de la galería.
+    for (const [position, path] of [
+      [1, 'catalog/segunda.webp'],
+      [0, 'catalog/portada.webp'],
+    ] as const) {
+      await prisma.webImage.create({
+        data: { webProductId: fila!.id, path, width: 10, height: 10, position },
+      });
+    }
+    const [conFotos] = await service.list();
+    expect(conFotos!.coverImagePath).toBe('catalog/portada.webp');
+    expect(conFotos!.alerts).toEqual(['NO_VARIANTS']);
   });
 });
