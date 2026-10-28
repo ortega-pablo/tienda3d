@@ -1273,6 +1273,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: que un aviso falso o repetido no cambie un pedido.
   - Qué hacer: funciones `signEvent` / `verifyEvent` en cada repo (formato de §5.5), con los mismos vectores de prueba del documento de contrato.
   - Cierra cuando: los dos repos pasan los mismos vectores.
+  - Hecho así: `apps/api/src/common/integration-auth/event-signature.ts` y `storefront/src/server/events/signature.ts`, idénticas: `verifyEvent` devuelve el motivo (`missing`, `malformed`, `stale`, `bad-signature`), acepta varios secretos para rotar y compara en tiempo constante. Los dos tests usan los tres vectores del contrato, más cuerpo alterado, otro secreto, ventana de ±300 s y rotación.
 - [ ] **F11·3 [t3d] Los avisos del sistema al sitio se reintentan hasta llegar**
   - Para qué: que un corte del sitio no haga perder un cambio de estado.
   - Qué hacer:
