@@ -1248,3 +1248,20 @@ model EcommerceSettings {
 
   @@map("ecommerce_settings")
 }
+
+/// Quién puede llamar a la API de integración (plan F11·1, §5.5): hoy, el sitio.
+/// Se guarda solo el SHA-256 de la clave; la clave se muestra una vez al emitirla.
+/// Durante una rotación conviven dos claves activas.
+model IntegrationClient {
+  id         String    @id @default(cuid())
+  name       String
+  keyHash    String    @unique
+  /// Comienzo de la clave, para reconocerla en el listado sin guardarla.
+  keyPrefix  String
+  scopes     String[]
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("integration_clients")
+}

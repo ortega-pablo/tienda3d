@@ -48,6 +48,8 @@ COPY --from=build --chown=nestjs:nodejs /app/apps/api/scripts ./apps/api/scripts
 # El seed (tsx prisma/seed.ts) importa la lectura de secretos y las reglas de
 # claves desde src/common/config: sin estos fuentes falla dentro de la imagen.
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/config ./apps/api/src/common/config
+# scripts/integration-key.ts (emitir y revocar claves de integración, F11·1).
+COPY --from=build --chown=nestjs:nodejs /app/apps/api/src/common/integration-auth ./apps/api/src/common/integration-auth
 COPY --from=build --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --chown=nestjs:nodejs package.json pnpm-workspace.yaml ./
 

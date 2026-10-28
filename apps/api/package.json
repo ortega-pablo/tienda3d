@@ -17,7 +17,11 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
     "test:int": "jest --config jest.integration.config.js --runInBand",
-    "test:all": "jest && jest --config jest.integration.config.js --runInBand"
+    "test:all": "jest && jest --config jest.integration.config.js --runInBand",
+    "integration:issue-key": "tsx scripts/integration-key.ts issue",
+    "integration:revoke": "tsx scripts/integration-key.ts revoke",
+    "integration:list": "tsx scripts/integration-key.ts list",
+    "integration:register": "tsx scripts/integration-key.ts register"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

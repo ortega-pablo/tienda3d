@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PERMISSIONS_KEY } from '@/common/decorators/permissions.decorator';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
+import { INTEGRATION_SCOPES_KEY } from '@/common/integration-auth/integration-scopes.decorator';
 
 /** Un endpoint HTTP con el permiso que exige. */
 export interface RouteInfo {
@@ -13,6 +14,8 @@ export interface RouteInfo {
   path: string;
   /** Permisos exigidos, heredando los del controller si el método no declara. */
   permissions: string[];
+  /** Alcances de integración (rutas que llama otro sistema con su clave, F11·1). */
+  integrationScopes: string[];
   isPublic: boolean;
 }
 
@@ -88,6 +91,8 @@ export function collectRoutes(modulesDir: string): RouteInfo[] {
             .replace(/\/+/g, '/')
             .replace(/\/$/, ''),
           permissions,
+          integrationScopes:
+            (Reflect.getMetadata(INTEGRATION_SCOPES_KEY, handler) as string[] | undefined) ?? [],
           isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, handler) === true,
         });
       }

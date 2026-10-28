@@ -14,6 +14,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "prisma/**/*.ts"],
+  "include": ["src/**/*", "prisma/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }

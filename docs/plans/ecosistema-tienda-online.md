@@ -1268,6 +1268,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - Rutas bajo `/api/integrations/storefront/v1`.
     - El proxy de `apps/web` devuelve 404 para `/api/integrations/*`.
   - Cierra cuando: sin clave da 401, con clave revocada da 401, con alcance insuficiente da 403, y por `sistema.localhost` da 404.
+  - Hecho así: modelo `IntegrationClient` (hash SHA-256, prefijo para reconocerla, alcances, `lastUsedAt` cada minuto como mucho, `revokedAt`); `IntegrationAuthGuard` compara contra todas las claves activas en tiempo constante; `@IntegrationScopes(...)` reemplaza a `@Permissions` y `route-permissions.spec` exige que vivan bajo `/integrations`; cupo propio de 600/min. Comando `scripts/integration-key.ts` (`issue`, `register` desde stdin para el secreto `storefront_api_key` de infra, `revoke`, `list`), copiado en la imagen. Primera ruta: `GET /integrations/storefront/v1/ping`. Probado en el ecosistema: por la red interna con clave 200 y sin clave 401; por `sistema.localhost` y `tienda.localhost`, 404. En desarrollo, un cambio del schema de Prisma necesita reiniciar `tienda3d-api` (el cliente se genera al arrancar).
 - [ ] **F11·2 [t3d][sf] Los avisos entre los sistemas van firmados**
   - Para qué: que un aviso falso o repetido no cambie un pedido.
   - Qué hacer: funciones `signEvent` / `verifyEvent` en cada repo (formato de §5.5), con los mismos vectores de prueba del documento de contrato.

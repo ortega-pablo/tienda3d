@@ -37,9 +37,9 @@ describe('permisos de los endpoints', () => {
     expect(routes.length).toBeGreaterThan(80);
   });
 
-  it('toda ruta exige un permiso, salvo las declaradas abiertas', () => {
+  it('toda ruta exige un permiso (o un alcance de integración), salvo las declaradas abiertas', () => {
     const unguarded = routes
-      .filter((r) => r.permissions.length === 0)
+      .filter((r) => r.permissions.length === 0 && r.integrationScopes.length === 0)
       .filter((r) => !INTENTIONALLY_OPEN.has(`${r.controller}.${r.handler}`))
       .map((r) => `${r.method} ${r.path} (${r.controller}.${r.handler})`);
     expect(unguarded).toEqual([]);
@@ -72,11 +72,20 @@ describe('permisos de los endpoints', () => {
    */
   it('todo permiso exigido por un endpoint existe en el catálogo del seed', () => {
     const seed = readFileSync(SEED_PATH, 'utf8');
-    const seeded = new Set(
-      [...seed.matchAll(/'([a-z]+:[a-z:]+)'/g)].map((m) => m[1]!),
-    );
+    const seeded = new Set([...seed.matchAll(/'([a-z]+:[a-z:]+)'/g)].map((m) => m[1]!));
     const used = new Set(routes.flatMap((r) => r.permissions));
     const missing = [...used].filter((p) => !seeded.has(p)).sort();
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * F11·1: lo que llama otro sistema vive bajo /integrations y se protege con
+   * un alcance de su clave; nada de eso puede quedar fuera de ese prefijo.
+   */
+  it('los alcances de integración solo aparecen bajo /integrations', () => {
+    const misplaced = routes
+      .filter((r) => r.integrationScopes.length > 0 && !r.path.startsWith('/integrations/'))
+      .map((r) => `${r.method} ${r.path}`);
+    expect(misplaced).toEqual([]);
   });
 });
