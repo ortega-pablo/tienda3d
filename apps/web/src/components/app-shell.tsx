@@ -17,8 +17,7 @@ function visibleItems(permissions: string[]) {
   return NAVIGATION.map((group) => ({
     ...group,
     items: group.items.filter(
-      (item) =>
-        !item.permissions || item.permissions.some((p) => permissions.includes(p)),
+      (item) => !item.permissions || item.permissions.some((p) => permissions.includes(p)),
     ),
   })).filter((g) => g.items.length > 0);
 }
@@ -47,7 +46,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </h3>
             <ul className="space-y-1">
               {group.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive =
+                  pathname === item.href || (!item.exact && pathname.startsWith(`${item.href}/`));
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>
@@ -138,10 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div
-            className="absolute inset-0 bg-foreground/40"
-            onClick={() => setMobileOpen(false)}
-          />
+          <div className="absolute inset-0 bg-foreground/40" onClick={() => setMobileOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-card shadow-xl">
             <SidebarContent onNavigate={() => setMobileOpen(false)} />
           </aside>

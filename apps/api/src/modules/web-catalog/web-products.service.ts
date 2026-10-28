@@ -101,6 +101,11 @@ export class WebProductsService {
           select: { product: { select: { webPrice: { select: { state: true, price: true } } } } },
         },
         variants: { where: { isActive: true }, select: { id: true } },
+        images: {
+          orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+          take: 1,
+          select: { path: true },
+        },
         colorOptions: {
           where: { isActive: true },
           select: { values: { select: { material: { select: { isActive: true } } } } },
@@ -132,6 +137,7 @@ export class WebProductsService {
         priceMin: prices.length ? Math.min(...prices) : null,
         priceMax: prices.length ? Math.max(...prices) : null,
         alerts,
+        coverImagePath: p.images[0]?.path ?? null,
         updatedAt: p.updatedAt.toISOString(),
       };
     });
