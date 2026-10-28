@@ -39,6 +39,23 @@ export interface WebColorOptionDto {
   pieces: WebColorOptionPieceDto[];
 }
 
+export interface WebAttributeValueDto {
+  id: string;
+  slug: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+/** Opción informativa ("Tipo de hoja"): genera variantes con el mismo precio (D6). */
+export interface WebAttributeDto {
+  id: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+  values: WebAttributeValueDto[];
+}
+
 export interface WebProductDto {
   id: string;
   slug: string;
@@ -54,6 +71,7 @@ export interface WebProductDto {
   sortOrder: number;
   members: WebProductMemberDto[];
   colorOptions: WebColorOptionDto[];
+  attributes: WebAttributeDto[];
   /** Slugs anteriores, que el sitio redirige al actual. */
   previousSlugs: string[];
   createdAt: string;

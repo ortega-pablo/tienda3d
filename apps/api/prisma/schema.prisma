@@ -1071,6 +1071,8 @@ model WebAttribute {
   webProduct   WebProduct @relation(fields: [webProductId], references: [id], onDelete: Cascade)
   label        String
   sortOrder    Int        @default(0)
+  /// Un atributo con variantes no se borra: queda inactivo, con sus valores y variantes.
+  isActive     Boolean    @default(true)
 
   values WebAttributeValue[]
 
