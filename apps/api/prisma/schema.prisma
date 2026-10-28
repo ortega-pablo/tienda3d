@@ -1030,6 +1030,8 @@ model WebColorOption {
   filamentLineId String
   filamentLine   Material   @relation("WebColorLine", fields: [filamentLineId], references: [id], onDelete: Restrict)
   sortOrder      Int        @default(0)
+  /// Una opción que ya tiene variantes no se borra: queda inactiva, con sus variantes.
+  isActive       Boolean    @default(true)
 
   values     WebColorValue[]
   pieces     WebColorOptionPiece[]

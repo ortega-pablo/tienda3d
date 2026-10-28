@@ -20,6 +20,24 @@ const DETAIL_INCLUDE = {
     orderBy: { sortOrder: 'asc' },
     include: { product: { select: { name: true, sku: true } } },
   },
+  colorOptions: {
+    orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }],
+    include: {
+      filamentLine: { select: { name: true } },
+      values: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          material: { select: { name: true, color: true, colorHex: true, isActive: true } },
+        },
+      },
+      pieces: {
+        orderBy: { piece: { sortOrder: 'asc' } },
+        include: {
+          piece: { select: { name: true, productId: true, product: { select: { name: true } } } },
+        },
+      },
+    },
+  },
   slugHistory: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.WebProductInclude;
 
@@ -166,6 +184,10 @@ export class WebProductsService {
       include: { _count: { select: { variants: true } } },
     });
     for (const member of current.filter((m) => !ids.includes(m.productId))) {
+      // Sus piezas dejan de tomar el color de las opciones de la publicación.
+      await tx.webColorOptionPiece.deleteMany({
+        where: { option: { webProductId }, piece: { productId: member.productId } },
+      });
       if (member._count.variants > 0) {
         await tx.webProductMember.update({ where: { id: member.id }, data: { isActive: false } });
         await tx.webVariant.updateMany({
@@ -264,6 +286,28 @@ function toDto(p: WebProductWithDetail): WebProductDto {
       valueLabel: m.valueLabel,
       sortOrder: m.sortOrder,
       isActive: m.isActive,
+    })),
+    colorOptions: p.colorOptions.map((o) => ({
+      id: o.id,
+      label: o.label,
+      filamentLineId: o.filamentLineId,
+      filamentLineName: o.filamentLine.name,
+      sortOrder: o.sortOrder,
+      isActive: o.isActive,
+      values: o.values.map((v) => ({
+        materialId: v.materialId,
+        name: v.material.name,
+        color: v.material.color,
+        colorHex: v.material.colorHex,
+        isActive: v.material.isActive,
+        sortOrder: v.sortOrder,
+      })),
+      pieces: o.pieces.map((op) => ({
+        id: op.pieceId,
+        name: op.piece.name,
+        productId: op.piece.productId,
+        productName: op.piece.product.name,
+      })),
     })),
     previousSlugs: p.slugHistory.map((s) => s.slug),
     createdAt: p.createdAt.toISOString(),

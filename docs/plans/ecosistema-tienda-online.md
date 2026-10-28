@@ -26,17 +26,17 @@
 
 ## 0. Convenciones
 
-| Ítem | Convención |
-| --- | --- |
-| IDs | `F<fase>·<n>` (por ejemplo `F5·3`). No se reutilizan: una tarea descartada se tacha con su motivo. |
-| Repos | **[t3d]** = `tienda3d` · **[sf]** = `tienda-plastik-page` (código en `storefront/`) · **[infra]** = repo nuevo `tienda-plastik-infra` (D1). |
-| Rutas | Relativas a la raíz de cada repo. En [sf], relativas a `storefront/`. |
-| Ramas | `feat/<id>-<slug>` (por ejemplo `feat/f5-3-colores`) desde la rama por defecto de cada repo: `unificacion` en [t3d] y [sf] mientras dure la unificación, `main` en [infra]. Cada tarea entra por un PR que la cierra (ver el tablero, `.claude/tablero.md`). |
-| Commits | Estilo de cada repo: [t3d] `feat(scope): …`; [sf] mensaje en español. Incluir el ID: `Cierra F5·3.` |
-| Verificación mínima | [t3d] `pnpm typecheck && pnpm test && pnpm test:int` · [sf] `pnpm typecheck && pnpm lint && pnpm test` (+ `pnpm test:e2e` donde se indique). |
+| Ítem                    | Convención                                                                                                                                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| IDs                     | `F<fase>·<n>` (por ejemplo `F5·3`). No se reutilizan: una tarea descartada se tacha con su motivo.                                                                                                                                                                                          |
+| Repos                   | **[t3d]** = `tienda3d` · **[sf]** = `tienda-plastik-page` (código en `storefront/`) · **[infra]** = repo nuevo `tienda-plastik-infra` (D1).                                                                                                                                                 |
+| Rutas                   | Relativas a la raíz de cada repo. En [sf], relativas a `storefront/`.                                                                                                                                                                                                                       |
+| Ramas                   | `feat/<id>-<slug>` (por ejemplo `feat/f5-3-colores`) desde la rama por defecto de cada repo: `unificacion` en [t3d] y [sf] mientras dure la unificación, `main` en [infra]. Cada tarea entra por un PR que la cierra (ver el tablero, `.claude/tablero.md`).                                |
+| Commits                 | Estilo de cada repo: [t3d] `feat(scope): …`; [sf] mensaje en español. Incluir el ID: `Cierra F5·3.`                                                                                                                                                                                         |
+| Verificación mínima     | [t3d] `pnpm typecheck && pnpm test && pnpm test:int` · [sf] `pnpm typecheck && pnpm lint && pnpm test` (+ `pnpm test:e2e` donde se indique).                                                                                                                                                |
 | Verificación automática | **Sin GitHub Actions.** Corre en hooks locales con lefthook: `pre-commit` (gitleaks sobre lo que se commitea + formato y lint de los archivos tocados) y `pre-push` (typecheck + tests unitarios). `pnpm verify` corre todo, integración incluida, y es obligatorio antes de mergear un PR. |
-| Estimaciones | Rangos en horas **propuestos**, incluyen definir cómo se hace. Confirmarlos o corregirlos antes de arrancar cada fase. |
-| Base de datos | Nunca resetear una base con datos sin preguntar. Cambios de esquema siempre por migración. |
+| Estimaciones            | Rangos en horas **propuestos**, incluyen definir cómo se hace. Confirmarlos o corregirlos antes de arrancar cada fase.                                                                                                                                                                      |
+| Base de datos           | Nunca resetear una base con datos sin preguntar. Cambios de esquema siempre por migración.                                                                                                                                                                                                  |
 
 ---
 
@@ -66,19 +66,19 @@ probarse en local (fases F0–F16). F17–F20 se encaran solo si el resultado de
 
 Definidas por Pablo el 2026-10-26.
 
-| ID | Decisión | Consecuencia en el plan |
-| --- | --- | --- |
-| T1 | El panel del ecommerce vive en tienda3d y es para el rol **`admin` existente**. No se crean roles ni usuarios nuevos. | Permisos `ecommerce:*` solo para `admin` (F4). |
-| T2 | Toda la información de productos sale de **una sola base: la de tienda3d**. | El storefront deja de tener catálogo propio (F12). |
-| T3 | El sitio lee el catálogo con un **usuario de solo lectura** limitado a lo que necesita. | Esquema `storefront_v1` con vistas + rol `storefront_reader` (F10). |
-| T4 | El sitio **guarda los datos de cada compra** en su base y **notifica al sistema**, que registra los pedidos que entran por la tienda. | El storefront conserva una base propia (clientes y pedidos) con escritura solo ahí; integración por API (F11, F14). |
-| T5 | El **precio publicado** es el **precio de Venta Directa a cliente normal**. | Proyección automática del precio (F7). Sin precios cargados a mano. |
-| T6 | Para comprar hay que **crear una cuenta o iniciar sesión** como cliente normal. Sin cuenta no se compra. La cuenta guarda todas las compras. | Cuentas de cliente en el storefront (F13). |
-| T7 | Un **producto web** puede agrupar **más de un producto del sistema** para indicar sus variantes. | Modelo "publicación" con miembros (F5). |
-| T8 | Los **colores** de cada producto web se eligen de los colores de filamento que existen en el sistema **para el filamento que usa**: la web puede mostrar 2 aunque se pueda imprimir en 5. | Opción de color por línea de filamento con subconjunto elegido (F5·3). |
-| T9 | Las **imágenes** se guardan en un **volumen Docker**, también en producción. | Almacenamiento en disco con puerto intercambiable (F6). |
-| T10 | Destino: **EC2 con Docker**; a largo plazo **RDS**. Primero, probar todo en local. | F3 replica la topología de producción en local; F17–F18 son evaluación. |
-| T11 | **Mercado Pago** se conecta más adelante. Los secretos tienen que seguir **los mejores estándares**, con herramientas **gratuitas**. | F1 y §5.8; MP queda en F19. |
+| ID  | Decisión                                                                                                                                                                                  | Consecuencia en el plan                                                                                             |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| T1  | El panel del ecommerce vive en tienda3d y es para el rol **`admin` existente**. No se crean roles ni usuarios nuevos.                                                                     | Permisos `ecommerce:*` solo para `admin` (F4).                                                                      |
+| T2  | Toda la información de productos sale de **una sola base: la de tienda3d**.                                                                                                               | El storefront deja de tener catálogo propio (F12).                                                                  |
+| T3  | El sitio lee el catálogo con un **usuario de solo lectura** limitado a lo que necesita.                                                                                                   | Esquema `storefront_v1` con vistas + rol `storefront_reader` (F10).                                                 |
+| T4  | El sitio **guarda los datos de cada compra** en su base y **notifica al sistema**, que registra los pedidos que entran por la tienda.                                                     | El storefront conserva una base propia (clientes y pedidos) con escritura solo ahí; integración por API (F11, F14). |
+| T5  | El **precio publicado** es el **precio de Venta Directa a cliente normal**.                                                                                                               | Proyección automática del precio (F7). Sin precios cargados a mano.                                                 |
+| T6  | Para comprar hay que **crear una cuenta o iniciar sesión** como cliente normal. Sin cuenta no se compra. La cuenta guarda todas las compras.                                              | Cuentas de cliente en el storefront (F13).                                                                          |
+| T7  | Un **producto web** puede agrupar **más de un producto del sistema** para indicar sus variantes.                                                                                          | Modelo "publicación" con miembros (F5).                                                                             |
+| T8  | Los **colores** de cada producto web se eligen de los colores de filamento que existen en el sistema **para el filamento que usa**: la web puede mostrar 2 aunque se pueda imprimir en 5. | Opción de color por línea de filamento con subconjunto elegido (F5·3).                                              |
+| T9  | Las **imágenes** se guardan en un **volumen Docker**, también en producción.                                                                                                              | Almacenamiento en disco con puerto intercambiable (F6).                                                             |
+| T10 | Destino: **EC2 con Docker**; a largo plazo **RDS**. Primero, probar todo en local.                                                                                                        | F3 replica la topología de producción en local; F17–F18 son evaluación.                                             |
+| T11 | **Mercado Pago** se conecta más adelante. Los secretos tienen que seguir **los mejores estándares**, con herramientas **gratuitas**.                                                      | F1 y §5.8; MP queda en F19.                                                                                         |
 
 **Cómo se aplica T6 (con D4):** "usuario de cliente normal" es una **cuenta de cliente del sitio**,
 no un usuario del sistema de gestión, así que no se incorporan usuarios a tienda3d (T1). El sistema
@@ -90,30 +90,30 @@ registra a cada comprador como **cliente** (`Customer` tipo `STANDARD`, origen w
 
 Definidas por Pablo el 2026-10-27. Las tareas del plan ya están escritas con estas respuestas.
 
-| ID | Pregunta | Definición | Tareas afectadas |
-| --- | --- | --- | --- |
-| D1 | ¿Dónde vive la orquestación del ecosistema (compose conjunto, Caddy, scripts de secretos, backup y despliegue)? | Repo nuevo **`ortega-pablo/tienda-plastik-infra`** (privado) en la carpeta madre. Los dos repos de apps siguen independientes. | F1, F3, F16, F17 |
-| D2 | ¿Cuándo registra el sitio cada pedido en el sistema? | **En el momento de comprar**: llamada a la API con idempotencia; el sistema valida el precio y reserva stock. Si no responde, el sitio no toma el pedido y lo avisa. Los cambios siguientes viajan como eventos con reintento. | F14·3 |
-| D3 | ¿La web aplica las escalas de Venta Directa por cantidad? | **No**: precio unitario de cantidad 1 para cualquier cantidad. | F7, F12·6, F14·3 |
-| D4 | ¿Cómo ve el sistema a los compradores de la web? | **Como clientes del sistema**: `Customer` tipo `STANDARD`, con `source = WEB` y `externalId` = id de la cuenta del sitio. Aparecen en Clientes junto a los B2B, con un filtro por origen. Si el email ya es de un cliente existente, los pedidos web se vinculan a ese cliente en lugar de crear otro. **El precio web es siempre el publicado**: nunca se aplican los flags ni el markup propio del cliente. | F13·8, F14·2, F14·8, F15 |
-| D5 | ¿Hay que verificar el email antes de comprar? | **Sí**: link de un solo uso válido 24 h. | F13·2, F13·6 |
-| D6 | ¿Se permiten opciones informativas sin producto del sistema detrás ("Tipo de hoja: Cuadro/Punto")? | **Sí**, sin impacto en el precio. | F5·4, F9·2 |
-| D7 | ¿Cómo se paga hasta que esté Mercado Pago? | **Transferencia** con confirmación manual del admin en el panel. En local, además, el pago **simulado**. | F14·4 |
-| D9 | ¿Cómo se maneja el stock de la tienda? | **Por variante**: a pedido (con plazo y máximo por compra) o stock de producto terminado cargado a mano, que la compra descuenta. La orden de producción se genera a mano desde el pedido. | F5·5, F14·3 |
-| D10 | ¿Quién manda los mails? | **Solo el sitio**. El sistema avisa los cambios al sitio y el sitio escribe al cliente. El proveedor de producción se elige en F17. | F13, F14·9 |
-| D13 | ¿Las categorías de la tienda van aparte de las del sistema (que definen el markup)? | **Aparte**: categorías de la tienda propias; un producto web puede estar en varias. | F5·6, F8·5 |
-| D14 | ¿Un producto del sistema puede estar en más de una publicación web? | **No**, en una sola. | F5·2 |
-| D15 | ¿Cómo se arma el SKU de cada variante web? | **`PTK-PROD-NNNNNN-VNN`**: el SKU del producto del sistema más un sufijo de variante. El SKU de WooCommerce se guarda como referencia (`legacySku`). | F5·5, F9·2 |
-| D16 | ¿Las solicitudes de personalización piden cuenta? | **Sí**: se envían desde la cuenta del cliente, quedan vinculadas a su `Customer` en el sistema y el cliente ve su estado en Mi cuenta. | F15 |
-| D17 | ¿Dónde se guardan los secretos en EC2? | **AWS Systems Manager Parameter Store** (`SecureString` estándar), leídos con el rol IAM de la instancia hacia tmpfs. | F17·3 |
+| ID  | Pregunta                                                                                                        | Definición                                                                                                                                                                                                                                                                                                                                                                                                    | Tareas afectadas         |
+| --- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| D1  | ¿Dónde vive la orquestación del ecosistema (compose conjunto, Caddy, scripts de secretos, backup y despliegue)? | Repo nuevo **`ortega-pablo/tienda-plastik-infra`** (privado) en la carpeta madre. Los dos repos de apps siguen independientes.                                                                                                                                                                                                                                                                                | F1, F3, F16, F17         |
+| D2  | ¿Cuándo registra el sitio cada pedido en el sistema?                                                            | **En el momento de comprar**: llamada a la API con idempotencia; el sistema valida el precio y reserva stock. Si no responde, el sitio no toma el pedido y lo avisa. Los cambios siguientes viajan como eventos con reintento.                                                                                                                                                                                | F14·3                    |
+| D3  | ¿La web aplica las escalas de Venta Directa por cantidad?                                                       | **No**: precio unitario de cantidad 1 para cualquier cantidad.                                                                                                                                                                                                                                                                                                                                                | F7, F12·6, F14·3         |
+| D4  | ¿Cómo ve el sistema a los compradores de la web?                                                                | **Como clientes del sistema**: `Customer` tipo `STANDARD`, con `source = WEB` y `externalId` = id de la cuenta del sitio. Aparecen en Clientes junto a los B2B, con un filtro por origen. Si el email ya es de un cliente existente, los pedidos web se vinculan a ese cliente en lugar de crear otro. **El precio web es siempre el publicado**: nunca se aplican los flags ni el markup propio del cliente. | F13·8, F14·2, F14·8, F15 |
+| D5  | ¿Hay que verificar el email antes de comprar?                                                                   | **Sí**: link de un solo uso válido 24 h.                                                                                                                                                                                                                                                                                                                                                                      | F13·2, F13·6             |
+| D6  | ¿Se permiten opciones informativas sin producto del sistema detrás ("Tipo de hoja: Cuadro/Punto")?              | **Sí**, sin impacto en el precio.                                                                                                                                                                                                                                                                                                                                                                             | F5·4, F9·2               |
+| D7  | ¿Cómo se paga hasta que esté Mercado Pago?                                                                      | **Transferencia** con confirmación manual del admin en el panel. En local, además, el pago **simulado**.                                                                                                                                                                                                                                                                                                      | F14·4                    |
+| D9  | ¿Cómo se maneja el stock de la tienda?                                                                          | **Por variante**: a pedido (con plazo y máximo por compra) o stock de producto terminado cargado a mano, que la compra descuenta. La orden de producción se genera a mano desde el pedido.                                                                                                                                                                                                                    | F5·5, F14·3              |
+| D10 | ¿Quién manda los mails?                                                                                         | **Solo el sitio**. El sistema avisa los cambios al sitio y el sitio escribe al cliente. El proveedor de producción se elige en F17.                                                                                                                                                                                                                                                                           | F13, F14·9               |
+| D13 | ¿Las categorías de la tienda van aparte de las del sistema (que definen el markup)?                             | **Aparte**: categorías de la tienda propias; un producto web puede estar en varias.                                                                                                                                                                                                                                                                                                                           | F5·6, F8·5               |
+| D14 | ¿Un producto del sistema puede estar en más de una publicación web?                                             | **No**, en una sola.                                                                                                                                                                                                                                                                                                                                                                                          | F5·2                     |
+| D15 | ¿Cómo se arma el SKU de cada variante web?                                                                      | **`PTK-PROD-NNNNNN-VNN`**: el SKU del producto del sistema más un sufijo de variante. El SKU de WooCommerce se guarda como referencia (`legacySku`).                                                                                                                                                                                                                                                          | F5·5, F9·2               |
+| D16 | ¿Las solicitudes de personalización piden cuenta?                                                               | **Sí**: se envían desde la cuenta del cliente, quedan vinculadas a su `Customer` en el sistema y el cliente ve su estado en Mi cuenta.                                                                                                                                                                                                                                                                        | F15                      |
+| D17 | ¿Dónde se guardan los secretos en EC2?                                                                          | **AWS Systems Manager Parameter Store** (`SecureString` estándar), leídos con el rol IAM de la instancia hacia tmpfs.                                                                                                                                                                                                                                                                                         | F17·3                    |
 
 **Siguen abiertas** (no bloquean empezar):
 
-| ID | Pregunta | Propuesta | Se define en |
-| --- | --- | --- | --- |
-| D8 | En EC2, ¿el panel de gestión queda abierto a internet? | Con una capa extra gratuita: Cloudflare Access o Tailscale. | F17 |
-| D11 | ¿EC2 ARM (Graviton) o x86? | Según las mediciones de F16·4. ARM es más barato; `argon2` y `sharp` tienen binarios para arm64, pero las imágenes hay que construirlas para esa arquitectura. | F16·4 |
-| D12 | Conciliación del catálogo actual con la dueña (§4.8). | Respuesta de la dueña al pedido de F0·5. | bloquea F9 |
+| ID  | Pregunta                                               | Propuesta                                                                                                                                                      | Se define en |
+| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| D8  | En EC2, ¿el panel de gestión queda abierto a internet? | Con una capa extra gratuita: Cloudflare Access o Tailscale.                                                                                                    | F17          |
+| D11 | ¿EC2 ARM (Graviton) o x86?                             | Según las mediciones de F16·4. ARM es más barato; `argon2` y `sharp` tienen binarios para arm64, pero las imágenes hay que construirlas para esa arquitectura. | F16·4        |
+| D12 | Conciliación del catálogo actual con la dueña (§4.8).  | Respuesta de la dueña al pedido de F0·5.                                                                                                                       | bloquea F9   |
 
 ---
 
@@ -123,14 +123,14 @@ Relevamiento del 2026-10-26 sobre el código de los dos repos y la base local en
 
 ### 4.1 Mapa actual
 
-| | tienda3d (sistema de gestión) | storefront (sitio web) |
-| --- | --- | --- |
-| Repo | `ortega-pablo/tienda3d` (privado) | `ortega-pablo/tienda-plastik-page` (privado), código en `storefront/` |
-| Stack | Next.js 16.0.0 + React 19 (web) · NestJS 11 + Prisma 6.19.3 + Zod (API) · PostgreSQL 16 · monorepo pnpm (`apps/api`, `apps/web`, `packages/shared`) | Next.js 16.4.3 (App Router, Cache Components, Server Actions) · Prisma 7 + PostgreSQL 16 · Tailwind v4 |
-| Corre | Docker Compose local en el taller: web `:3000`, API `:3001`, Postgres `:5432` | Docker Compose: tienda `:3100`, Postgres `:5442`, Mailpit `:8026` |
-| Rama | `fix/auditoria-correcciones`: 1 commit adelante de su remoto, 69 sobre `main` (que tiene 8 commits; la base real es `develop`). Rename sin commitear de `docs/FUNCIONALIDADES.md` → `docs/funcionalidades-sistema-gestion.md`. | `main` = `origin/main` (756f467), limpio. Tag `wordpress-final` con el WordPress. |
-| Tests | ~121 unitarios (12 archivos) · ~20 de integración contra Postgres real (5 archivos) · sin e2e · **sin CI** | 61 unitarios (Vitest) · 18 e2e (Playwright, escritorio + celular) · sin CI |
-| Producción | No tiene: corre en la PC del taller | No tiene: el sitio público sigue siendo el WordPress en Hostinger |
+|            | tienda3d (sistema de gestión)                                                                                                                                                                                                  | storefront (sitio web)                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| Repo       | `ortega-pablo/tienda3d` (privado)                                                                                                                                                                                              | `ortega-pablo/tienda-plastik-page` (privado), código en `storefront/`                                  |
+| Stack      | Next.js 16.0.0 + React 19 (web) · NestJS 11 + Prisma 6.19.3 + Zod (API) · PostgreSQL 16 · monorepo pnpm (`apps/api`, `apps/web`, `packages/shared`)                                                                            | Next.js 16.4.3 (App Router, Cache Components, Server Actions) · Prisma 7 + PostgreSQL 16 · Tailwind v4 |
+| Corre      | Docker Compose local en el taller: web `:3000`, API `:3001`, Postgres `:5432`                                                                                                                                                  | Docker Compose: tienda `:3100`, Postgres `:5442`, Mailpit `:8026`                                      |
+| Rama       | `fix/auditoria-correcciones`: 1 commit adelante de su remoto, 69 sobre `main` (que tiene 8 commits; la base real es `develop`). Rename sin commitear de `docs/FUNCIONALIDADES.md` → `docs/funcionalidades-sistema-gestion.md`. | `main` = `origin/main` (756f467), limpio. Tag `wordpress-final` con el WordPress.                      |
+| Tests      | ~121 unitarios (12 archivos) · ~20 de integración contra Postgres real (5 archivos) · sin e2e · **sin CI**                                                                                                                     | 61 unitarios (Vitest) · 18 e2e (Playwright, escritorio + celular) · sin CI                             |
+| Producción | No tiene: corre en la PC del taller                                                                                                                                                                                            | No tiene: el sitio público sigue siendo el WordPress en Hostinger                                      |
 
 ### 4.2 tienda3d — plataforma
 
@@ -312,17 +312,17 @@ Relevamiento del 2026-10-26 sobre el código de los dos repos y la base local en
 
 ### 4.6 tienda3d — datos reales (base local en uso, 2026-10-26)
 
-| Dato | Valor |
-| --- | --- |
-| Migraciones aplicadas | hasta `20260821030000_one_current_price_per_material` |
-| Productos | 38, todos activos, **todos con piezas de "PLA Genérico"** |
-| Líneas de filamento | 2: "PLA Genérico", "ABS genérico" |
-| **Colores de filamento** | **1**: "PLA Genérico · Blanco" `#FFFFFF` |
-| Insumos | 3 FILAMENT · 9 HARDWARE · 4 OTHER · 2 SHEET · 1 PACKAGING (todos con stock 0) |
-| Cotizaciones / órdenes de producción | 10 / 0 |
-| Usuarios | 2 (1 `admin`, 1 `operator`) · Clientes B2B: 6 |
-| Canales | `directa` DIRECT_SALE · `mercadolibre` MARKETPLACE · `efectivo` CASH, todos `SIMPLE` sin IVA |
-| Venta Directa deshabilitada | en 0 productos |
+| Dato                                 | Valor                                                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Migraciones aplicadas                | hasta `20260821030000_one_current_price_per_material`                                        |
+| Productos                            | 38, todos activos, **todos con piezas de "PLA Genérico"**                                    |
+| Líneas de filamento                  | 2: "PLA Genérico", "ABS genérico"                                                            |
+| **Colores de filamento**             | **1**: "PLA Genérico · Blanco" `#FFFFFF`                                                     |
+| Insumos                              | 3 FILAMENT · 9 HARDWARE · 4 OTHER · 2 SHEET · 1 PACKAGING (todos con stock 0)                |
+| Cotizaciones / órdenes de producción | 10 / 0                                                                                       |
+| Usuarios                             | 2 (1 `admin`, 1 `operator`) · Clientes B2B: 6                                                |
+| Canales                              | `directa` DIRECT_SALE · `mercadolibre` MARKETPLACE · `efectivo` CASH, todos `SIMPLE` sin IVA |
+| Venta Directa deshabilitada          | en 0 productos                                                                               |
 
 En la raíz del repo hay un volcado `tienda3d_dump_2026-07-22.sql`. Está ignorado por git y nunca se
 commiteó, pero **contiene usuarios, tokens de refresco y clientes** (F0·2).
@@ -335,19 +335,19 @@ commiteó, pero **contiene usuarios, tokens de refresco y clientes** (F0·2).
 - Catálogo propio con variantes y stock, carrito en cookie (`tp_cart`), checkout como invitado y pagos (puerto con proveedor simulado y Mercado Pago Checkout Pro, listo pero sin credenciales).
 - Pedidos, cotizaciones a medida con adjunto, mails con Nodemailer, y panel `/admin` con sesión propia.
 
-| Pieza | Destino en el plan |
-| --- | --- |
-| Páginas públicas, diseño, `src/content/`, SEO, carrito en cookie, `domain/cart.ts`, `domain/money.ts`, `domain/rich-text.ts`, `domain/checkout.ts`, `domain/shipping.ts` | **Se quedan.** |
-| `domain/catalog.ts` (ProductView, disponibilidad, selección de variantes) | **Se queda**, alimentado por las vistas del sistema (F12·1). |
-| `domain/variants.ts` (`planVariants`) | **Se porta a tienda3d** (F5·5). |
-| `domain/orders.ts` (estados y transiciones) | **Se divide**: pago en el sitio, preparación en el sistema (§5.6). |
-| Modelos Prisma de catálogo (`Category`, `Product*`, `Variant*`), `StoreSettings`, seed de catálogo, `scripts/import-woocommerce.ts` | **Se van** (F12·5). `prisma/seed/catalog.json` + `media/` alimentan la migración (F9). |
-| Panel `/admin`, `AdminUser`, `AdminSession`, `server/actions/admin/*`, `server/admin/*` | **Se van** (F12·5); se rehacen en tienda3d (F8, F14·5, F15). |
-| `Order`, `OrderItem`, `Payment`, `PaymentNotification`, `OrderEvent`, `QuoteRequest` | **Se quedan y cambian** (F14, F15). |
-| `server/payments/*` (gateway, MP, simulado, reglas y firma de webhook) | **Se queda**; MP se activa en F19. |
-| `server/mail/*` | **Se queda y crece** (cuentas y estados). |
-| `server/storage.ts` + `/media/[...path]` | **Se queda**, lee el volumen del sistema en solo lectura (F12·3). |
-| `server/rate-limit.ts` (en memoria) | **Se queda** (una sola instancia). |
+| Pieza                                                                                                                                                                    | Destino en el plan                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Páginas públicas, diseño, `src/content/`, SEO, carrito en cookie, `domain/cart.ts`, `domain/money.ts`, `domain/rich-text.ts`, `domain/checkout.ts`, `domain/shipping.ts` | **Se quedan.**                                                                         |
+| `domain/catalog.ts` (ProductView, disponibilidad, selección de variantes)                                                                                                | **Se queda**, alimentado por las vistas del sistema (F12·1).                           |
+| `domain/variants.ts` (`planVariants`)                                                                                                                                    | **Se porta a tienda3d** (F5·5).                                                        |
+| `domain/orders.ts` (estados y transiciones)                                                                                                                              | **Se divide**: pago en el sitio, preparación en el sistema (§5.6).                     |
+| Modelos Prisma de catálogo (`Category`, `Product*`, `Variant*`), `StoreSettings`, seed de catálogo, `scripts/import-woocommerce.ts`                                      | **Se van** (F12·5). `prisma/seed/catalog.json` + `media/` alimentan la migración (F9). |
+| Panel `/admin`, `AdminUser`, `AdminSession`, `server/actions/admin/*`, `server/admin/*`                                                                                  | **Se van** (F12·5); se rehacen en tienda3d (F8, F14·5, F15).                           |
+| `Order`, `OrderItem`, `Payment`, `PaymentNotification`, `OrderEvent`, `QuoteRequest`                                                                                     | **Se quedan y cambian** (F14, F15).                                                    |
+| `server/payments/*` (gateway, MP, simulado, reglas y firma de webhook)                                                                                                   | **Se queda**; MP se activa en F19.                                                     |
+| `server/mail/*`                                                                                                                                                          | **Se queda y crece** (cuentas y estados).                                              |
+| `server/storage.ts` + `/media/[...path]`                                                                                                                                 | **Se queda**, lee el volumen del sistema en solo lectura (F12·3).                      |
+| `server/rate-limit.ts` (en memoria)                                                                                                                                      | **Se queda** (una sola instancia).                                                     |
 
 **Variables actuales** (`src/server/env.ts`): `NODE_ENV`, `DATABASE_URL`, `SITE_URL`,
 `UPLOADS_DIR`, `PAYMENTS_PROVIDER`, `MP_ACCESS_TOKEN`, `MP_WEBHOOK_SECRET`,
@@ -355,21 +355,21 @@ commiteó, pero **contiene usuarios, tokens de refresco y clientes** (F0·2).
 
 ### 4.8 Correspondencia de catálogos (web hoy ↔ sistema)
 
-| Producto web | Opciones web | SKU web | Producto(s) del sistema | Estado |
-| --- | --- | --- | --- | --- |
-| Cuaderno Plastik A5 – Army | Tipo de hoja | PTK-PROD-000026 | Cuaderno A5 — Army | ok |
-| Cuaderno Plastik A5 – DEV | Tipo de hoja | PTK-PROD-000019 | Cuaderno A5 — DEV | ok |
-| Cuaderno Plastik A5 – Edición Arirang | Color (Blanco, Negro) × Tipo de hoja | PTK-PROD-000017 | Cuaderno A5 — Arirang BTS | ok |
-| Cuaderno Plastik A5 – Monocromático | Tipo de hoja × Color (7) | **TPK**-PROD-000001 | PTK-PROD-000001 Cuaderno A5 — Monocromático | **error de tipeo en la web** |
-| Cuaderno Plastik A5 – Noche / Día | Tipo de hoja | TPK-PROD-27 | — | **no existe en el sistema** (PTK-PROD-000027 es el Cuaderno A4) |
-| Cuaderno Plastik A5 – Riso | Tipo de hoja | PTK-PROD-27 | — | **no existe en el sistema** |
-| Lámpara Lana — Mesa | Color (Negro) | PTK-PROD-000006 | Lana | ok |
-| Lámpara Lia — Colgante | Color (Blanco, Negro) | PTK-PROD-000025 | Lámpara Lia — Colgante | ok |
-| Lámpara Lina — Mesa | Color (4) | PTK-PROD-000005 | Lina | ok |
-| Lámpara Mila — Colgante | Color (3) | PTK-PROD-000009 | Mila | ok |
-| Lámpara Nala — Colgante | Color (3) | PTK-PROD-000010 | Nala | ok |
-| Lámpara Trapecio — Mesa | Color (4) × Tamaño (280, **380**) | PTK-PROD-000003, -000004 | Trapecio 280, Trapecio **390** | **380 vs 390** |
-| Lámpara Vera — Mesa | Color (5) | PTK-PROD-000002 | Vera R | ok |
+| Producto web                          | Opciones web                         | SKU web                  | Producto(s) del sistema                     | Estado                                                          |
+| ------------------------------------- | ------------------------------------ | ------------------------ | ------------------------------------------- | --------------------------------------------------------------- |
+| Cuaderno Plastik A5 – Army            | Tipo de hoja                         | PTK-PROD-000026          | Cuaderno A5 — Army                          | ok                                                              |
+| Cuaderno Plastik A5 – DEV             | Tipo de hoja                         | PTK-PROD-000019          | Cuaderno A5 — DEV                           | ok                                                              |
+| Cuaderno Plastik A5 – Edición Arirang | Color (Blanco, Negro) × Tipo de hoja | PTK-PROD-000017          | Cuaderno A5 — Arirang BTS                   | ok                                                              |
+| Cuaderno Plastik A5 – Monocromático   | Tipo de hoja × Color (7)             | **TPK**-PROD-000001      | PTK-PROD-000001 Cuaderno A5 — Monocromático | **error de tipeo en la web**                                    |
+| Cuaderno Plastik A5 – Noche / Día     | Tipo de hoja                         | TPK-PROD-27              | —                                           | **no existe en el sistema** (PTK-PROD-000027 es el Cuaderno A4) |
+| Cuaderno Plastik A5 – Riso            | Tipo de hoja                         | PTK-PROD-27              | —                                           | **no existe en el sistema**                                     |
+| Lámpara Lana — Mesa                   | Color (Negro)                        | PTK-PROD-000006          | Lana                                        | ok                                                              |
+| Lámpara Lia — Colgante                | Color (Blanco, Negro)                | PTK-PROD-000025          | Lámpara Lia — Colgante                      | ok                                                              |
+| Lámpara Lina — Mesa                   | Color (4)                            | PTK-PROD-000005          | Lina                                        | ok                                                              |
+| Lámpara Mila — Colgante               | Color (3)                            | PTK-PROD-000009          | Mila                                        | ok                                                              |
+| Lámpara Nala — Colgante               | Color (3)                            | PTK-PROD-000010          | Nala                                        | ok                                                              |
+| Lámpara Trapecio — Mesa               | Color (4) × Tamaño (280, **380**)    | PTK-PROD-000003, -000004 | Trapecio 280, Trapecio **390**              | **380 vs 390**                                                  |
+| Lámpara Vera — Mesa                   | Color (5)                            | PTK-PROD-000002          | Vera R                                      | ok                                                              |
 
 Totales web: 13 productos, 52 variantes y 64 fotos. **11 colores** con su código:
 
@@ -386,30 +386,30 @@ $ 39.995,78 y $ 47.643,01 en la Trapecio). F9·3 arma el reporte de diferencias 
 
 ### 4.9 Secretos y seguridad — hallazgos
 
-| # | Hallazgo | Severidad | Se resuelve en |
-| --- | --- | --- | --- |
-| S1 | Escaneo del **historial completo** con gitleaks: no hay secretos propios en ningún repo. En [t3d] hay 2 falsos positivos (datos de prueba en `apps/api/src/common/config/validate-secrets.spec.ts`). En [sf], los únicos hallazgos están en código de plugins de WordPress de terceros (commit `a23354bc`, hoy solo en el historial y en el tag `wordpress-final`). | Info | F1·4 (allowlist) |
-| S2 | `.env` local de [t3d] con `POSTGRES_PASSWORD` igual al valor de ejemplo y `SEED_ADMIN_PASSWORD=admin123` (F-23 parcial). | Alta | F1·5 |
-| S3 | `API_NODE_ENV` local no es `production`, así que las cookies del sistema salen sin `Secure`. | Media (local) | F3·6, F17 |
-| S4 | Volcado de la base con usuarios, tokens y clientes en la raíz del repo de [t3d]. | Media | F0·2 |
-| S5 | Los secretos se pasan como **variables de entorno** en los dos sistemas: aparecen en `docker inspect` y en el entorno de cualquier proceso hijo (por ejemplo, el `pg_dump` del backup). | Media | F1·1, F3·6 |
-| S6 | La API de [t3d] usa el **superusuario** de Postgres, y su endpoint de backup descarga la base completa, con hashes de contraseñas. | Alta | F2·6, F3·2 |
-| S7 | El compose de [t3d] publica Postgres, API y web en todas las interfaces. Con `trust proxy 1`, un `X-Forwarded-For` falso esquiva el límite por IP si se le pega directo a la API. | Alta al exponerse | F3·4 |
-| S8 | No hay escaneo de secretos ni CI en ningún repo. | Media | F1·4, F2·7 |
-| S9 | [sf] valida pagos simulados solo con `localhost` y exige `MP_WEBHOOK_SECRET` fuera de localhost; no lee secretos desde archivo. | Info | F1·1 |
-| S10 | Los permisos van en el JWT y no se revalidan por request (ventana de 15 min). | Baja | aceptado |
+| #   | Hallazgo                                                                                                                                                                                                                                                                                                                                                            | Severidad         | Se resuelve en   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------- |
+| S1  | Escaneo del **historial completo** con gitleaks: no hay secretos propios en ningún repo. En [t3d] hay 2 falsos positivos (datos de prueba en `apps/api/src/common/config/validate-secrets.spec.ts`). En [sf], los únicos hallazgos están en código de plugins de WordPress de terceros (commit `a23354bc`, hoy solo en el historial y en el tag `wordpress-final`). | Info              | F1·4 (allowlist) |
+| S2  | `.env` local de [t3d] con `POSTGRES_PASSWORD` igual al valor de ejemplo y `SEED_ADMIN_PASSWORD=admin123` (F-23 parcial).                                                                                                                                                                                                                                            | Alta              | F1·5             |
+| S3  | `API_NODE_ENV` local no es `production`, así que las cookies del sistema salen sin `Secure`.                                                                                                                                                                                                                                                                        | Media (local)     | F3·6, F17        |
+| S4  | Volcado de la base con usuarios, tokens y clientes en la raíz del repo de [t3d].                                                                                                                                                                                                                                                                                    | Media             | F0·2             |
+| S5  | Los secretos se pasan como **variables de entorno** en los dos sistemas: aparecen en `docker inspect` y en el entorno de cualquier proceso hijo (por ejemplo, el `pg_dump` del backup).                                                                                                                                                                             | Media             | F1·1, F3·6       |
+| S6  | La API de [t3d] usa el **superusuario** de Postgres, y su endpoint de backup descarga la base completa, con hashes de contraseñas.                                                                                                                                                                                                                                  | Alta              | F2·6, F3·2       |
+| S7  | El compose de [t3d] publica Postgres, API y web en todas las interfaces. Con `trust proxy 1`, un `X-Forwarded-For` falso esquiva el límite por IP si se le pega directo a la API.                                                                                                                                                                                   | Alta al exponerse | F3·4             |
+| S8  | No hay escaneo de secretos ni CI en ningún repo.                                                                                                                                                                                                                                                                                                                    | Media             | F1·4, F2·7       |
+| S9  | [sf] valida pagos simulados solo con `localhost` y exige `MP_WEBHOOK_SECRET` fuera de localhost; no lee secretos desde archivo.                                                                                                                                                                                                                                     | Info              | F1·1             |
+| S10 | Los permisos van en el JWT y no se revalidan por request (ventana de 15 min).                                                                                                                                                                                                                                                                                       | Baja              | aceptado         |
 
 ### 4.10 Deuda de tienda3d que afecta este plan
 
-| ID | Problema | Por qué importa acá | Tarea |
-| --- | --- | --- | --- |
-| F-30 | La imagen de producción de la web no compila. | No se puede probar el ecosistema como en producción ni desplegarlo. | F2·1 |
-| P1 | El PUT de producto reactiva archivados, rehabilita Venta Directa y filtra notas. | La web publicaría productos archivados y precios de un canal que se quiso apagar. | F2·2 |
-| P2 | El PUT recrea las piezas, que cambian de ID. | Los colores se asignan a piezas (T8) y la orden de producción usa IDs de pieza. | F2·3 |
-| P3 | `activeOnly=false` se lee como `true`. | El selector de colores podría mostrar colores inactivos. | F2·4 |
-| P4 | Doble consumo en la producción de llaveros. | Generar una orden desde un pedido de llaveros descontaría el doble. | F2·5 |
-| P5 | API con superusuario y migraciones en el CMD de la API. | Impide el modelo de roles de §5.3. | F2·6, F3·2 |
-| P6 | Sin CI ni request id. | No se puede seguir un pedido entre los dos sistemas. | F2·7, F2·8 |
+| ID   | Problema                                                                         | Por qué importa acá                                                               | Tarea      |
+| ---- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------- |
+| F-30 | La imagen de producción de la web no compila.                                    | No se puede probar el ecosistema como en producción ni desplegarlo.               | F2·1       |
+| P1   | El PUT de producto reactiva archivados, rehabilita Venta Directa y filtra notas. | La web publicaría productos archivados y precios de un canal que se quiso apagar. | F2·2       |
+| P2   | El PUT recrea las piezas, que cambian de ID.                                     | Los colores se asignan a piezas (T8) y la orden de producción usa IDs de pieza.   | F2·3       |
+| P3   | `activeOnly=false` se lee como `true`.                                           | El selector de colores podría mostrar colores inactivos.                          | F2·4       |
+| P4   | Doble consumo en la producción de llaveros.                                      | Generar una orden desde un pedido de llaveros descontaría el doble.               | F2·5       |
+| P5   | API con superusuario y migraciones en el CMD de la API.                          | Impide el modelo de roles de §5.3.                                                | F2·6, F3·2 |
+| P6   | Sin CI ni request id.                                                            | No se puede seguir un pedido entre los dos sistemas.                              | F2·7, F2·8 |
 
 ---
 
@@ -449,32 +449,32 @@ $ 39.995,78 y $ 47.643,01 en la Trapecio). F9·3 arma el reporte de diferencias 
 
 ### 5.2 Dueño de cada dato
 
-| Dato | Escribe (dueño) | Lee | Por dónde |
-| --- | --- | --- | --- |
-| Productos, recetas, costos, precios por canal | tienda3d | — | — |
-| Publicaciones web, variantes, colores, atributos, fotos, categorías web, ajustes de la tienda | tienda3d (admin) | storefront | vistas `storefront_v1` |
-| Precio publicado (Venta Directa, cliente normal, cantidad 1) | tienda3d (cálculo automático) | storefront | vista |
-| Stock de venta web | tienda3d | storefront | vista + reserva por API al registrar el pedido |
-| Cuentas de cliente, sesiones, direcciones | storefront | tienda3d (como `Customer` tipo STANDARD, origen web: D4) | evento `customer.upserted` |
-| Pedido (datos de la compra) | storefront | tienda3d (registro) | API `POST …/orders` |
-| Estado de **pago** | storefront (MP en F19; transferencia confirmada por el admin vía evento) | tienda3d | eventos |
-| Estado de **preparación / entrega** | tienda3d | storefront | eventos |
-| Solicitudes de personalización | storefront (recibe) → tienda3d (gestiona) | — | outbox con adjunto |
-| Mails al cliente y aviso de pedido a la tienda | storefront | — | SMTP |
+| Dato                                                                                          | Escribe (dueño)                                                          | Lee                                                      | Por dónde                                      |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------- | ---------------------------------------------- |
+| Productos, recetas, costos, precios por canal                                                 | tienda3d                                                                 | —                                                        | —                                              |
+| Publicaciones web, variantes, colores, atributos, fotos, categorías web, ajustes de la tienda | tienda3d (admin)                                                         | storefront                                               | vistas `storefront_v1`                         |
+| Precio publicado (Venta Directa, cliente normal, cantidad 1)                                  | tienda3d (cálculo automático)                                            | storefront                                               | vista                                          |
+| Stock de venta web                                                                            | tienda3d                                                                 | storefront                                               | vista + reserva por API al registrar el pedido |
+| Cuentas de cliente, sesiones, direcciones                                                     | storefront                                                               | tienda3d (como `Customer` tipo STANDARD, origen web: D4) | evento `customer.upserted`                     |
+| Pedido (datos de la compra)                                                                   | storefront                                                               | tienda3d (registro)                                      | API `POST …/orders`                            |
+| Estado de **pago**                                                                            | storefront (MP en F19; transferencia confirmada por el admin vía evento) | tienda3d                                                 | eventos                                        |
+| Estado de **preparación / entrega**                                                           | tienda3d                                                                 | storefront                                               | eventos                                        |
+| Solicitudes de personalización                                                                | storefront (recibe) → tienda3d (gestiona)                                | —                                                        | outbox con adjunto                             |
+| Mails al cliente y aviso de pedido a la tienda                                                | storefront                                                               | —                                                        | SMTP                                           |
 
 ### 5.3 Bases y roles
 
 Una instancia de PostgreSQL con **dos bases**, igual que tendrá RDS. Ningún servicio usa el
 superusuario.
 
-| Rol | Base | Puede | Lo usa |
-| --- | --- | --- | --- |
-| `postgres` (superusuario; *master* en RDS) | todas | todo | solo el init y el mantenimiento |
-| `tienda3d_owner` | tienda3d | dueño de `public` y `storefront_v1`; DDL | servicio `tienda3d-migrate` |
-| `tienda3d_app` | tienda3d | SELECT/INSERT/UPDATE/DELETE en `public`, uso de secuencias, sin DDL | `tienda3d-api` |
-| `storefront_reader` | tienda3d | `USAGE` en `storefront_v1` + `SELECT` en sus vistas. Nada en `public`. | `storefront`, `storefront-worker` |
-| `storefront_owner` | storefront | dueño; migraciones Prisma | servicio `storefront-migrate` |
-| `storefront_app` | storefront | DML | `storefront`, `storefront-worker` |
+| Rol                                        | Base       | Puede                                                                  | Lo usa                            |
+| ------------------------------------------ | ---------- | ---------------------------------------------------------------------- | --------------------------------- |
+| `postgres` (superusuario; _master_ en RDS) | todas      | todo                                                                   | solo el init y el mantenimiento   |
+| `tienda3d_owner`                           | tienda3d   | dueño de `public` y `storefront_v1`; DDL                               | servicio `tienda3d-migrate`       |
+| `tienda3d_app`                             | tienda3d   | SELECT/INSERT/UPDATE/DELETE en `public`, uso de secuencias, sin DDL    | `tienda3d-api`                    |
+| `storefront_reader`                        | tienda3d   | `USAGE` en `storefront_v1` + `SELECT` en sus vistas. Nada en `public`. | `storefront`, `storefront-worker` |
+| `storefront_owner`                         | storefront | dueño; migraciones Prisma                                              | servicio `storefront-migrate`     |
+| `storefront_app`                           | storefront | DML                                                                    | `storefront`, `storefront-worker` |
 
 Reglas:
 
@@ -489,16 +489,16 @@ Reglas:
 Vistas (columnas mínimas). Solo muestran publicaciones `PUBLISHED`, con producto del sistema activo
 y precio calculado:
 
-| Vista | Columnas |
-| --- | --- |
-| `products` | `id, slug, name, summary, description, seo_title, seo_description, option_label, featured, sort_order, published_at, updated_at` |
-| `variants` | `id, product_id, sku, member_value_key, member_value_label, member_sort, price_cents, availability, available_quantity, max_per_order, lead_time_days, image_id, sort` |
-| `variant_options` | `variant_id, option_kind ('member'\|'color'\|'attribute'), option_key, option_label, value_key, value_label, color_hex, option_sort, value_sort` |
-| `images` | `id, product_id, path, alt, width, height, position, color_value_key` |
-| `categories` | `id, slug, name, description, parent_id, image_path, sort_order` |
-| `product_categories` | `product_id, category_id` |
-| `slug_redirects` | `old_slug, product_slug` |
-| `store_settings` | `shipping_flat_rate_cents, free_shipping_from_cents, pickup_enabled, pickup_instructions, bank_transfer_enabled, bank_transfer_instructions, notification_email` |
+| Vista                | Columnas                                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `products`           | `id, slug, name, summary, description, seo_title, seo_description, option_label, featured, sort_order, published_at, updated_at`                                       |
+| `variants`           | `id, product_id, sku, member_value_key, member_value_label, member_sort, price_cents, availability, available_quantity, max_per_order, lead_time_days, image_id, sort` |
+| `variant_options`    | `variant_id, option_kind ('member'\|'color'\|'attribute'), option_key, option_label, value_key, value_label, color_hex, option_sort, value_sort`                       |
+| `images`             | `id, product_id, path, alt, width, height, position, color_value_key`                                                                                                  |
+| `categories`         | `id, slug, name, description, parent_id, image_path, sort_order`                                                                                                       |
+| `product_categories` | `product_id, category_id`                                                                                                                                              |
+| `slug_redirects`     | `old_slug, product_slug`                                                                                                                                               |
+| `store_settings`     | `shipping_flat_rate_cents, free_shipping_from_cents, pickup_enabled, pickup_instructions, bank_transfer_enabled, bank_transfer_instructions, notification_email`       |
 
 - Los montos se exponen en **centavos enteros** (el storefront ya trabaja así); tienda3d sigue con `Decimal(14,2)`.
 - **Ninguna vista expone** costos, recetas, proveedores, markups, notas internas, clientes ni usuarios.
@@ -509,13 +509,13 @@ y precio calculado:
 **Del storefront a tienda3d.** Llamadas HTTP por la red interna a
 `http://tienda3d-api:3001/api/integrations/storefront/v1/…`:
 
-| Endpoint | Cuándo | Idempotencia |
-| --- | --- | --- |
-| `POST /orders` | al confirmar la compra (sincrónico, D2): valida precios contra el precio publicado, reserva stock y devuelve el código `W-AAAA-NNNN` | `externalId` = uuid del pedido del sitio |
-| `POST /orders/{externalId}/events` | `payment_updated`, `cancelled_by_customer` (por outbox) | `eventId` |
-| `POST /customers` | `customer.upserted` (por outbox) | id del cliente en el sitio |
-| `POST /quote-requests` (multipart) | solicitud de personalización (por outbox) | id de la solicitud |
-| `GET /ping` | health de la integración | — |
+| Endpoint                           | Cuándo                                                                                                                               | Idempotencia                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| `POST /orders`                     | al confirmar la compra (sincrónico, D2): valida precios contra el precio publicado, reserva stock y devuelve el código `W-AAAA-NNNN` | `externalId` = uuid del pedido del sitio |
+| `POST /orders/{externalId}/events` | `payment_updated`, `cancelled_by_customer` (por outbox)                                                                              | `eventId`                                |
+| `POST /customers`                  | `customer.upserted` (por outbox)                                                                                                     | id del cliente en el sitio               |
+| `POST /quote-requests` (multipart) | solicitud de personalización (por outbox)                                                                                            | id de la solicitud                       |
+| `GET /ping`                        | health de la integración                                                                                                             | —                                        |
 
 - **Autenticación:** `Authorization: Bearer <clave>`. La clave tiene 32 bytes aleatorios; tienda3d guarda solo su SHA-256 en `integration_clients` (con alcances, `lastUsedAt` y `revokedAt`) y la compara con `timingSafeEqual`.
 - **Rotación:** se admiten dos claves activas a la vez durante el cambio.
@@ -523,11 +523,11 @@ y precio calculado:
 
 **De tienda3d al storefront.** Eventos a `http://storefront:3100/api/internal/events`:
 
-| Evento | Efecto en el sitio |
-| --- | --- |
-| `catalog.changed {scope, ids}` | `revalidateTag` del catálogo, del producto o de los ajustes |
-| `order.fulfillment_changed {externalId, status, tracking?}` | actualiza el pedido, suma al historial y manda mail al cliente |
-| `order.payment_confirmed_manually {externalId}` | marca la transferencia como pagada y emite `payment_updated` de vuelta |
+| Evento                                                      | Efecto en el sitio                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `catalog.changed {scope, ids}`                              | `revalidateTag` del catálogo, del producto o de los ajustes            |
+| `order.fulfillment_changed {externalId, status, tracking?}` | actualiza el pedido, suma al historial y manda mail al cliente         |
+| `order.payment_confirmed_manually {externalId}`             | marca la transferencia como pagada y emite `payment_updated` de vuelta |
 
 **Firma y entrega** (en los dos sentidos, para eventos):
 
@@ -545,10 +545,10 @@ y precio calculado:
 El estado único de hoy (`domain/orders.ts`) mezcla pago y preparación. Se separa en dos ejes, cada
 uno con un dueño:
 
-| Eje | Dueño | Estados |
-| --- | --- | --- |
-| Pago (`paymentStatus`) | storefront | `PENDING` → `AWAITING_TRANSFER` → `APPROVED` · `REJECTED` · `REFUNDED` (este último en F19) |
-| Preparación (`fulfillmentStatus`) | tienda3d | `RECEIVED` → `PREPARING` → `READY_FOR_PICKUP` (retiro) / `SHIPPED` con seguimiento (envío) → `DELIVERED` · `CANCELLED` |
+| Eje                               | Dueño      | Estados                                                                                                                |
+| --------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Pago (`paymentStatus`)            | storefront | `PENDING` → `AWAITING_TRANSFER` → `APPROVED` · `REJECTED` · `REFUNDED` (este último en F19)                            |
+| Preparación (`fulfillmentStatus`) | tienda3d   | `RECEIVED` → `PREPARING` → `READY_FOR_PICKUP` (retiro) / `SHIPPED` con seguimiento (envío) → `DELIVERED` · `CANCELLED` |
 
 Reglas:
 
@@ -559,13 +559,13 @@ Reglas:
 
 ### 5.7 Fotos y archivos
 
-| Volumen | Escribe | Lee | Contenido |
-| --- | --- | --- | --- |
-| `media` | tienda3d-api | storefront (ro), tienda3d-api | `catalog/<webProductId>/<uuid>.webp`, `categories/<uuid>.webp` |
-| `t3d-private` | tienda3d-api | tienda3d-api | adjuntos de solicitudes de personalización |
-| `sf-private` | storefront | storefront | adjuntos pendientes de entregar (se borran al confirmarse la entrega) |
+| Volumen       | Escribe      | Lee                           | Contenido                                                             |
+| ------------- | ------------ | ----------------------------- | --------------------------------------------------------------------- |
+| `media`       | tienda3d-api | storefront (ro), tienda3d-api | `catalog/<webProductId>/<uuid>.webp`, `categories/<uuid>.webp`        |
+| `t3d-private` | tienda3d-api | tienda3d-api                  | adjuntos de solicitudes de personalización                            |
+| `sf-private`  | storefront   | storefront                    | adjuntos pendientes de entregar (se borran al confirmarse la entrega) |
 
-- Proceso al subir: verificación de tipo por *magic bytes* (jpg, png, webp), límite de 15 MB, `sharp` → WebP de máximo 2000 px y sin metadatos EXIF.
+- Proceso al subir: verificación de tipo por _magic bytes_ (jpg, png, webp), límite de 15 MB, `sharp` → WebP de máximo 2000 px y sin metadatos EXIF.
 - Las dos apps corren con uid 1001: el volumen compartido no necesita permisos especiales.
 - El almacenamiento queda detrás de un puerto (`MediaStorage`) para pasar a S3 si un día hay más de un host.
 
@@ -582,10 +582,10 @@ Reglas:
 
 **Herramientas (todas gratuitas):**
 
-| Ambiente | Dónde viven | Cómo llegan al contenedor |
-| --- | --- | --- |
-| Local | `tienda-plastik-infra/secrets/local/*.txt` (ignorado por git, permisos `600`), generados con `openssl rand` por `scripts/secrets/init-local.sh` | `secrets:` de Compose (archivos) |
-| EC2 | **AWS Systems Manager Parameter Store**, parámetros `SecureString` de nivel **estándar** bajo `/tienda-plastik/prod/<servicio>/<nombre>`, cifrados con la clave administrada por AWS | Un servicio systemd (`fetch-secrets`) corre antes de `docker compose up`, lee por `GetParametersByPath` con el **rol IAM de la instancia** (sin claves de AWS en el disco) y escribe en tmpfs `/run/tienda-plastik/secrets` (`0400`, uid 1001), que Compose monta como `secrets:` |
+| Ambiente | Dónde viven                                                                                                                                                                          | Cómo llegan al contenedor                                                                                                                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local    | `tienda-plastik-infra/secrets/local/*.txt` (ignorado por git, permisos `600`), generados con `openssl rand` por `scripts/secrets/init-local.sh`                                      | `secrets:` de Compose (archivos)                                                                                                                                                                                                                                                  |
+| EC2      | **AWS Systems Manager Parameter Store**, parámetros `SecureString` de nivel **estándar** bajo `/tienda-plastik/prod/<servicio>/<nombre>`, cifrados con la clave administrada por AWS | Un servicio systemd (`fetch-secrets`) corre antes de `docker compose up`, lee por `GetParametersByPath` con el **rol IAM de la instancia** (sin claves de AWS en el disco) y escribe en tmpfs `/run/tienda-plastik/secrets` (`0400`, uid 1001), que Compose monta como `secrets:` |
 
 **Costo del almacén en EC2:**
 
@@ -595,20 +595,20 @@ Reglas:
 
 **Inventario:**
 
-| Secreto | Servicios | Uso |
-| --- | --- | --- |
-| `pg_superuser_password` | db (init) | administración |
-| `tienda3d_owner_password` · `tienda3d_app_password` | tienda3d-migrate · tienda3d-api | base del sistema |
-| `storefront_owner_password` · `storefront_app_password` | storefront-migrate · storefront, worker | base del sitio |
-| `storefront_reader_password` | storefront, worker | lectura del catálogo |
-| `jwt_secret` · `refresh_secret` | tienda3d-api | sesiones del panel |
-| `seed_admin_password` | tienda3d-migrate (solo la primera vez) | admin inicial |
-| `storefront_api_key` | storefront (en claro); en tienda3d se guarda su hash en la base | API de servicio |
-| `events_secret_t3d_to_sf` · `events_secret_sf_to_t3d` | los dos | firma de eventos |
-| `session_secret` (si hace falta para firmar tokens de email) | storefront | cuentas de cliente |
-| `smtp_url` | storefront, worker | mails |
-| `mp_access_token` · `mp_webhook_secret` | storefront (F19) | Mercado Pago |
-| futuros: MELI, ARCA, WhatsApp | tienda3d-api | integraciones |
+| Secreto                                                      | Servicios                                                       | Uso                  |
+| ------------------------------------------------------------ | --------------------------------------------------------------- | -------------------- |
+| `pg_superuser_password`                                      | db (init)                                                       | administración       |
+| `tienda3d_owner_password` · `tienda3d_app_password`          | tienda3d-migrate · tienda3d-api                                 | base del sistema     |
+| `storefront_owner_password` · `storefront_app_password`      | storefront-migrate · storefront, worker                         | base del sitio       |
+| `storefront_reader_password`                                 | storefront, worker                                              | lectura del catálogo |
+| `jwt_secret` · `refresh_secret`                              | tienda3d-api                                                    | sesiones del panel   |
+| `seed_admin_password`                                        | tienda3d-migrate (solo la primera vez)                          | admin inicial        |
+| `storefront_api_key`                                         | storefront (en claro); en tienda3d se guarda su hash en la base | API de servicio      |
+| `events_secret_t3d_to_sf` · `events_secret_sf_to_t3d`        | los dos                                                         | firma de eventos     |
+| `session_secret` (si hace falta para firmar tokens de email) | storefront                                                      | cuentas de cliente   |
+| `smtp_url`                                                   | storefront, worker                                              | mails                |
+| `mp_access_token` · `mp_webhook_secret`                      | storefront (F19)                                                | Mercado Pago         |
+| futuros: MELI, ARCA, WhatsApp                                | tienda3d-api                                                    | integraciones        |
 
 **Alternativas también gratuitas**, por si no se va a AWS o para versionar secretos de un ambiente de
 prueba: **SOPS + age** (archivos cifrados en git), **Infisical** autoalojado y **Bitwarden Secrets
@@ -616,13 +616,13 @@ Manager** (plan gratuito).
 
 ### 5.9 Redes y puertos
 
-| Servicio | Red | Puerto publicado en local | En EC2 |
-| --- | --- | --- | --- |
-| caddy | `edge` | 80 (y 443 con `tls internal`, opcional) | 80/443 (único abierto en el Security Group) |
-| storefront · tienda3d-web | `edge` + `internal` | ninguno | ninguno |
-| tienda3d-api · storefront-worker · migraciones | `internal` | ninguno | ninguno |
-| db | `internal` | `127.0.0.1:5452` solo con el perfil `dev` | ninguno (RDS: Security Group solo desde la EC2) |
-| mailpit | `internal` + `edge` | vía `correo.localhost` | no existe (SMTP real) |
+| Servicio                                       | Red                 | Puerto publicado en local                 | En EC2                                          |
+| ---------------------------------------------- | ------------------- | ----------------------------------------- | ----------------------------------------------- |
+| caddy                                          | `edge`              | 80 (y 443 con `tls internal`, opcional)   | 80/443 (único abierto en el Security Group)     |
+| storefront · tienda3d-web                      | `edge` + `internal` | ninguno                                   | ninguno                                         |
+| tienda3d-api · storefront-worker · migraciones | `internal`          | ninguno                                   | ninguno                                         |
+| db                                             | `internal`          | `127.0.0.1:5452` solo con el perfil `dev` | ninguno (RDS: Security Group solo desde la EC2) |
+| mailpit                                        | `internal` + `edge` | vía `correo.localhost`                    | no existe (SMTP real)                           |
 
 ---
 
@@ -631,30 +631,30 @@ Manager** (plan gratuito).
 Cada fase indica el repo, de qué depende, la estimación propuesta y sus tareas. Una tarea tiene
 **Qué hacer** y **Cierra cuando**; la fase cierra con su **Verificación**.
 
-| Fase | Tema | Repo | Depende de | Estimación |
-| --- | --- | --- | --- | --- |
-| F0 | Base de trabajo | t3d, sf | — | 3–5 h |
-| F1 | Secretos y configuración | t3d, sf, infra | F0 | 8–12 h |
-| F2 | Endurecer tienda3d para integrarse | t3d | F0 | 12–20 h |
-| F3 | Ecosistema local en Docker | infra, t3d, sf | F1, F2·1, F2·6 | 10–16 h |
-| F4 | Permisos de tienda online para `admin` | t3d | F0 | 2–4 h |
-| F5 | Modelo del catálogo web | t3d | F2·2, F2·3, F4 | 16–24 h |
-| F6 | Fotos en volumen | t3d | F3·5, F5·1 | 8–12 h |
-| F7 | Precio publicado = Venta Directa | t3d | F5·2 | 8–12 h |
-| F8 | Panel "Tienda online" | t3d | F5, F6, F7 | 24–36 h |
-| F9 | Migración del catálogo actual | t3d | F8, D12 | 6–10 h |
-| F10 | Contrato de lectura | t3d, infra | F5, F7 | 8–12 h |
-| F11 | Integración entre sistemas | t3d, sf | F3, F10 | 12–18 h |
-| F12 | El sitio lee el catálogo del sistema | sf | F9, F10, F11 | 12–18 h |
-| F13 | Cuentas de cliente | sf | F12 | 20–30 h |
-| F14 | Pedidos de punta a punta | t3d, sf | F11, F13 | 30–45 h |
-| F15 | Solicitudes de personalización | t3d, sf | F11, F13 | 10–15 h |
-| F16 | Prueba integral local y decisión | infra, sf | F12–F15 | 12–18 h |
-| **Local** | | | | **201–307 h** |
-| F17 | Despliegue en EC2 (si F16 da "sí") | infra | F16 | 16–24 h |
-| F18 | Base en RDS (largo plazo) | infra | F17 | 6–10 h |
-| F19 | Mercado Pago | sf | F17 | 10–16 h |
-| F20 | Lanzamiento y baja del WordPress | infra, sf | F17 | 6–10 h |
+| Fase      | Tema                                   | Repo           | Depende de     | Estimación    |
+| --------- | -------------------------------------- | -------------- | -------------- | ------------- |
+| F0        | Base de trabajo                        | t3d, sf        | —              | 3–5 h         |
+| F1        | Secretos y configuración               | t3d, sf, infra | F0             | 8–12 h        |
+| F2        | Endurecer tienda3d para integrarse     | t3d            | F0             | 12–20 h       |
+| F3        | Ecosistema local en Docker             | infra, t3d, sf | F1, F2·1, F2·6 | 10–16 h       |
+| F4        | Permisos de tienda online para `admin` | t3d            | F0             | 2–4 h         |
+| F5        | Modelo del catálogo web                | t3d            | F2·2, F2·3, F4 | 16–24 h       |
+| F6        | Fotos en volumen                       | t3d            | F3·5, F5·1     | 8–12 h        |
+| F7        | Precio publicado = Venta Directa       | t3d            | F5·2           | 8–12 h        |
+| F8        | Panel "Tienda online"                  | t3d            | F5, F6, F7     | 24–36 h       |
+| F9        | Migración del catálogo actual          | t3d            | F8, D12        | 6–10 h        |
+| F10       | Contrato de lectura                    | t3d, infra     | F5, F7         | 8–12 h        |
+| F11       | Integración entre sistemas             | t3d, sf        | F3, F10        | 12–18 h       |
+| F12       | El sitio lee el catálogo del sistema   | sf             | F9, F10, F11   | 12–18 h       |
+| F13       | Cuentas de cliente                     | sf             | F12            | 20–30 h       |
+| F14       | Pedidos de punta a punta               | t3d, sf        | F11, F13       | 30–45 h       |
+| F15       | Solicitudes de personalización         | t3d, sf        | F11, F13       | 10–15 h       |
+| F16       | Prueba integral local y decisión       | infra, sf      | F12–F15        | 12–18 h       |
+| **Local** |                                        |                |                | **201–307 h** |
+| F17       | Despliegue en EC2 (si F16 da "sí")     | infra          | F16            | 16–24 h       |
+| F18       | Base en RDS (largo plazo)              | infra          | F17            | 6–10 h        |
+| F19       | Mercado Pago                           | sf             | F17            | 10–16 h       |
+| F20       | Lanzamiento y baja del WordPress       | infra, sf      | F17            | 6–10 h        |
 
 Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permite cargar datos.
 
@@ -1032,6 +1032,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - Por defecto, las piezas son todas las de los miembros cuyo `defaultFilamentId` es esa línea.
     - Validar que la línea esté usada por las piezas elegidas y que cada color sea un hijo **activo** de esa línea.
     - Si un color se desactiva en Insumos, las variantes que lo usan dejan de venderse y el panel lo avisa.
+    - Hecho así: el DTO marca el color inactivo (`values[].isActive`) para el aviso del panel, y las vistas de F10·1 no muestran variantes con un color inactivo. Quitar un color de una opción desactiva sus variantes; una opción con variantes que se quita queda inactiva (`WebColorOption.isActive`), igual que un miembro (F5·2). Un miembro que sale de la publicación saca sus piezas de las opciones.
   - Cierra cuando: hay tests que rechazan un color de otra línea, un color inactivo y una pieza de otro producto.
 - [ ] **F5·4 [t3d] Un producto web puede tener opciones informativas que no cambian el precio**
   - Para qué: ofrecer "Tipo de hoja" sin crear un producto del sistema por cada valor (D6).
@@ -1072,13 +1073,13 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 
 - [ ] **F6·1 [t3d] Los archivos se guardan en el volumen de forma segura**
   - Para qué: que ninguna ruta armada desde afuera escriba o lea fuera de la carpeta de fotos.
-  - Qué hacer: `apps/api/src/common/storage/` con `save`, `delete` y `read` sobre `MEDIA_DIR` (y `PRIVATE_DIR`), con rutas generadas por el sistema y control de *path traversal*.
+  - Qué hacer: `apps/api/src/common/storage/` con `save`, `delete` y `read` sobre `MEDIA_DIR` (y `PRIVATE_DIR`), con rutas generadas por el sistema y control de _path traversal_.
   - Cierra cuando: un test intenta `../` y falla.
 - [ ] **F6·2 [t3d] El admin sube, ordena y borra las fotos de un producto**
   - Para qué: gestionar la galería desde el sistema, con fotos livianas para la web.
   - Qué hacer:
     - `POST /web-catalog/products/:id/images` (multipart con `FileInterceptor`, `memoryStorage`, máximo 15 MB y 10 archivos).
-    - Verificar el tipo por *magic bytes* y procesar con `sharp`: WebP, 2000 px como máximo, sin EXIF, guardando ancho y alto.
+    - Verificar el tipo por _magic bytes_ y procesar con `sharp`: WebP, 2000 px como máximo, sin EXIF, guardando ancho y alto.
     - `PATCH …/images/:imageId` (alt, posición, color) y `DELETE` (borra la fila y el archivo).
     - El límite JSON global de `1mb` no aplica a esta ruta.
   - Cierra cuando: hay tests con un JPG real, un archivo `.jpg` que en realidad es texto (rechazado) y uno de 16 MB (rechazado).
@@ -1110,7 +1111,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 - [ ] **F7·2 [t3d] El precio web se actualiza solo cuando cambia un costo o un markup**
   - Para qué: no tener que acordarse de actualizar la web cada vez que sube un insumo.
   - Qué hacer:
-    - Después de cada escritura de la lista de §4.3 (al confirmarse la transacción), llamar a `WebPriceService.recomputePublished()` con *debounce* de 2 s. Son unas decenas de productos, así que se recalculan todos los publicados.
+    - Después de cada escritura de la lista de §4.3 (al confirmarse la transacción), llamar a `WebPriceService.recomputePublished()` con _debounce_ de 2 s. Son unas decenas de productos, así que se recalculan todos los publicados.
     - Sumar un cron de respaldo cada 10 min y un botón "Recalcular precios" (`ecommerce:write`).
     - Si algún precio cambió, registrar `WebPriceHistory` y emitir `catalog.changed`.
   - Cierra cuando: cambiar el precio vigente de "PLA Genérico" actualiza en menos de 5 s el precio publicado de todos los productos que lo usan (test de integración con el reloj controlado).
@@ -1206,8 +1207,8 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 
 - [ ] **F10·1 [t3d] El sitio ve solo lo publicado, a través de vistas**
   - Para qué: que la tienda no pueda leer costos, proveedores ni datos internos.
-  - Qué hacer: migración SQL con las vistas de §5.4, `WITH (security_barrier)`, filtrando `status = 'PUBLISHED'`, producto del sistema activo, miembro activo y precio `OK`. Montos en centavos (`(price * 100)::int`).
-  - Cierra cuando: la migración aplica en limpio, y una publicación oculta, un producto archivado o una variante sin precio no aparecen.
+  - Qué hacer: migración SQL con las vistas de §5.4, `WITH (security_barrier)`, filtrando `status = 'PUBLISHED'`, producto del sistema activo, miembro activo, opción de color activa con sus colores activos en Insumos (F5·3) y precio `OK`. Montos en centavos (`(price * 100)::int`).
+  - Cierra cuando: la migración aplica en limpio, y una publicación oculta, un producto archivado, una variante con un color inactivo o una variante sin precio no aparecen.
 - [ ] **F10·2 [t3d] El usuario de lectura del sitio queda configurado en cada migración**
   - Para qué: que una actualización del sistema no corte la lectura de la tienda.
   - Qué hacer: `db/grants.sql` idempotente, corrido por `tienda3d-migrate` después de `migrate deploy`, con `GRANT USAGE` + `SELECT ON ALL TABLES IN SCHEMA storefront_v1` y los ajustes del rol de §5.3. El rol lo crea el init de infra (F3·2); los tests lo crean en su setup.
@@ -1216,7 +1217,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: detectar cualquier fuga de datos antes de que llegue a producción.
   - Qué hacer: `apps/api/test/storefront-contract.int-spec.ts` conecta como `storefront_reader` y verifica:
     - (a) puede leer cada vista;
-    - (b) `SELECT` en `public.users`, `public.supplier_materials`, `public.customers`, `public.quotes` y `public.web_products` da *permission denied*;
+    - (b) `SELECT` en `public.users`, `public.supplier_materials`, `public.customers`, `public.quotes` y `public.web_products` da _permission denied_;
     - (c) `INSERT`/`UPDATE` fallan;
     - (d) las columnas de cada vista coinciden con un snapshot;
     - (e) lo oculto no aparece.
@@ -1501,7 +1502,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
     - Cabeceras.
     - **OWASP ZAP baseline** (gratuito) contra `tienda.localhost` y `sistema.localhost`.
     - gitleaks en los tres repos.
-  - Cierra cuando: ZAP no tiene alertas *High* y las *Medium* están resueltas o justificadas.
+  - Cierra cuando: ZAP no tiene alertas _High_ y las _Medium_ están resueltas o justificadas.
 - [ ] **F16·3 [infra] Se probó recuperar todo desde un backup**
   - Para qué: saber que funciona y cuánto tarda antes de necesitarlo.
   - Qué hacer: backup → borrar volúmenes → restaurar (F3·7). Medir el tiempo.
@@ -1551,7 +1552,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 ### F18 — Base en RDS · 6–10 h (largo plazo)
 
 - [ ] **F18·1** Crear RDS PostgreSQL 16 en subred privada, cifrada, con backups automáticos, `rds.force_ssl=1` y Security Group solo desde la EC2.
-- [ ] **F18·2** Correr `db/init/00-roles.sh` contra RDS con el usuario *master*; no requiere superusuario (§5.3).
+- [ ] **F18·2** Correr `db/init/00-roles.sh` contra RDS con el usuario _master_; no requiere superusuario (§5.3).
 - [ ] **F18·3** Ventana de corte: modo mantenimiento, `pg_dump` de las dos bases, `pg_restore`, URLs nuevas en SSM (`sslmode=verify-full` con el bundle de AWS), reinicio y verificación. Después, quitar el servicio `db` del compose.
 - [ ] Cierra cuando: las e2e de F16·1 pasan contra RDS y el backup automático de RDS está verificado.
 
@@ -1575,17 +1576,17 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 
 ## 7. Riesgos
 
-| Riesgo | Impacto | Mitigación |
-| --- | --- | --- |
-| Los precios de la web cambian al pasar a Venta Directa (redondeo hacia arriba a 50 y markups actuales). | La dueña ve precios distintos a los de hoy. | Reporte F9·3 antes de publicar; los ajustes se hacen en markups o categorías del sistema. |
-| El sistema tiene 1 solo color de filamento cargado. | No se puede publicar nada con colores. | F9·1 antes de F9·2. |
-| F-30 no tiene una solución conocida todavía. | Sin imagen de producción de la web no hay prueba integral ni EC2. | F2·1 es lo primero de F2; si se traba, construir la web del sistema con `next start` sobre el build completo como plan B. |
-| El checkout depende de que tienda3d responda (D2). | Si el sistema se cae, no se vende. | Los dos corren en el mismo host; mensaje claro y monitoreo en F17·6. |
-| Datos personales en dos bases (cuentas en el sitio y clientes en el sistema, D4). | Más superficie ante una filtración. | El sistema guarda solo nombre, email, teléfono y documento (nunca contraseñas); backups cifrados. |
-| El panel de gestión pasa de estar solo en el taller a estar en internet. | Más exposición. | D8 (capa extra gratuita), bloqueo por intentos y cookies `Secure`. |
-| Tamaño del trabajo (≈200–300 h en local). | Mucho tiempo sin nada utilizable. | Fases con valor propio: al terminar F12, el catálogo ya sale del sistema; F13–F15 se pueden priorizar. |
-| Una sola instancia (límites, sesiones y crons en memoria o en la base). | No escala horizontalmente. | Aceptado para este volumen; si hace falta, Redis para límites y *leader election* para crons. |
-| Next 16.0.0 en tienda3d y 16.4.x en el storefront. | Diferencias de comportamiento entre los dos. | Opcional: alinear versiones en F2. |
+| Riesgo                                                                                                  | Impacto                                                           | Mitigación                                                                                                                |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Los precios de la web cambian al pasar a Venta Directa (redondeo hacia arriba a 50 y markups actuales). | La dueña ve precios distintos a los de hoy.                       | Reporte F9·3 antes de publicar; los ajustes se hacen en markups o categorías del sistema.                                 |
+| El sistema tiene 1 solo color de filamento cargado.                                                     | No se puede publicar nada con colores.                            | F9·1 antes de F9·2.                                                                                                       |
+| F-30 no tiene una solución conocida todavía.                                                            | Sin imagen de producción de la web no hay prueba integral ni EC2. | F2·1 es lo primero de F2; si se traba, construir la web del sistema con `next start` sobre el build completo como plan B. |
+| El checkout depende de que tienda3d responda (D2).                                                      | Si el sistema se cae, no se vende.                                | Los dos corren en el mismo host; mensaje claro y monitoreo en F17·6.                                                      |
+| Datos personales en dos bases (cuentas en el sitio y clientes en el sistema, D4).                       | Más superficie ante una filtración.                               | El sistema guarda solo nombre, email, teléfono y documento (nunca contraseñas); backups cifrados.                         |
+| El panel de gestión pasa de estar solo en el taller a estar en internet.                                | Más exposición.                                                   | D8 (capa extra gratuita), bloqueo por intentos y cookies `Secure`.                                                        |
+| Tamaño del trabajo (≈200–300 h en local).                                                               | Mucho tiempo sin nada utilizable.                                 | Fases con valor propio: al terminar F12, el catálogo ya sale del sistema; F13–F15 se pueden priorizar.                    |
+| Una sola instancia (límites, sesiones y crons en memoria o en la base).                                 | No escala horizontalmente.                                        | Aceptado para este volumen; si hace falta, Redis para límites y _leader election_ para crons.                             |
+| Next 16.0.0 en tienda3d y 16.4.x en el storefront.                                                      | Diferencias de comportamiento entre los dos.                      | Opcional: alinear versiones en F2.                                                                                        |
 
 ---
 
@@ -1603,8 +1604,8 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 
 ## 9. Bitácora
 
-| Fecha | Fase | Nota |
-| --- | --- | --- |
-| 2026-10-26 | — | Plan creado a partir del relevamiento de los dos sistemas y la base local en uso. Decisiones T1–T11 de Pablo; D1–D12 propuestas, a confirmar en F0·3. |
-| 2026-10-27 | F0 | Decisiones definidas (§3): D4 cambia a clientes del sistema y D16 pide cuenta para las solicitudes; el resto, como se proponía. Sin GitHub Actions: verificación con hooks locales. Rama `unificacion` en [t3d] y [sf], rama por defecto mientras dure el trabajo. Títulos de tareas reescritos como resultados, con su "Para qué", para el tablero. |
-| 2026-10-27 | F0·4 | Línea de base en verde. [t3d]: typecheck y lint ok, 131/131 unitarios (12 suites), 24/24 de integración (5 suites, Postgres 16 temporal). [sf]: typecheck y lint ok, 61/61 unitarios, 18/18 e2e (escritorio + celular) contra la imagen de producción. Sigue abierto F-30 (imagen de producción de la web de [t3d]), que es F2·1. |
+| Fecha      | Fase | Nota                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-26 | —    | Plan creado a partir del relevamiento de los dos sistemas y la base local en uso. Decisiones T1–T11 de Pablo; D1–D12 propuestas, a confirmar en F0·3.                                                                                                                                                                                                |
+| 2026-10-27 | F0   | Decisiones definidas (§3): D4 cambia a clientes del sistema y D16 pide cuenta para las solicitudes; el resto, como se proponía. Sin GitHub Actions: verificación con hooks locales. Rama `unificacion` en [t3d] y [sf], rama por defecto mientras dure el trabajo. Títulos de tareas reescritos como resultados, con su "Para qué", para el tablero. |
+| 2026-10-27 | F0·4 | Línea de base en verde. [t3d]: typecheck y lint ok, 131/131 unitarios (12 suites), 24/24 de integración (5 suites, Postgres 16 temporal). [sf]: typecheck y lint ok, 61/61 unitarios, 18/18 e2e (escritorio + celular) contra la imagen de producción. Sigue abierto F-30 (imagen de producción de la web de [t3d]), que es F2·1.                    |

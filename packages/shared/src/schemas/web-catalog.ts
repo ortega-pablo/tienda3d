@@ -68,3 +68,23 @@ export const webProductMembersSchema = z.object({
   members: z.array(webProductMemberInputSchema).min(1).max(20),
 });
 export type WebProductMembersInput = z.infer<typeof webProductMembersSchema>;
+
+/**
+ * Opción de color de una publicación (T8): los colores elegidos de una línea de
+ * filamento y las piezas que pintan. Con `id` se actualiza la opción existente;
+ * sin `id`, se crea. Sin `pieceIds`, toma las piezas de los miembros que usan la línea.
+ */
+export const webColorOptionInputSchema = z.object({
+  id: z.string().min(1).optional(),
+  label: z.string().trim().min(1).max(40).default('Color'),
+  filamentLineId: z.string().min(1),
+  /** Colores (hijos activos de la línea) en el orden en que se muestran. */
+  colorIds: z.array(z.string().min(1)).min(1).max(30),
+  pieceIds: z.array(z.string().min(1)).min(1).max(50).optional(),
+});
+export type WebColorOptionInput = z.infer<typeof webColorOptionInputSchema>;
+
+export const webColorOptionsSchema = z.object({
+  options: z.array(webColorOptionInputSchema).max(5),
+});
+export type WebColorOptionsInput = z.infer<typeof webColorOptionsSchema>;
