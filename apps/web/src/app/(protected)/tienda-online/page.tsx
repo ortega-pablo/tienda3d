@@ -13,6 +13,7 @@ const SECCIONES: Array<{ titulo: string; detalle: string; href?: string }> = [
   {
     titulo: 'Categorías de la tienda',
     detalle: 'Cómo se navega la vidriera, sin tocar las categorías que definen los precios.',
+    href: '/tienda-online/categorias',
   },
   {
     titulo: 'Pedidos web',
