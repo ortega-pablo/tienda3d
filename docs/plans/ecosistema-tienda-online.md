@@ -1099,6 +1099,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: armar las tarjetas de categoría de la vidriera.
   - Qué hacer: lo mismo en `/web-catalog/categories/:id/image`.
   - Cierra cuando: hay un test de subida y reemplazo, y el archivo viejo se borra.
+  - Hecho así: `POST /web-catalog/categories/:id/image` (campo `file`, misma conversión que F6·2, en `categories/<id>/<uuid>.webp`) y `DELETE` para quitarla. El archivo viejo se borra después de guardar el nuevo; borrar la categoría también borra su foto.
 
 **Verificación:** verificación mínima de [t3d]; con el ecosistema arriba, el archivo aparece en el volumen `media`.
 

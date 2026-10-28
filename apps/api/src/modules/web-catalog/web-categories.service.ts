@@ -12,6 +12,8 @@ import type {
   WebProductDto,
 } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { toWebImage } from '@/common/storage/images';
+import { StorageService } from '@/common/storage/storage.service';
 import { AuditService } from '@/modules/audit/audit.service';
 import { slugify, WebProductsService } from './web-products.service';
 
@@ -30,6 +32,7 @@ export class WebCategoriesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly products: WebProductsService,
+    private readonly storage: StorageService,
   ) {}
 
   async list(): Promise<WebCategoryDto[]> {
@@ -122,6 +125,7 @@ export class WebCategoriesService {
     }
 
     await this.prisma.webCategory.delete({ where: { id } });
+    if (category.imagePath) await this.storage.delete('media', category.imagePath);
     await this.audit.record({
       actorId,
       entity: 'WebCategory',
@@ -129,6 +133,66 @@ export class WebCategoriesService {
       action: 'delete',
       before: { slug: category.slug, name: category.name, parentId: category.parentId },
     });
+  }
+
+  /**
+   * Foto de la tarjeta de la categoría (plan F6·4). Reemplaza la anterior y
+   * borra su archivo una vez guardada la nueva.
+   */
+  async setImage(
+    id: string,
+    file: { originalname: string; buffer: Buffer } | undefined,
+    actorId: string,
+  ): Promise<WebCategoryDto> {
+    if (!file) throw new BadRequestException('No llegó ninguna foto.');
+    const before = await this.prisma.webCategory.findUnique({ where: { id } });
+    if (!before) throw new NotFoundException('Categoría inexistente');
+
+    const image = await toWebImage(file.buffer, file.originalname);
+    const path = await this.storage.save('media', `categories/${id}`, 'webp', image.data);
+    let updated: CategoryWithCounts;
+    try {
+      updated = await this.prisma.webCategory.update({
+        where: { id },
+        data: { imagePath: path },
+        include: COUNTS,
+      });
+    } catch (error) {
+      await this.storage.delete('media', path);
+      throw error;
+    }
+    if (before.imagePath) await this.storage.delete('media', before.imagePath);
+
+    await this.audit.record({
+      actorId,
+      entity: 'WebCategory',
+      entityId: id,
+      action: 'set-image',
+      before: { imagePath: before.imagePath },
+      after: { imagePath: path, width: image.width, height: image.height },
+    });
+    return toDto(updated);
+  }
+
+  async removeImage(id: string, actorId: string): Promise<WebCategoryDto> {
+    const before = await this.prisma.webCategory.findUnique({ where: { id } });
+    if (!before) throw new NotFoundException('Categoría inexistente');
+    const updated = await this.prisma.webCategory.update({
+      where: { id },
+      data: { imagePath: null },
+      include: COUNTS,
+    });
+    if (before.imagePath) {
+      await this.storage.delete('media', before.imagePath);
+      await this.audit.record({
+        actorId,
+        entity: 'WebCategory',
+        entityId: id,
+        action: 'remove-image',
+        before: { imagePath: before.imagePath },
+      });
+    }
+    return toDto(updated);
   }
 
   /** Reemplaza las categorías de una publicación. */

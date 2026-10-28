@@ -8,11 +8,12 @@ import {
   Patch,
   Post,
   Put,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ecommerceSettingsSchema,
   webAttributesSchema,
@@ -256,5 +257,24 @@ export class WebCatalogController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.images.remove(id, imageId, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Post('categories/:id/image')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: IMAGE_UPLOAD.maxBytes, files: 1 } }),
+  )
+  setCategoryImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.categories.setImage(id, file, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Delete('categories/:id/image')
+  removeCategoryImage(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    return this.categories.removeImage(id, user.sub);
   }
 }
