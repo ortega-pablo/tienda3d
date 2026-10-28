@@ -202,6 +202,12 @@ export const NAVIGATION: NavGroup[] = [
         icon: LayoutGrid,
         permissions: ['ecommerce:read'],
       },
+      {
+        label: 'Categorías de la tienda',
+        href: '/tienda-online/categorias',
+        icon: FolderTree,
+        permissions: ['ecommerce:read'],
+      },
     ],
   },
 ];

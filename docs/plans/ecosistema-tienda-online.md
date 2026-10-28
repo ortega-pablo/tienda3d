@@ -1178,6 +1178,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: definir cómo se navega la vidriera.
   - Qué hacer: `/tienda-online/categorias` con árbol, alta y edición en diálogo, foto y orden.
   - Cierra cuando: se crea "Lámpara > Lámpara de mesa" con foto.
+  - Hecho así: lista en árbol (madre y sus hijas con sangría) con foto, slug, cantidad de publicaciones y orden; alta y edición en `Dialog` (nombre, slug opcional, madre de primer nivel, descripción, orden, activa); foto por categoría con el mismo flujo de F6·4; borrar con confirmación (el 409 de la API explica por qué no). Recorrido con Playwright en el ecosistema, sin errores ([captura](anexos/capturas/f8-5-categorias.jpg)).
 - [ ] **F8·6 [t3d] El admin cambia las condiciones de venta de la tienda**
   - Para qué: actualizar envíos, retiro y transferencia sin depender de un desarrollador.
   - Qué hacer: `/tienda-online/ajustes` (envíos, retiro, transferencia y email de avisos).
