@@ -50,6 +50,7 @@ import { WebColorOptionsService } from './web-color-options.service';
 import { WebImagesService } from './web-images.service';
 import { WebProductsService } from './web-products.service';
 import { WebPriceRecalcService } from './web-price-recalc.service';
+import { WebPriceService } from './web-price.service';
 import { WebPublicationService } from './web-publication.service';
 import { WebSettingsService } from './web-settings.service';
 import { WebVariantsService } from './web-variants.service';
@@ -68,6 +69,7 @@ export class WebCatalogController {
     private readonly settings: WebSettingsService,
     private readonly images: WebImagesService,
     private readonly priceRecalc: WebPriceRecalcService,
+    private readonly prices: WebPriceService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -286,5 +288,12 @@ export class WebCatalogController {
   @HttpCode(200)
   recomputePrices() {
     return this.priceRecalc.recomputeAll('Recálculo manual');
+  }
+
+  /** Precio publicado de un producto del sistema y sus últimos cambios (F7·3). */
+  @Permissions('ecommerce:read')
+  @Get('prices/:productId/history')
+  priceHistory(@Param('productId') productId: string) {
+    return this.prices.history(productId);
   }
 }

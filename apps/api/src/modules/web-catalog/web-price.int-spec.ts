@@ -185,4 +185,35 @@ describe('[int] Precio web = Venta Directa', () => {
     expect(historial[1]!.previous!.equals(primero.price!)).toBe(true);
     expect(Number(historial[1]!.price)).toBeGreaterThan(Number(primero.price));
   });
+
+  it('el historial trae el precio actual y los cambios con su causa, del más nuevo al más viejo', async () => {
+    await service.refresh(fx.productId, 'Alta en la tienda');
+    await prisma.category.update({ where: { id: fx.categoryId }, data: { baseMarkupPct: 120 } });
+    await service.refresh(fx.productId, 'Markup de categoría');
+    await prisma.productChannel.updateMany({
+      where: { productId: fx.productId },
+      data: { isEnabled: false },
+    });
+    await service.refresh(fx.productId, 'Producto editado');
+
+    const result = await service.history(fx.productId);
+
+    expect(result).toMatchObject({
+      state: 'NO_PRICE',
+      price: null,
+      reason: expect.stringMatching(/Venta Directa deshabilitada/),
+    });
+    expect(result.history.map((h) => h.cause)).toEqual([
+      'Producto editado',
+      'Markup de categoría',
+      'Alta en la tienda',
+    ]);
+    const [sinPrecio, subio, alta] = result.history;
+    expect(alta).toMatchObject({ previous: null });
+    expect(subio!.previous).toBe(alta!.price);
+    expect(subio!.price).toBeGreaterThan(alta!.price!);
+    expect(sinPrecio).toMatchObject({ previous: subio!.price, price: null });
+
+    await expect(service.history('no-existe')).rejects.toThrow(/inexistente/);
+  });
 });

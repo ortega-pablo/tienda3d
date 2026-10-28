@@ -1129,7 +1129,8 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
 - [ ] **F7·3 [t3d] Se ve el historial de precios de cada producto**
   - Para qué: saber cuándo y por qué cambió un precio.
   - Qué hacer: `GET /web-catalog/prices/:productId/history`.
-  - Cierra cuando: el panel muestra los últimos cambios con su causa.
+  - Cierra cuando: el endpoint devuelve el precio actual y los últimos cambios con su causa (test). ~~el panel muestra los últimos cambios con su causa~~ → pasa a F8·4 (pestaña Publicación), que es donde está la pantalla.
+  - Hecho así: devuelve estado, precio, motivo, fecha de cálculo y los últimos 50 cambios del más nuevo al más viejo (2026-10-28: el criterio de panel se movió a F8·4 porque la ficha de la publicación todavía no existe).
 - [ ] **F7·4 [t3d] Un producto sin precio no se puede publicar y el panel dice por qué**
   - Para qué: que la tienda nunca muestre un producto sin precio.
   - Qué hacer: el listado de publicaciones marca las variantes sin precio y por qué ("Venta Directa deshabilitada", "La categoría no tiene markup").
@@ -1167,7 +1168,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - **Fotos**: subir, arrastrar para ordenar, alt, asociar a un color y borrar con confirmación.
     - **Categorías**.
     - **Publicación**: checklist, historial de precios y link a la vista en el sitio.
-  - Cierra cuando: se arma la Trapecio (2 productos del sistema, 4 colores, fotos por color) de punta a punta.
+  - Cierra cuando: se arma la Trapecio (2 productos del sistema, 4 colores, fotos por color) de punta a punta, y la pestaña Publicación muestra los últimos cambios de precio con su causa (criterio que viene de F7·3).
 - [ ] **F8·5 [t3d] El admin organiza las categorías de la tienda**
   - Para qué: definir cómo se navega la vidriera.
   - Qué hacer: `/tienda-online/categorias` con árbol, alta y edición en diálogo, foto y orden.

@@ -1,7 +1,7 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, NotFoundException } from '@nestjs/common';
 import { ChannelKind, Prisma, WebPriceState } from '@prisma/client';
 import { createHash } from 'node:crypto';
-import type { PriceLine } from '@tienda3d/shared';
+import type { PriceLine, WebPriceDto } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { PricingService, type ChannelPriceBlock } from '@/modules/pricing/pricing.service';
 
@@ -98,6 +98,36 @@ export class WebPriceService {
     });
     return { changed: priceChanged };
   }
+
+  /** Precio publicado y sus últimos cambios (plan F7·3). */
+  async history(productId: string, limit = 50): Promise<WebPriceDto> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        webPrice: true,
+        webPriceHistory: { orderBy: { changedAt: 'desc' }, take: limit },
+      },
+    });
+    if (!product) throw new NotFoundException('Producto inexistente');
+    const current = product.webPrice;
+    return {
+      productId,
+      state: current?.state ?? null,
+      price: decimalOrNull(current?.price),
+      reason: current?.reason ?? null,
+      computedAt: current?.computedAt.toISOString() ?? null,
+      history: product.webPriceHistory.map((h) => ({
+        changedAt: h.changedAt.toISOString(),
+        previous: decimalOrNull(h.previous),
+        price: decimalOrNull(h.price),
+        cause: h.cause,
+      })),
+    };
+  }
+}
+
+function decimalOrNull(value: Prisma.Decimal | null | undefined): number | null {
+  return value == null ? null : Number(value);
 }
 
 function noPrice(reason: string): ComputedWebPrice {
