@@ -210,4 +210,47 @@ describe('[int] Fotos de la tienda online', () => {
       .expect(404);
     expect(await prisma.webImage.count()).toBe(1);
   });
+
+  describe('GET /web-catalog/media/* (F6·3)', () => {
+    const media = (path: string, auth = token) =>
+      request(app.getHttpServer())
+        .get(`/web-catalog/media/${path}`)
+        .set('Authorization', `Bearer ${auth}`);
+
+    it('sirve la foto subida al panel, con caché privada', async () => {
+      const res = await subir([await jpg(200, 100), 'a.jpg']).expect(201);
+      const [imagen] = (res.body as WebProductDto).images;
+
+      const foto = await media(imagen!.path)
+        .buffer(true)
+        .parse((r, cb) => {
+          const chunks: Buffer[] = [];
+          r.on('data', (c: Buffer) => chunks.push(c));
+          r.on('end', () => cb(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect(foto.headers['content-type']).toBe('image/webp');
+      expect(foto.headers['cache-control']).toMatch(/^private/);
+      expect(foto.body).toEqual(await readFile(join(base, 'media', imagen!.path)));
+    });
+
+    it('no sale del volumen ni sirve otra cosa que fotos', async () => {
+      await media('catalog/..%2F..%2F..%2Fetc%2Fpasswd.webp').expect((r) =>
+        expect([400, 404]).toContain(r.status),
+      );
+      await media('catalog/no-existe.webp').expect(404);
+      await media('catalog/datos.json').expect(404);
+    });
+
+    it('pide ecommerce:read', async () => {
+      const res = await subir([await jpg(200, 100), 'a.jpg']).expect(201);
+      const [imagen] = (res.body as WebProductDto).images;
+      const sinPermiso = app
+        .get(JwtService)
+        .sign({ sub: fx.userId, email: 'x@plastik.local', role: 'operator', permissions: [] });
+
+      await media(imagen!.path, sinPermiso).expect(403);
+      await request(app.getHttpServer()).get(`/web-catalog/media/${imagen!.path}`).expect(401);
+    });
+  });
 });

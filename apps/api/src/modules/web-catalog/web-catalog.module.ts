@@ -5,6 +5,7 @@ import { WebAttributesService } from './web-attributes.service';
 import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebImagesService } from './web-images.service';
+import { WebMediaController } from './web-media.controller';
 import { WebProductsService } from './web-products.service';
 import { WebPublicationService } from './web-publication.service';
 import { WebSettingsService } from './web-settings.service';
@@ -12,7 +13,7 @@ import { WebVariantsService } from './web-variants.service';
 
 /** Tienda online: catálogo web gestionado desde el sistema (plan de unificación, F5). */
 @Module({
-  controllers: [WebCatalogController],
+  controllers: [WebCatalogController, WebMediaController],
   providers: [
     WebProductsService,
     WebColorOptionsService,
