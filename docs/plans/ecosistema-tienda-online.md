@@ -1330,6 +1330,7 @@ contenedor apagado.
   - Para qué: un solo catálogo para el sistema y la web.
   - Qué hacer: `server/catalog/queries.ts` y `server/settings.ts` pasan a leer las vistas, manteniendo `"use cache"` + `cacheTag` y leyendo primero los datos dinámicos (regla de Cache Components del `CLAUDE.md`).
   - Cierra cuando: `pnpm build` funciona sin base, y las páginas de tienda, categoría y producto muestran lo publicado.
+  - Hecho así: `getProductCards`, `getProduct`, `getCategories` y `getStoreSettings` mantienen su firma y su `"use cache"` + `cacheTag`, pero leen las vistas con el lector de F12·1; la caché vence a los 5 minutos (`CATALOG_CACHE`), el respaldo del contrato por si se pierde un aviso. La ficha usa `seo_title`/`seo_description` cuando hay. En [infra], el sitio recibe `TIENDA3D_READER_URL_FILE` (secreto `storefront_reader_database_url`). `pnpm build` pasa sin ninguna base configurada. En el ecosistema, con la Trapecio y el Army publicados, `/tienda/`, las categorías, las fichas y el sitemap muestran solo esas dos; una publicación oculta da el 404 de la tienda. Hasta F12·6 el carrito sigue con las variantes propias del sitio, y hasta F12·5 el `docker compose` suelto de [sf] no tiene catálogo (necesita el ecosistema).
 - [ ] **F12·3 [sf] La tienda muestra las fotos que se suben en el sistema**
   - Para qué: cargar cada foto una sola vez.
   - Qué hacer: `/media/[...path]` lee de `MEDIA_DIR` (montado `:ro`) con `Cache-Control` largo y `next/image` sobre esas rutas.
