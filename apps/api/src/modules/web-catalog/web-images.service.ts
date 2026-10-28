@@ -4,6 +4,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { toWebImage, type ProcessedImage } from '@/common/storage/images';
 import { StorageService } from '@/common/storage/storage.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { CatalogEvents } from './catalog-events';
 import { WebProductsService } from './web-products.service';
 
 /** Tope de fotos por publicación. */
@@ -24,6 +25,7 @@ export class WebImagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly events: CatalogEvents,
     private readonly storage: StorageService,
     private readonly products: WebProductsService,
   ) {}
@@ -62,6 +64,7 @@ export class WebImagesService {
           _max: { position: true },
         });
         const start = (last._max.position ?? -1) + 1;
+        await this.events.productChanged(tx, webProductId);
         await tx.webImage.createMany({
           data: processed.map((image, i) => ({
             webProductId,
@@ -106,6 +109,7 @@ export class WebImagesService {
 
     await this.prisma.$transaction(async (tx) => {
       const { position, ...rest } = input;
+      await this.events.productChanged(tx, webProductId);
       if (Object.keys(rest).length) {
         await tx.webImage.update({ where: { id: imageId }, data: rest });
       }
@@ -140,7 +144,10 @@ export class WebImagesService {
   /** Borra la foto y su archivo. Las variantes que la usaban quedan sin foto propia. */
   async remove(webProductId: string, imageId: string, actorId: string): Promise<WebProductDto> {
     const image = await this.find(webProductId, imageId);
-    await this.prisma.webImage.delete({ where: { id: imageId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webImage.delete({ where: { id: imageId } });
+      await this.events.productChanged(tx, webProductId);
+    });
     await this.storage.delete('media', image.path);
 
     await this.audit.record({

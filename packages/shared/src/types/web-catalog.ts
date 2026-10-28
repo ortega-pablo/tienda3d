@@ -238,3 +238,15 @@ export interface WebProductSummaryDto {
   coverImagePath: string | null;
   updatedAt: string;
 }
+
+/** Estado de los avisos al sitio, para la alerta del panel (F11·3). */
+export interface OutboxStatusDto {
+  /** Sin entregar todavía (se siguen reintentando). */
+  pending: number;
+  /** De esos, los que llevan más de 1 h. */
+  stuck: number;
+  /** Abandonados después de 48 h de reintentos. */
+  failed: number;
+  oldestPendingAt: string | null;
+  lastError: string | null;
+}

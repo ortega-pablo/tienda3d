@@ -35,6 +35,11 @@ export const envSchema = z
     /** Archivos que no se publican (volumen `t3d-private`). */
     PRIVATE_DIR: z.string().min(1).default('./storage/private'),
 
+    /** Adónde se entregan los avisos al sitio (F11·3), por la red interna. */
+    STOREFRONT_EVENTS_URL: z.string().url().default('http://storefront:3100/api/internal/events'),
+    /** Secreto para firmarlos; sin él, los avisos quedan pendientes. */
+    EVENTS_SECRET_T3D_TO_SF: optional,
+
     INTEGRATION_MELI_ENABLED: flag,
     MELI_CLIENT_ID: optional,
     MELI_CLIENT_SECRET: optional,

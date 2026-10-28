@@ -64,6 +64,13 @@ export function findSecretIssues(env: NodeJS.ProcessEnv): SecretIssue[] {
       reason: 'es igual a JWT_SECRET; un access token serviría como refresh',
     });
   }
+  const eventsSecret = env.EVENTS_SECRET_T3D_TO_SF;
+  if (eventsSecret && eventsSecret.length < MIN_SECRET_LENGTH) {
+    issues.push({
+      variable: 'EVENTS_SECRET_T3D_TO_SF',
+      reason: `tiene ${eventsSecret.length} caracteres; se esperan al menos ${MIN_SECRET_LENGTH}`,
+    });
+  }
   if (env.DATABASE_URL) {
     const reason = databasePasswordIssue(env.DATABASE_URL);
     if (reason) issues.push({ variable: 'DATABASE_URL', reason });

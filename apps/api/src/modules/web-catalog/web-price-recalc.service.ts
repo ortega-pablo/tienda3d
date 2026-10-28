@@ -60,7 +60,9 @@ export class WebPriceRecalcService implements OnModuleInit, OnModuleDestroy {
       this.pending = null;
       const causes = [...this.causes].join(', ');
       this.causes.clear();
-      this.recomputeAll(causes).catch((error: unknown) =>
+      // Lo disparó un cambio del sistema: además del precio pudo cambiar lo que se
+      // ve (un producto archivado, un color desactivado), así que se avisa todo.
+      this.recomputeAll(causes, { wholeCatalog: true }).catch((error: unknown) =>
         this.logger.error({ err: error }, 'No se pudieron recalcular los precios web'),
       );
     }, RECALC_DEBOUNCE_MS);
@@ -76,13 +78,19 @@ export class WebPriceRecalcService implements OnModuleInit, OnModuleDestroy {
     return this.queue;
   }
 
-  recomputeAll(cause: string): Promise<{ checked: number; changed: number }> {
-    const run = this.queue.then(() => this.run(cause));
+  recomputeAll(
+    cause: string,
+    opts: { wholeCatalog?: boolean } = {},
+  ): Promise<{ checked: number; changed: number }> {
+    const run = this.queue.then(() => this.run(cause, opts.wholeCatalog ?? false));
     this.queue = run.catch(() => undefined);
     return run;
   }
 
-  private async run(cause: string): Promise<{ checked: number; changed: number }> {
+  private async run(
+    cause: string,
+    wholeCatalog: boolean,
+  ): Promise<{ checked: number; changed: number }> {
     const members = await this.prisma.webProductMember.findMany({
       where: { isActive: true },
       select: { productId: true, webProduct: { select: { slug: true } } },
@@ -94,13 +102,19 @@ export class WebPriceRecalcService implements OnModuleInit, OnModuleDestroy {
       if ((await this.prices.refresh(productId, cause)).changed) changed.add(productId);
     }
 
-    if (changed.size) {
+    if (wholeCatalog) {
+      await this.prisma.$transaction((tx) =>
+        this.events.changed(tx, { scope: 'catalog', ids: [] }),
+      );
+    } else if (changed.size) {
       const slugs = [
         ...new Set(members.filter((m) => changed.has(m.productId)).map((m) => m.webProduct.slug)),
       ];
       await this.prisma.$transaction((tx) =>
         this.events.changed(tx, { scope: 'product', ids: slugs }),
       );
+    }
+    if (changed.size) {
       this.logger.log(`Precios web: ${changed.size} de ${productIds.length} cambiaron (${cause})`);
     }
     return { checked: productIds.length, changed: changed.size };

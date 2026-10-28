@@ -1265,3 +1265,24 @@ model IntegrationClient {
 
   @@map("integration_clients")
 }
+
+/// Avisos del sistema al sitio (plan F11·3): se escriben en la misma transacción
+/// que el cambio y un despachador los entrega firmados, con reintentos de 30 s a
+/// 1 h durante 48 h. Lo que no se entrega queda como alerta en el panel.
+model OutboxEvent {
+  /// Va como X-TP-Event-Id: el sitio deduplica por él.
+  id            String    @id @default(uuid())
+  /// "catalog.changed", "order.fulfillment_changed"…
+  type          String
+  payload       Json
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lastError     String?
+  deliveredAt   DateTime?
+  /// Se dejó de reintentar (pasaron 48 h).
+  failedAt      DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([deliveredAt, failedAt, nextAttemptAt])
+  @@map("outbox_events")
+}

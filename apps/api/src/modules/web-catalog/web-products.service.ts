@@ -17,6 +17,7 @@ import type {
 } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { CatalogEvents } from './catalog-events';
 import { variantAvailability } from './domain/availability';
 import { WebPriceService } from './web-price.service';
 
@@ -88,6 +89,7 @@ export class WebProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly events: CatalogEvents,
     private readonly prices: WebPriceService,
   ) {}
 
@@ -208,6 +210,12 @@ export class WebProductsService {
         await tx.webProductSlug.deleteMany({ where: { slug: input.slug, webProductId: id } });
       }
       await tx.webProduct.update({ where: { id }, data: input });
+      // Con el slug viejo: el sitio revalida también la dirección que redirige.
+      await this.events.productChanged(
+        tx,
+        id,
+        input.slug && input.slug !== before.slug ? [before.slug] : [],
+      );
     });
 
     await this.audit.record({
@@ -230,7 +238,10 @@ export class WebProductsService {
     if (!exists) throw new NotFoundException('Publicación inexistente');
 
     const before = await this.prisma.webProductMember.findMany({ where: { webProductId: id } });
-    await this.prisma.$transaction((tx) => this.replaceMembers(tx, id, members));
+    await this.prisma.$transaction(async (tx) => {
+      await this.replaceMembers(tx, id, members);
+      await this.events.productChanged(tx, id);
+    });
     await this.refreshPrices(members);
 
     await this.audit.record({
