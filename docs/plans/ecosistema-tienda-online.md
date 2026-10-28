@@ -1061,6 +1061,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - Al publicar se responde con la lista de lo que falta.
     - Cada cambio registra auditoría y un evento `catalog.changed` en el outbox (la tabla llega en F11·3; hasta entonces, un no-op detrás de una interfaz).
   - Cierra cuando: hay tests del checklist y del ida y vuelta publicar → ocultar → publicar.
+  - Hecho así: `GET /web-catalog/products/:id/checklist` para que el panel muestre lo que falta antes del clic; `publish` responde 422 con `details.missing`. Una variante cuenta si está activa, su miembro y su producto también, tiene `WebPrice` en `OK` y ningún color inactivo. `publishedAt` es la fecha de la primera publicación. El aviso es `CatalogEvents.changed(tx, {scope: 'product', ids: [slug]})`, hoy `NoopCatalogEvents`.
 - [ ] **F5·8 [t3d] Envíos, retiro, transferencia y email de avisos se configuran en el sistema**
   - Para qué: cambiar las condiciones de venta sin tocar el sitio.
   - Qué hacer: `GET/PUT /web-catalog/settings` (`ecommerce:settings`) sobre `EcommerceSettings`.
@@ -1255,6 +1256,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: que un corte del sitio no haga perder un cambio de estado.
   - Qué hacer:
     - Tabla `outbox_events`. La escritura del evento va en la misma transacción que el cambio.
+    - Reemplazar `NoopCatalogEvents` (F5·7) por el escritor del outbox, y emitir `catalog.changed` también desde los cambios a publicaciones publicadas (contenido, slug con el viejo incluido, miembros, opciones, variantes, categorías, fotos) y de los ajustes (`scope: 'settings'`).
     - Despachador con `@nestjs/schedule` cada 15 s, con backoff y `lastError`.
     - Alerta en el panel si un evento lleva más de 1 h sin entregarse.
   - Cierra cuando: con el storefront apagado, un `catalog.changed` queda pendiente y se entrega al prenderlo.

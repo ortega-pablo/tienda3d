@@ -39,6 +39,7 @@ import { WebAttributesService } from './web-attributes.service';
 import { WebCategoriesService } from './web-categories.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
+import { WebPublicationService } from './web-publication.service';
 import { WebVariantsService } from './web-variants.service';
 
 /** Gestión de la tienda online. Solo el rol admin tiene ecommerce:* (F4·1). */
@@ -51,6 +52,7 @@ export class WebCatalogController {
     private readonly attributes: WebAttributesService,
     private readonly variants: WebVariantsService,
     private readonly categories: WebCategoriesService,
+    private readonly publication: WebPublicationService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -170,5 +172,25 @@ export class WebCatalogController {
   @HttpCode(204)
   removeCategory(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
     return this.categories.remove(id, user.sub);
+  }
+
+  @Permissions('ecommerce:read')
+  @Get('products/:id/checklist')
+  checklist(@Param('id') id: string) {
+    return this.publication.checklist(id);
+  }
+
+  @Permissions('ecommerce:write')
+  @Post('products/:id/publish')
+  @HttpCode(200)
+  publish(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    return this.publication.publish(id, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Post('products/:id/hide')
+  @HttpCode(200)
+  hide(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    return this.publication.hide(id, user.sub);
   }
 }

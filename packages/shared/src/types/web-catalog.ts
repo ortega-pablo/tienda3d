@@ -146,6 +146,20 @@ export interface WebProductDto {
   updatedAt: string;
 }
 
+/** Lo que se revisa antes de publicar (F5·7). */
+export type WebPublishCheckKey = 'slug' | 'description' | 'image' | 'variant';
+
+export interface WebPublishCheckDto {
+  key: WebPublishCheckKey;
+  ok: boolean;
+  label: string;
+}
+
+export interface WebPublishChecklistDto {
+  ready: boolean;
+  checks: WebPublishCheckDto[];
+}
+
 export interface WebProductSummaryDto {
   id: string;
   slug: string;
