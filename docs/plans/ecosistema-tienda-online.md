@@ -1038,6 +1038,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: ofrecer "Tipo de hoja" sin crear un producto del sistema por cada valor (D6).
   - Qué hacer: `PUT /web-catalog/products/:id/attributes` (etiqueta + valores ordenados).
   - Cierra cuando: un cuaderno con "Tipo de hoja: Cuadro/Punto" genera variantes por cada valor, con el mismo precio.
+  - Hecho así: los valores se asocian por id o por slug (renombrar conserva el id). Un valor o atributo con variantes que se quita queda inactivo y sus variantes dejan de venderse (migración `web_attributes.isActive`). La matriz de combinaciones es un dominio puro (`web-catalog/domain/variant-matrix.ts`) que reusa F5·5: cada miembro se multiplica solo por las opciones de color que pintan sus piezas y por todos los atributos; el precio sale del miembro, así que los atributos no lo cambian.
 - [ ] **F5·5 [t3d] Cada combinación vendible tiene su SKU, su disponibilidad y su stock**
   - Para qué: saber exactamente qué se vende, si hay y cuánto tarda en fabricarse.
   - Qué hacer:

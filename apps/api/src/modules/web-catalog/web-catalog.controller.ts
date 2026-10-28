@@ -1,9 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import {
+  webAttributesSchema,
   webColorOptionsSchema,
   webProductCreateSchema,
   webProductMembersSchema,
   webProductUpdateSchema,
+  type WebAttributesInput,
   type WebColorOptionsInput,
   type WebProductCreateInput,
   type WebProductMembersInput,
@@ -14,6 +16,7 @@ import { Permissions } from '@/common/decorators/permissions.decorator';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import type { AccessPayload } from '../auth/auth.service';
+import { WebAttributesService } from './web-attributes.service';
 import { WebColorOptionsService } from './web-color-options.service';
 import { WebProductsService } from './web-products.service';
 
@@ -24,6 +27,7 @@ export class WebCatalogController {
   constructor(
     private readonly products: WebProductsService,
     private readonly colorOptions: WebColorOptionsService,
+    private readonly attributes: WebAttributesService,
   ) {}
 
   @Permissions('ecommerce:read')
@@ -75,5 +79,15 @@ export class WebCatalogController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.colorOptions.set(id, body.options, user.sub);
+  }
+
+  @Permissions('ecommerce:write')
+  @Put('products/:id/attributes')
+  setAttributes(
+    @Param('id') id: string,
+    @Body(ZodValidation(webAttributesSchema)) body: WebAttributesInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.attributes.set(id, body.attributes, user.sub);
   }
 }

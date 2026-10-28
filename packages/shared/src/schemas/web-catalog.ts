@@ -88,3 +88,27 @@ export const webColorOptionsSchema = z.object({
   options: z.array(webColorOptionInputSchema).max(5),
 });
 export type WebColorOptionsInput = z.infer<typeof webColorOptionsSchema>;
+
+/**
+ * Valor de una opción informativa. Con `id` se renombra el valor existente;
+ * sin `id`, se busca por `slug` (que sale de la etiqueta si no viene).
+ */
+export const webAttributeValueInputSchema = z.object({
+  id: z.string().min(1).optional(),
+  label: z.string().trim().min(1).max(60),
+  slug: webSlugSchema.optional(),
+});
+export type WebAttributeValueInput = z.infer<typeof webAttributeValueInputSchema>;
+
+/** Opción informativa sin producto del sistema detrás (D6): no cambia el precio. */
+export const webAttributeInputSchema = z.object({
+  id: z.string().min(1).optional(),
+  label: z.string().trim().min(1).max(40),
+  values: z.array(webAttributeValueInputSchema).min(1).max(30),
+});
+export type WebAttributeInput = z.infer<typeof webAttributeInputSchema>;
+
+export const webAttributesSchema = z.object({
+  attributes: z.array(webAttributeInputSchema).max(5),
+});
+export type WebAttributesInput = z.infer<typeof webAttributesSchema>;

@@ -38,6 +38,10 @@ const DETAIL_INCLUDE = {
       },
     },
   },
+  attributes: {
+    orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }],
+    include: { values: { orderBy: [{ isActive: 'desc' }, { sortOrder: 'asc' }] } },
+  },
   slugHistory: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.WebProductInclude;
 
@@ -307,6 +311,19 @@ function toDto(p: WebProductWithDetail): WebProductDto {
         name: op.piece.name,
         productId: op.piece.productId,
         productName: op.piece.product.name,
+      })),
+    })),
+    attributes: p.attributes.map((a) => ({
+      id: a.id,
+      label: a.label,
+      sortOrder: a.sortOrder,
+      isActive: a.isActive,
+      values: a.values.map((v) => ({
+        id: v.id,
+        slug: v.slug,
+        label: v.label,
+        sortOrder: v.sortOrder,
+        isActive: v.isActive,
       })),
     })),
     previousSlugs: p.slugHistory.map((s) => s.slug),
