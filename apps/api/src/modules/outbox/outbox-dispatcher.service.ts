@@ -16,6 +16,8 @@ export const RETRY_MAX_MS = 60 * 60 * 1000;
 export const GIVE_UP_AFTER_MS = 48 * 60 * 60 * 1000;
 const BATCH = 50;
 const TIMEOUT_MS = 10_000;
+/** Un aviso recién escrito sale a este tiempo, sin esperar el próximo ciclo (F11·6). */
+export const SOON_DELAY_MS = 300;
 
 export function retryDelayMs(attempts: number): number {
   return Math.min(RETRY_FIRST_MS * 2 ** Math.max(0, attempts - 1), RETRY_MAX_MS);
@@ -24,12 +26,17 @@ export function retryDelayMs(attempts: number): number {
 /**
  * Entrega los avisos pendientes al sitio (plan F11·3), firmados (F11·2): cada
  * 15 s, en orden, con backoff y el último error guardado. El sitio deduplica por
- * `X-TP-Event-Id`, así que reintentar no duplica efectos.
+ * `X-TP-Event-Id`, así que reintentar no duplica efectos. Un aviso nuevo
+ * despierta el despacho enseguida (`soon`), para que un cambio del panel se vea
+ * en la tienda en segundos (F11·6).
  */
 @Injectable()
 export class OutboxDispatcher {
   private readonly logger = new Logger(OutboxDispatcher.name);
   private running = false;
+  /** Llegó un pedido de despacho mientras corría uno: se repite al terminar. */
+  private again = false;
+  private soonTimer: NodeJS.Timeout | null = null;
   private warnedNoSecret = false;
 
   constructor(
@@ -39,7 +46,10 @@ export class OutboxDispatcher {
 
   @Interval('outbox-dispatch', 15_000)
   async tick(): Promise<void> {
-    if (this.running) return;
+    if (this.running) {
+      this.again = true;
+      return;
+    }
     this.running = true;
     try {
       await this.dispatchDue();
@@ -47,7 +57,25 @@ export class OutboxDispatcher {
       this.logger.error({ err: error }, 'Falló el despacho de avisos al sitio');
     } finally {
       this.running = false;
+      if (this.again) {
+        this.again = false;
+        void this.tick();
+      }
     }
+  }
+
+  /**
+   * Despacha en un momento, sin esperar el ciclo. Lo llama `enqueue`, dentro de
+   * la transacción del cambio: si al despertar todavía no se confirmó, el aviso
+   * sale en el ciclo siguiente.
+   */
+  soon(delayMs = SOON_DELAY_MS): void {
+    if (this.soonTimer) return;
+    this.soonTimer = setTimeout(() => {
+      this.soonTimer = null;
+      void this.tick();
+    }, delayMs);
+    this.soonTimer.unref();
   }
 
   async dispatchDue(
