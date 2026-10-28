@@ -1117,10 +1117,11 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
     - Si no hay bloque (Directa deshabilitada) o no hay markup, guarda `NO_PRICE` con el motivo.
     - `inputsHash` sirve para no escribir cuando nada cambió.
   - Cierra cuando: un test compara el precio publicado con el que muestra `GET /products/:id/prices` para un producto sin escalas, uno con escalas y un llavero.
+  - Hecho así: `WebPriceService.computeFor` y `refresh(productId, cause)`. El bloque es el del canal `DIRECT_SALE` (si hubiera dos, el de slug `directa`). Motivos de `NO_PRICE`: Directa deshabilitada, categoría sin markup, escalas que no arrancan en 1, falta de comisión, o el mensaje del costeo (pieza sin filamento, insumo sin precio). `inputsHash` cubre precio, markup, comisión y carga impositiva; el historial se escribe solo si cambia el precio o el estado.
 - [ ] **F7·2 [t3d] El precio web se actualiza solo cuando cambia un costo o un markup**
   - Para qué: no tener que acordarse de actualizar la web cada vez que sube un insumo.
   - Qué hacer:
-    - Después de cada escritura de la lista de §4.3 (al confirmarse la transacción), llamar a `WebPriceService.recomputePublished()` con _debounce_ de 2 s. Son unas decenas de productos, así que se recalculan todos los publicados.
+    - Después de cada escritura de la lista de §4.3 (al confirmarse la transacción), llamar a `WebPriceService.recomputePublished()` con _debounce_ de 2 s. Son unas decenas de productos, así que se recalculan todos los que están en alguna publicación, **también en borrador**: publicar exige precio `OK` (F5·7), así que un borrador sin precio calculado no se podría publicar nunca. Sumar el recálculo del producto al agregarlo como miembro (F5·2).
     - Sumar un cron de respaldo cada 10 min y un botón "Recalcular precios" (`ecommerce:write`).
     - Si algún precio cambió, registrar `WebPriceHistory` y emitir `catalog.changed`.
   - Cierra cuando: cambiar el precio vigente de "PLA Genérico" actualiza en menos de 5 s el precio publicado de todos los productos que lo usan (test de integración con el reloj controlado).
