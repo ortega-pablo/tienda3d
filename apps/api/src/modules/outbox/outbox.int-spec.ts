@@ -58,6 +58,7 @@ describe('[int] Outbox de avisos al sitio', () => {
   let prisma: PrismaService;
   let dispatcher: OutboxDispatcher;
   let fx: Fixtures;
+  let soon: jest.SpyInstance;
   const target: OutboxTarget = { url: '', secret: SECRET };
   const storefront = new FakeStorefront();
 
@@ -71,6 +72,8 @@ describe('[int] Outbox de avisos al sitio', () => {
     moduleRef.get(SchedulerRegistry).deleteInterval('outbox-dispatch');
     prisma = moduleRef.get(PrismaService);
     dispatcher = moduleRef.get(OutboxDispatcher);
+    // Lo mismo el despacho inmediato (F11·6), salvo en su propio test.
+    soon = jest.spyOn(dispatcher, 'soon').mockImplementation(() => undefined);
     // Un puerto libre que después se reusa: primero el sitio está "apagado".
     await storefront.start();
     target.url = `http://127.0.0.1:${storefront.port}/api/internal/events`;
@@ -170,6 +173,23 @@ describe('[int] Outbox de avisos al sitio', () => {
       failed: 0,
     });
     await storefront.stop();
+  });
+
+  it('un aviso nuevo sale enseguida, sin esperar el ciclo de 15 s (F11·6)', async () => {
+    soon.mockRestore();
+    try {
+      await storefront.start(storefront.port);
+      await saveSettings();
+      const deadline = Date.now() + 3_000;
+      while (storefront.received.length === 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(storefront.received).toHaveLength(1);
+      expect(JSON.parse(storefront.received[0]!.body)).toMatchObject({ scope: 'settings' });
+    } finally {
+      soon = jest.spyOn(dispatcher, 'soon').mockImplementation(() => undefined);
+      await storefront.stop();
+    }
   });
 
   it('el backoff duplica de 30 s hasta 1 h', () => {

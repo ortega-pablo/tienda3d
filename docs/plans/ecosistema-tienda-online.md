@@ -1307,6 +1307,7 @@ Administración → Roles. Es aceptable, porque solo el admin tiene `role:manage
   - Para qué: que lo publicado sea lo que ve el cliente.
   - Qué hacer: `catalog.changed` → `revalidateTag(CATALOG_TAG | productTag(slug) | SETTINGS_TAG)`, con un `cacheLife` de respaldo de 5 minutos.
   - Cierra cuando: un cambio en el panel se ve en el sitio en menos de 5 s.
+  - Hecho así: en [sf], el manejador de `catalog.changed` revalida con `revalidateTag(…, { expire: 0 })` (la próxima visita ya lee lo nuevo): `product` → la ficha de cada slug y los listados, `catalog` → todo el catálogo, `settings` → los ajustes; un aviso que no se entiende revalida todo (regla pura `catalogChangeTargets`). El respaldo de 5 minutos es el `CATALOG_CACHE` de F12·2. En [t3d] hizo falta un cambio: el dispatcher entregaba cada 15 s, así que `enqueue` ahora lo despierta a los 300 ms (`soon`, uno a la vez; si la transacción todavía no se confirmó, el aviso sale en el ciclo siguiente) y un despacho pedido mientras corre otro se repite al terminar. Medido en el ecosistema: un cambio del resumen de la Trapecio desde la API del panel se vio en la ficha a los 2,4 s, y un cambio de las instrucciones de retiro en _Ajustes_ se vio en el checkout a los 0,9 s (el criterio que F12 traía de F8·6); los dos se restauraron.
 
 **Verificación:** verificación mínima de los dos repos, más una prueba manual con el ecosistema y un
 contenedor apagado.

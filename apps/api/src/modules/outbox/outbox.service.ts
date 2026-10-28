@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { OutboxStatusDto } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { OutboxDispatcher } from './outbox-dispatcher.service';
 
 /** Un aviso pendiente hace más de esto se muestra como alerta en el panel. */
 export const OUTBOX_ALERT_AFTER_MS = 60 * 60 * 1000;
@@ -12,7 +13,10 @@ export const OUTBOX_ALERT_AFTER_MS = 60 * 60 * 1000;
  */
 @Injectable()
 export class OutboxService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dispatcher: OutboxDispatcher,
+  ) {}
 
   async enqueue(
     tx: Prisma.TransactionClient,
@@ -20,6 +24,7 @@ export class OutboxService {
     payload: Prisma.InputJsonObject,
   ): Promise<void> {
     await tx.outboxEvent.create({ data: { type, payload } });
+    this.dispatcher.soon();
   }
 
   /** Para la alerta del panel: qué está atrasado y por qué. */
