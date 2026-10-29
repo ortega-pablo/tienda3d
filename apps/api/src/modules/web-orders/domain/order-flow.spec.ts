@@ -1,8 +1,10 @@
 import {
   allowedFulfillments,
   canConfirmTransfer,
+  canStartProduction,
   canMoveFulfillment,
   needsAttention,
+  productionColors,
   type OrderState,
 } from './order-flow';
 
@@ -70,5 +72,53 @@ describe('Pedidos web: qué puede hacer el admin (§5.6)', () => {
     expect(needsAttention({ paymentStatus: 'APPROVED', fulfillmentStatus: 'PREPARING' })).toBe(
       false,
     );
+  });
+});
+
+describe('Orden de producción de un ítem (F14·7)', () => {
+  it('se fabrica lo pagado que no salió del taller', () => {
+    expect(canStartProduction({ paymentStatus: 'APPROVED', fulfillmentStatus: 'RECEIVED' })).toBe(
+      true,
+    );
+    expect(canStartProduction({ paymentStatus: 'APPROVED', fulfillmentStatus: 'PREPARING' })).toBe(
+      true,
+    );
+    expect(
+      canStartProduction({ paymentStatus: 'AWAITING_TRANSFER', fulfillmentStatus: 'RECEIVED' }),
+    ).toBe(false);
+    expect(canStartProduction({ paymentStatus: 'APPROVED', fulfillmentStatus: 'CANCELLED' })).toBe(
+      false,
+    );
+    expect(canStartProduction({ paymentStatus: 'APPROVED', fulfillmentStatus: 'SHIPPED' })).toBe(
+      false,
+    );
+  });
+
+  it('cada pieza toma el color de la opción que la pinta, solo las del producto', () => {
+    const pieces = [
+      { id: 'pantalla', needsColor: true },
+      { id: 'cuerpo', needsColor: true },
+      { id: 'tornillo', needsColor: false },
+    ];
+    expect(
+      productionColors(pieces, [
+        // La opción también pinta piezas de otro tamaño: se ignoran.
+        { materialId: 'marron', pieceIds: ['pantalla', 'cuerpo', 'pantalla-390'] },
+      ]),
+    ).toEqual({ overrides: { pantalla: 'marron', cuerpo: 'marron' }, missing: [] });
+  });
+
+  it('dos opciones de color pintan cada una sus piezas; lo que nadie cubre falta', () => {
+    const pieces = [
+      { id: 'pantalla', needsColor: true },
+      { id: 'base', needsColor: true },
+      { id: 'cable', needsColor: true },
+    ];
+    expect(
+      productionColors(pieces, [
+        { materialId: 'blanco', pieceIds: ['pantalla'] },
+        { materialId: 'negro', pieceIds: ['base'] },
+      ]),
+    ).toEqual({ overrides: { pantalla: 'blanco', base: 'negro' }, missing: ['cable'] });
   });
 });

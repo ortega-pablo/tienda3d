@@ -71,3 +71,42 @@ export const FULFILLMENT_LABEL: Record<Fulfillment, string> = {
   DELIVERED: 'Entregado',
   CANCELLED: 'Cancelado',
 };
+
+/** Se fabrica lo pagado que todavía no salió del taller (§5.6). */
+export function canStartProduction(order: Pick<OrderState, 'paymentStatus' | 'fulfillmentStatus'>) {
+  return (
+    order.paymentStatus === 'APPROVED' &&
+    (order.fulfillmentStatus === 'RECEIVED' || order.fulfillmentStatus === 'PREPARING')
+  );
+}
+
+/** Una pieza del producto: si su filamento tiene colores, hay que elegirle uno. */
+export interface PieceToPaint {
+  id: string;
+  needsColor: boolean;
+}
+
+/** Un color que eligió el cliente y las piezas que lo toman (las de su opción de color). */
+export interface ChosenColor {
+  materialId: string;
+  pieceIds: string[];
+}
+
+/**
+ * Los `filamentOverrides` de la orden de producción de un ítem (F14·7): cada
+ * pieza del producto toma el color elegido en la opción que la pinta. Las
+ * piezas con colores que ninguna opción cubre quedan en `missing`.
+ */
+export function productionColors(
+  pieces: PieceToPaint[],
+  chosen: ChosenColor[],
+): { overrides: Record<string, string>; missing: string[] } {
+  const ids = new Set(pieces.map((p) => p.id));
+  const overrides: Record<string, string> = {};
+  for (const color of chosen) {
+    for (const pieceId of color.pieceIds)
+      if (ids.has(pieceId)) overrides[pieceId] = color.materialId;
+  }
+  const missing = pieces.filter((p) => p.needsColor && !overrides[p.id]).map((p) => p.id);
+  return { overrides, missing };
+}

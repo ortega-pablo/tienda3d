@@ -71,3 +71,11 @@ export const webOrderNotesSchema = z
   })
   .strict();
 export type WebOrderNotesInput = z.infer<typeof webOrderNotesSchema>;
+
+/** Orden de producción de un ítem (F14·7): cuántas unidades fabricar. */
+export const webOrderProductionSchema = z
+  .object({
+    quantity: z.number().int().min(1).max(999),
+  })
+  .strict();
+export type WebOrderProductionInput = z.infer<typeof webOrderProductionSchema>;

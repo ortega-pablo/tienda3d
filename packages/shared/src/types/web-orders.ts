@@ -84,6 +84,8 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
   /** Lo que el admin puede hacer ahora, según §5.6. */
   actions: {
     confirmTransfer: boolean;
+    /** Se puede generar la orden de producción de los ítems que no la tienen (F14·7). */
+    production: boolean;
     fulfillment: Array<Exclude<WebOrderFulfillmentValue, 'RECEIVED' | 'CANCELLED'>>;
     cancel: boolean;
   };
@@ -91,4 +93,24 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
 
 export interface WebOrderAttentionDto {
   count: number;
+}
+
+/** Lo que se va a fabricar para un ítem, antes de generar la orden (F14·7). */
+export interface WebOrderProductionPlanDto {
+  itemId: string;
+  productId: string;
+  productName: string;
+  variantLabel: string;
+  quantity: number;
+  /** Lo que no sale del stock: lo que hay que fabricar. */
+  suggestedQuantity: number;
+  pieces: Array<{
+    pieceId: string;
+    pieceName: string;
+    /** El color que lleva (el elegido por el cliente); null si no lleva color. */
+    colorName: string | null;
+    colorHex: string | null;
+  }>;
+  /** Piezas que necesitan color y ninguna opción de la publicación lo define. */
+  missing: string[];
 }
