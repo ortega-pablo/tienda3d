@@ -53,6 +53,11 @@ export interface CustomerProductOverrideDto {
  * Suficiente para construir el `CustomerPricingProfile` que aplica el motor
  * para cualquier producto del catálogo del cliente.
  */
+/** Una fila del listado: suma cuántos pedidos hizo por la tienda online (F14·8). */
+export interface CustomerListItem extends CustomerLite {
+  webOrderCount: number;
+}
+
 export interface CustomerWithRelations extends CustomerLite {
   categoryCommitments: CustomerCategoryCommitmentDto[];
   productOverrides: CustomerProductOverrideDto[];
@@ -129,7 +134,9 @@ export class CustomersService {
     }));
   }
 
-  async list(filters: { activeOnly?: boolean; type?: CustomerType } = {}): Promise<CustomerLite[]> {
+  async list(
+    filters: { activeOnly?: boolean; type?: CustomerType } = {},
+  ): Promise<CustomerListItem[]> {
     const where: Prisma.CustomerWhereInput = {};
     if (filters.activeOnly) where.isActive = true;
     if (filters.type) where.type = filters.type;
@@ -137,8 +144,9 @@ export class CustomersService {
     const rows = await this.prisma.customer.findMany({
       where,
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { webOrders: true } } },
     });
-    return rows.map((c) => this.toLite(c));
+    return rows.map((c) => ({ ...this.toLite(c), webOrderCount: c._count.webOrders }));
   }
 
   async getWithRelations(id: string): Promise<CustomerWithRelations> {

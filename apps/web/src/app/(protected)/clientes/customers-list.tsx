@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TYPE_LABEL, type CustomerLite, type CustomerSource, type CustomerType } from './types';
+import { TYPE_LABEL, type CustomerListItem, type CustomerSource, type CustomerType } from './types';
 
 /** Origen (F13·8): los compradores de la tienda online entran solos como "Web". */
 const SOURCE_OPTIONS: { key: CustomerSource | 'ALL'; label: string }[] = [
@@ -25,7 +25,7 @@ export function CustomersList({
   customers,
   canWrite,
 }: {
-  customers: CustomerLite[];
+  customers: CustomerListItem[];
   canWrite: boolean;
 }) {
   const [filter, setFilter] = useState<CustomerType | 'ALL'>('ALL');
@@ -118,6 +118,7 @@ export function CustomersList({
                 <th className="py-2 pr-4 font-medium">Cliente</th>
                 <th className="py-2 pr-4 font-medium">Tipo</th>
                 <th className="py-2 pr-4 font-medium">Contacto</th>
+                <th className="py-2 pr-4 font-medium">Pedidos web</th>
                 <th className="py-2 pr-4 font-medium">Portal</th>
                 <th className="py-2 pr-4 font-medium">Estado</th>
                 <th className="py-2 font-medium" />
@@ -143,6 +144,13 @@ export function CustomersList({
                   <td className="py-3 pr-4 text-muted-foreground">
                     {c.email ?? '—'}
                     {c.phone && <div className="text-xs">{c.phone}</div>}
+                  </td>
+                  <td className="py-3 pr-4 tabular-nums">
+                    {c.webOrderCount > 0 ? (
+                      c.webOrderCount
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </td>
                   <td className="py-3 pr-4">
                     {c.hasPortalAccess ? (
@@ -173,7 +181,7 @@ export function CustomersList({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                     {customers.length === 0
                       ? 'Sin clientes cargados todavía.'
                       : 'No hay clientes con esos filtros.'}

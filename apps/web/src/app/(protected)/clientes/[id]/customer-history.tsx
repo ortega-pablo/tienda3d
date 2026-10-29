@@ -7,6 +7,8 @@ import { handleApiError } from '@/lib/handle-error';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import { useHasPermission } from '@/components/user-provider';
+import { CustomerWebOrders } from './customer-web-orders';
 
 interface QuoteRow {
   id: string;
@@ -44,7 +46,8 @@ const STATUS_COLOR: Record<QuoteRow['status'], string> = {
 };
 
 export function CustomerHistory({ customerId }: { customerId: string }) {
-  const [tab, setTab] = useState<'quotes' | 'volumes'>('quotes');
+  const can = useHasPermission();
+  const [tab, setTab] = useState<'quotes' | 'volumes' | 'webOrders'>('quotes');
   const [quotes, setQuotes] = useState<QuoteRow[] | null>(null);
   const [volumes, setVolumes] = useState<VolumeRow[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -99,7 +102,8 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
           <div>
             <CardTitle>Histórico</CardTitle>
             <CardDescription>
-              Cotizaciones y volúmenes mensuales por categoría asociada.
+              Cotizaciones, volúmenes mensuales por categoría asociada y pedidos de la tienda
+              online.
             </CardDescription>
           </div>
           <div className="flex gap-1 rounded-md border bg-muted/30 p-1 text-sm">
@@ -123,6 +127,18 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
             >
               Volúmenes mensuales
             </button>
+            {can('ecommerce:orders') && (
+              <button
+                onClick={() => setTab('webOrders')}
+                className={
+                  tab === 'webOrders'
+                    ? 'rounded px-3 py-1.5 font-medium bg-secondary text-secondary-foreground'
+                    : 'rounded px-3 py-1.5 text-muted-foreground hover:bg-accent'
+                }
+              >
+                Pedidos web
+              </button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -203,6 +219,8 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
             )}
           </div>
         )}
+
+        {tab === 'webOrders' && <CustomerWebOrders customerId={customerId} />}
 
         {!loading && tab === 'volumes' && volumeMatrix && (
           <div className="space-y-3">
