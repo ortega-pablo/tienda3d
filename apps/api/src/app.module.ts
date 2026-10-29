@@ -32,6 +32,7 @@ import { UsersModule } from './modules/users/users.module';
 import { WebCatalogModule } from './modules/web-catalog/web-catalog.module';
 import { StorefrontIntegrationModule } from './modules/storefront-integration/storefront-integration.module';
 import { WebOrdersModule } from './modules/web-orders/web-orders.module';
+import { WebQuoteRequestsModule } from './modules/web-quote-requests/web-quote-requests.module';
 import { InboundEventsModule } from './modules/inbound-events/inbound-events.module';
 
 @Module({
@@ -81,6 +82,7 @@ import { InboundEventsModule } from './modules/inbound-events/inbound-events.mod
     WebCatalogModule,
     StorefrontIntegrationModule,
     WebOrdersModule,
+    WebQuoteRequestsModule,
     InboundEventsModule,
     ProductsModule,
     CustomersModule,

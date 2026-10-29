@@ -12,6 +12,7 @@ import {
   Layers,
   LayoutDashboard,
   LayoutGrid,
+  Lightbulb,
   Package,
   PackageSearch,
   Plug,
@@ -188,7 +189,8 @@ export const NAVIGATION: NavGroup[] = [
   {
     // Solo el rol admin tiene ecommerce:*. Cada sección suma su entrada al
     // habilitarse (publicaciones, pedidos web, solicitudes, categorías, ajustes).
-    // "Pedidos web" muestra cuántos esperan al taller (ver ProtectedLayout).
+    // "Pedidos web" muestra cuántos esperan al taller y "Solicitudes", las nuevas
+    // (ver ProtectedLayout).
     label: 'Tienda online',
     items: [
       {
@@ -202,6 +204,12 @@ export const NAVIGATION: NavGroup[] = [
         label: 'Pedidos web',
         href: '/tienda-online/pedidos',
         icon: Receipt,
+        permissions: ['ecommerce:orders'],
+      },
+      {
+        label: 'Solicitudes',
+        href: '/tienda-online/solicitudes',
+        icon: Lightbulb,
         permissions: ['ecommerce:orders'],
       },
       {

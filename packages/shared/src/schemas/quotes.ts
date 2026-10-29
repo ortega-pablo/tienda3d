@@ -77,6 +77,8 @@ export const quoteCreateSchema = z.object({
   notes: z.string().max(4000).nullable().optional(),
   discount: z.number().min(0).optional(),
   items: z.array(quoteItemSchema).min(1),
+  /** La solicitud de personalización de la que sale (F15·3): queda vinculada y cotizada. */
+  webQuoteRequestId: z.string().min(1).optional(),
 });
 
 export const quotePreviewSchema = z.object({

@@ -7,16 +7,14 @@ import {
 } from '@nestjs/common';
 import { PieceScope, Prisma, QuoteStatus, QuoteType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
+import { WebQuoteRequestsService } from '@/modules/web-quote-requests/web-quote-requests.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
 import { addBusinessDays, startOfBusinessMonth } from '@/common/utils/date';
 import { DocumentCodeService } from '@/common/utils/document-code';
 import { CostingService } from '../costing/costing.service';
 import type { CostingResult } from '../costing/costing.types';
-import {
-  CustomersService,
-  type CustomerWithRelations,
-} from '../customers/customers.service';
+import { CustomersService, type CustomerWithRelations } from '../customers/customers.service';
 import {
   KeychainScaleTiersService,
   type KeychainScaleTierDto,
@@ -24,11 +22,7 @@ import {
 import { PricingEngine } from '../pricing/pricing.engine';
 import { PricingService } from '../pricing/pricing.service';
 import { roundPriceUp } from '../pricing/round-price';
-import type {
-  CustomerPricingProfile,
-  PriceLine,
-  PricingGlobals,
-} from '../pricing/pricing.types';
+import type { CustomerPricingProfile, PriceLine, PricingGlobals } from '../pricing/pricing.types';
 import { CategoryTiersService } from '../categories/category-tiers.service';
 import type {
   AdhocItemPayload,
@@ -111,6 +105,7 @@ export class QuotesService {
     private readonly customers: CustomersService,
     private readonly keychainScaleTiers: KeychainScaleTiersService,
     private readonly codes: DocumentCodeService,
+    private readonly webQuoteRequests: WebQuoteRequestsService,
   ) {}
 
   async list(
@@ -199,6 +194,10 @@ export class QuotesService {
     // queda null y el motor usa cost = price (caso "sin canal").
     const channelId = input.channelId ?? null;
 
+    // De una solicitud de personalización (F15·3): se valida antes de tomar el código.
+    if (input.webQuoteRequestId)
+      await this.webQuoteRequests.assertQuotable(input.webQuoteRequestId);
+
     const code = await this.nextCode(quoteType);
     // Una sola caché para toda la cotización: los parámetros globales y la
     // grilla de escalas se leen una vez, no una vez por ítem.
@@ -219,42 +218,58 @@ export class QuotesService {
     // Datos textuales del cliente: si vino customerId, los usamos como fuente
     // de verdad pero el caller puede pisarlos (ej. cliente paga a nombre de
     // un familiar para esta cotización).
-    const customerName =
-      input.customerName?.trim() || customerCtx?.customer.name || '';
+    const customerName = input.customerName?.trim() || customerCtx?.customer.name || '';
     if (!customerName) {
       throw new BadRequestException('La cotización requiere un nombre de cliente');
     }
     const customerEmail = input.customerEmail ?? customerCtx?.customer.email ?? null;
     const customerPhone = input.customerPhone ?? customerCtx?.customer.phone ?? null;
 
-    const created = await this.prisma.quote.create({
-      data: {
-        code,
-        type: quoteType,
-        status: QuoteStatus.DRAFT,
-        customerName,
-        customerEmail,
-        customerPhone,
-        customerNotes: input.customerNotes ?? null,
-        customerId: input.customerId ?? null,
-        customerProfileSnapshot: customerCtx
-          ? (customerCtx.snapshot as unknown as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        channelId,
-        withInvoice: input.withInvoice ?? false,
-        // Validez del documento: 15 días hábiles (lun-vie) desde la emisión.
-        // Es una regla fija del negocio — si el caller manda validUntil se
-        // respeta, si no se computa el default.
-        validUntil: input.validUntil ? new Date(input.validUntil) : addBusinessDays(new Date(), 15),
-        notes: input.notes ?? null,
-        subtotal,
-        discount,
-        total,
-        createdById: actorId,
-        items: { create: itemsData },
-      },
-      include: { items: true, channel: { select: { name: true } } },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const quote = await tx.quote.create({
+        data: {
+          code,
+          type: quoteType,
+          status: QuoteStatus.DRAFT,
+          customerName,
+          customerEmail,
+          customerPhone,
+          customerNotes: input.customerNotes ?? null,
+          customerId: input.customerId ?? null,
+          customerProfileSnapshot: customerCtx
+            ? (customerCtx.snapshot as unknown as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+          channelId,
+          withInvoice: input.withInvoice ?? false,
+          // Validez del documento: 15 días hábiles (lun-vie) desde la emisión.
+          // Es una regla fija del negocio — si el caller manda validUntil se
+          // respeta, si no se computa el default.
+          validUntil: input.validUntil
+            ? new Date(input.validUntil)
+            : addBusinessDays(new Date(), 15),
+          notes: input.notes ?? null,
+          subtotal,
+          discount,
+          total,
+          createdById: actorId,
+          items: { create: itemsData },
+        },
+        include: { items: true, channel: { select: { name: true } } },
+      });
+      if (input.webQuoteRequestId) {
+        await this.webQuoteRequests.linkQuote(tx, input.webQuoteRequestId, quote.id);
+      }
+      return quote;
     });
+    if (input.webQuoteRequestId) {
+      await this.audit.record({
+        actorId,
+        entity: 'WebQuoteRequest',
+        entityId: input.webQuoteRequestId,
+        action: 'quoted',
+        after: { quoteId: created.id, code: created.code },
+      });
+    }
     return this.toDto(created);
   }
 
@@ -273,8 +288,9 @@ export class QuotesService {
     // Validar que todos los productos del catálogo estén permitidos para
     // este cliente. ADHOC se permite siempre (el cliente puede pedir piezas
     // instantáneas sin restricción de categoría).
-    const productItems = items.filter((i): i is { type: 'PRODUCT'; productId: string; quantity: number; description?: string } =>
-      i.type === 'PRODUCT',
+    const productItems = items.filter(
+      (i): i is { type: 'PRODUCT'; productId: string; quantity: number; description?: string } =>
+        i.type === 'PRODUCT',
     );
     // El cliente ya está cargado: se le pasa a canBuy para que no lo relea por
     // ítem. Antes una cotización de 10 ítems disparaba 10 getWithRelations
@@ -391,9 +407,7 @@ export class QuotesService {
     if (commitments.length === 0) return;
 
     const associatedIds = new Set(commitments.map((c) => c.categoryId));
-    const commitmentsByCategory = new Map(
-      commitments.map((c) => [c.categoryId, c]),
-    );
+    const commitmentsByCategory = new Map(commitments.map((c) => [c.categoryId, c]));
 
     // Acumulamos por categoría destino.
     const deltaByCategory = new Map<string, number>();
@@ -471,9 +485,7 @@ export class QuotesService {
     designSurcharge: number;
     warnings: string[];
   }> {
-    const customerCtx = customerId
-      ? await this.resolveCustomerContext(customerId, [item])
-      : null;
+    const customerCtx = customerId ? await this.resolveCustomerContext(customerId, [item]) : null;
     // El cliente ya no lleva canal default — el form siempre manda channelId.
     const effectiveChannel = channelId ?? null;
     const { row, cost, line } = await this.buildItemRow(item, effectiveChannel, customerCtx);
@@ -563,9 +575,10 @@ export class QuotesService {
           customerCtx,
           cache,
         );
-        const adhocPayload = row.adhocPayload as
-          | { designSurcharge?: number; appliedMarkupPct?: number }
-          | null;
+        const adhocPayload = row.adhocPayload as {
+          designSurcharge?: number;
+          appliedMarkupPct?: number;
+        } | null;
         const designSurcharge =
           adhocPayload && typeof adhocPayload.designSurcharge === 'number'
             ? adhocPayload.designSurcharge
@@ -640,8 +653,7 @@ export class QuotesService {
         }
         keychainMarkupOverride = scaleTier.markupPct;
         const scope = KeychainScaleTiersService.resolveScope(scaleTiers, item.quantity);
-        const batchSize =
-          scope === PieceScope.BATCH ? await cache.getBatchSize() : undefined;
+        const batchSize = scope === PieceScope.BATCH ? await cache.getBatchSize() : undefined;
         const costingOpts =
           scope === PieceScope.INDIVIDUAL
             ? { pieceScope: PieceScope.INDIVIDUAL }
@@ -740,8 +752,7 @@ export class QuotesService {
     // cantidad. 1-4 usa `individualPieces` (piezas para 1 unidad); 5+ usa la
     // tanda (`pieces`) ÷ batchSize. Insumos y adicionales NO se dividen: son
     // por unidad. `designMinutes` es cargo plano aparte.
-    let keychainScale: { markupPct: number; minQty: number; maxQty: number | null } | null =
-      null;
+    let keychainScale: { markupPct: number; minQty: number; maxQty: number | null } | null = null;
     let pricingBase: 'INDIVIDUAL' | 'BATCH' | null = null;
     let costingPieces = item.payload.pieces;
     if (isKeychain) {
@@ -1010,7 +1021,9 @@ export class QuotesService {
       //   - customMarkupPct del cliente pisa todo internamente en el motor.
       targetMarkupPct: product ? baseMarkup : adhocDefaultMarkup,
       marketplaceCommissionPct:
-        productChannel && productChannel.commissionPct ? Number(productChannel.commissionPct) : null,
+        productChannel && productChannel.commissionPct
+          ? Number(productChannel.commissionPct)
+          : null,
     };
     // Precedencia: markupOverridePct (caller, p.ej. tier de llaveros)
     //   > tier resuelta de la categoría del producto > baseMarkup del target.
@@ -1066,40 +1079,43 @@ export class QuotesService {
     return allowed[from]?.includes(to) ?? false;
   }
 
-  private toDto(q: {
-    id: string;
-    code: string;
-    type: QuoteType;
-    status: QuoteStatus;
-    customerName: string;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    customerNotes: string | null;
-    customerId: string | null;
-    customerProfileSnapshot: Prisma.JsonValue;
-    channelId: string | null;
-    channel?: { name: string } | null;
-    withInvoice: boolean;
-    subtotal: Prisma.Decimal;
-    discount: Prisma.Decimal;
-    total: Prisma.Decimal;
-    validUntil: Date | null;
-    notes: string | null;
-    createdById: string;
-    createdAt: Date;
-    items: Array<{
+  private toDto(
+    q: {
       id: string;
-      productId: string | null;
-      description: string;
-      quantity: Prisma.Decimal;
-      unitCost: Prisma.Decimal;
-      unitPrice: Prisma.Decimal;
-      unitProfit: Prisma.Decimal;
-      lineTotal: Prisma.Decimal;
-      adhocPayload: Prisma.JsonValue;
-      pricingBreakdown?: Prisma.JsonValue;
-    }>;
-  }, includeBreakdown = false): QuoteDto {
+      code: string;
+      type: QuoteType;
+      status: QuoteStatus;
+      customerName: string;
+      customerEmail: string | null;
+      customerPhone: string | null;
+      customerNotes: string | null;
+      customerId: string | null;
+      customerProfileSnapshot: Prisma.JsonValue;
+      channelId: string | null;
+      channel?: { name: string } | null;
+      withInvoice: boolean;
+      subtotal: Prisma.Decimal;
+      discount: Prisma.Decimal;
+      total: Prisma.Decimal;
+      validUntil: Date | null;
+      notes: string | null;
+      createdById: string;
+      createdAt: Date;
+      items: Array<{
+        id: string;
+        productId: string | null;
+        description: string;
+        quantity: Prisma.Decimal;
+        unitCost: Prisma.Decimal;
+        unitPrice: Prisma.Decimal;
+        unitProfit: Prisma.Decimal;
+        lineTotal: Prisma.Decimal;
+        adhocPayload: Prisma.JsonValue;
+        pricingBreakdown?: Prisma.JsonValue;
+      }>;
+    },
+    includeBreakdown = false,
+  ): QuoteDto {
     const items: QuoteItemDto[] = q.items.map((i) => ({
       id: i.id,
       productId: i.productId,

@@ -24,6 +24,7 @@ const SECCIONES: Array<{ titulo: string; detalle: string; href?: string }> = [
   {
     titulo: 'Solicitudes de personalización',
     detalle: 'Los pedidos de cotización a medida que llegan desde la web.',
+    href: '/tienda-online/solicitudes',
   },
   {
     titulo: 'Ajustes de la tienda',

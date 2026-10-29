@@ -17,3 +17,4 @@ export interface AuthenticatedUser {
 }
 export * from './web-catalog';
 export * from './web-orders';
+export * from './web-quote-requests';

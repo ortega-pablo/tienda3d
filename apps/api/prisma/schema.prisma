@@ -587,7 +587,9 @@ model Quote {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  items QuoteItem[]
+  items           QuoteItem[]
+  /// La solicitud de personalización de la que salió (F15·3).
+  webQuoteRequest WebQuoteRequest?
 
   @@index([status])
   @@index([customerId])
@@ -1469,6 +1471,9 @@ model WebQuoteRequest {
   attachmentSize Int?
   status         WebQuoteRequestStatus @default(NEW)
   adminNote      String                @default("")
+  /// La cotización a medida que salió de la solicitud (F15·3).
+  quoteId        String?               @unique
+  quote          Quote?                @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   /// Cuándo la pidió el cliente en el sitio.
   requestedAt    DateTime
   createdAt      DateTime              @default(now())
