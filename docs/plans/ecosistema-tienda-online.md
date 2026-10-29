@@ -846,6 +846,7 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permi
     - Cabeceras de seguridad (HSTS solo con TLS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) y `x-request-id`.
     - `tls internal` opcional para probar cookies `Secure`.
   - Cierra cuando: `curl http://tienda.localhost/api/internal/events` da 404 desde el host, y desde la red interna da 401 sin firma (después de F11).
+  - Hecho así: un snippet `(puerta)` en el `Caddyfile` que importan los tres sitios: `respond 404` para `/api/internal*` y `/api/integrations*`, `X-Request-Id` propio en el pedido y en la respuesta (el del navegador no se usa), cabeceras de seguridad con `?` para no pisar las que manda la app, y sin `Server`. HSTS y `tls internal` quedan comentados (producción, F17·5). Probado: desde el host dan 404 `POST /api/internal/events/` y sus variantes (sin barra final, mayúsculas, doble barra, `%2F`, `./`) y `/api/integrations/...` en `sistema.localhost`; desde la red interna el receptor sigue dando 401 sin firma; los tres sitios responden.
 - [ ] **F3·5 [infra] El sistema guarda las fotos y el sitio solo puede leerlas**
   - Para qué: compartir las fotos sin que el sitio pueda modificarlas ni borrarlas.
   - Qué hacer: crear `pgdata`, `media` (rw en tienda3d-api, `:ro` en storefront y worker), `t3d-private`, `sf-private` y `backups`, con uid 1001.
