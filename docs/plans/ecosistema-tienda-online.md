@@ -1695,7 +1695,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
 - [ ] **F22·5 [sf][t3d] Mercado Pago completo y blindado**
   - Para qué: cobrar con tarjeta y dinero en cuenta sin que un aviso falso, un monto alterado o un contracargo terminen en mercadería entregada sin cobrar.
   - Qué hacer:
-    - La firma `x-signature` es obligatoria: con Mercado Pago real y sin `MP_WEBHOOK_SECRET`, el sitio no arranca (hoy, sin la clave, acepta cualquier aviso). Además, una ventana de 5 min sobre `ts` frena las repeticiones.
+    - La firma `x-signature` es obligatoria también en localhost: hoy, sin `MP_WEBHOOK_SECRET`, el sitio no arranca fuera de localhost, pero en localhost acepta cualquier aviso. Además, una ventana de 5 min sobre `ts` frena las repeticiones (la función ya la admite, el webhook no la usa).
     - El estado se consulta siempre a la API, también al volver del checkout. Además del monto, se controlan la moneda (ARS), que `external_reference` sea el pedido y que un pago no se aplique a dos pedidos.
     - La preferencia lleva:
       - `Idempotency-Key`;
