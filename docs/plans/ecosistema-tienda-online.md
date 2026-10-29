@@ -1377,6 +1377,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
     - `CustomerEmailToken` (`VERIFY`/`RESET`, hash, vencimiento, `usedAt`).
     - `CustomerAddress`.
   - Cierra cuando: la migración aplica y hay tests del dominio de tokens.
+  - Hecho así: modelos `Customer` (id uuid, email único normalizado, scrypt, datos, verificación, intentos y bloqueo, aceptación de términos, último ingreso), `CustomerSession` (hash del token, vencimiento, último uso), `CustomerEmailToken` (`VERIFY`/`RESET`) y `CustomerAddress` (los campos del envío de un pedido), más `Order.customerId` (null en los pedidos anteriores). `src/server/auth/password.ts` volvió del historial: F12·5 lo había borrado con el login del panel. Las reglas están en `src/domain/accounts.ts`: normalizar el email, hash de tokens, largo de la contraseña, estado de un link de un uso, sesión de 30 días renovada por uso como mucho una vez por día, y bloqueo de 15 minutos al octavo intento fallido. La migración se generó con `prisma migrate diff`, se aplicó en el ecosistema sin diferencias con el esquema, y tiene 7 tests.
 - [ ] **F13·2 [sf] El cliente se registra y verifica su email**
   - Para qué: que cada compra tenga un email real para los avisos (D5).
   - Qué hacer:
