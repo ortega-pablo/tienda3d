@@ -44,6 +44,7 @@ model User {
   quotesCreated      Quote[]           @relation("QuoteCreatedBy")
   stockMovements     StockMovement[]
   auditLogs          AuditLog[]
+  webOrderEvents     WebOrderEvent[]
 
   @@map("users")
 }
@@ -411,6 +412,7 @@ model Product {
   webMember       WebProductMember?
   webPrice        WebPrice?
   webPriceHistory WebPriceHistory[]
+  webOrderItems   WebOrderItem[]
 
   @@index([machineId])
   @@index([categoryId])
@@ -649,7 +651,8 @@ model ProductionOrder {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  movements StockMovement[]
+  movements     StockMovement[]
+  webOrderItems WebOrderItem[]
 
   @@index([status])
   @@map("production_orders")
@@ -767,6 +770,8 @@ model Customer {
   monthlyVolumes      CustomerMonthlyVolume[]
   /// Cotizaciones vinculadas a este cliente.
   quotes              Quote[]
+  /// Pedidos de la tienda online (F14·2).
+  webOrders           WebOrder[]
 
   @@index([type, isActive])
   @@index([source])
@@ -1134,6 +1139,7 @@ model WebVariant {
   updatedAt     DateTime         @updatedAt
 
   selections WebVariantSelection[]
+  orderItems WebOrderItem[]
 
   @@unique([webProductId, selectionKey])
   @@index([memberId])
@@ -1312,4 +1318,122 @@ model InboundEvent {
 
   @@unique([source, key])
   @@map("inbound_events")
+}
+
+// ─── Pedidos de la tienda online (plan F14) ─────────────────────────────────
+
+/// Pago del pedido web: lo informa el sitio, salvo la transferencia, que se confirma acá (§5.6).
+enum WebOrderPayment {
+  PENDING
+  AWAITING_TRANSFER
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+/// Preparación del pedido web: la maneja el taller desde el panel (§5.6).
+enum WebOrderFulfillment {
+  RECEIVED
+  PREPARING
+  READY_FOR_PICKUP
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum WebPaymentMethod {
+  MERCADOPAGO
+  BANK_TRANSFER
+}
+
+enum WebDeliveryMethod {
+  PICKUP
+  SHIPPING
+}
+
+/// Un pedido de la tienda online. Los montos van en centavos, como en el sitio.
+model WebOrder {
+  id                 String              @id @default(cuid())
+  /// W-AAAA-NNNN, correlativo por año de Argentina.
+  code               String              @unique
+  /// Id del pedido en el sitio: un reintento del mismo pedido no lo duplica (F14·3).
+  externalId         String              @unique
+  /// Número que ve el cliente en el sitio (#1004).
+  number             Int
+  customerId         String
+  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  paymentMethod      WebPaymentMethod
+  paymentStatus      WebOrderPayment
+  fulfillmentStatus  WebOrderFulfillment @default(RECEIVED)
+  deliveryMethod     WebDeliveryMethod
+  shippingStreet     String?
+  shippingNumber     String?
+  shippingApartment  String?
+  shippingCity       String?
+  shippingProvince   String?
+  shippingPostalCode String?
+  shippingLabel      String
+  /// Null: el costo de envío se coordina con el cliente.
+  shippingCents      Int?
+  subtotalCents      Int
+  totalCents         Int
+  customerNote       String              @default("")
+  trackingCode       String?
+  internalNotes      String              @default("")
+  cancelReason       String?
+  /// Cuándo se hizo el pedido en el sitio.
+  placedAt           DateTime
+  paidAt             DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  items  WebOrderItem[]
+  events WebOrderEvent[]
+
+  @@index([fulfillmentStatus, createdAt])
+  @@index([paymentStatus])
+  @@index([customerId])
+  @@map("web_orders")
+}
+
+model WebOrderItem {
+  id                String           @id @default(cuid())
+  webOrderId        String
+  webOrder          WebOrder         @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
+  webVariantId      String
+  webVariant        WebVariant       @relation(fields: [webVariantId], references: [id], onDelete: Restrict)
+  productId         String
+  product           Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sku               String
+  productName       String
+  variantLabel      String
+  /// Lo elegido al comprar: colores (línea, color, código) y opciones informativas.
+  selections        Json             @default("[]")
+  quantity          Int
+  unitPriceCents    Int
+  lineTotalCents    Int
+  /// Unidades descontadas del stock de la variante al registrar el pedido; se devuelven al cancelar.
+  reservedQuantity  Int              @default(0)
+  productionOrderId String?
+  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: SetNull)
+
+  @@index([webOrderId])
+  @@index([webVariantId])
+  @@map("web_order_items")
+}
+
+/// Historial del pedido web: cambios de estado, pagos y notas.
+model WebOrderEvent {
+  id         String   @id @default(cuid())
+  webOrderId String
+  webOrder   WebOrder @relation(fields: [webOrderId], references: [id], onDelete: Cascade)
+  kind       String
+  message    String
+  /// Quién lo hizo en el panel; null si vino del sitio.
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([webOrderId, createdAt])
+  @@map("web_order_events")
 }

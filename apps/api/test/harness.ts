@@ -29,6 +29,10 @@ export async function bootTestApp(): Promise<{
 
 /** Tablas que se limpian entre tests, en orden irrelevante (CASCADE). */
 const TABLES = [
+  // Pedidos de la tienda online (F14)
+  'web_order_events',
+  'web_order_items',
+  'web_orders',
   // Tienda online (F5)
   'web_variant_selections',
   'web_variants',

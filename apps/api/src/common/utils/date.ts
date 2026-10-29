@@ -8,6 +8,11 @@ export const AR_TIMEZONE = 'America/Argentina/Buenos_Aires';
 /** Offset fijo de Argentina respecto de UTC (sin horario de verano). */
 const AR_OFFSET_MS = 3 * 60 * 60 * 1000;
 
+/** El año en Argentina (el 31/12 a las 23:30 de acá ya es 1/1 en UTC). */
+export function yearInArgentina(d: Date): number {
+  return new Date(d.getTime() - AR_OFFSET_MS).getUTCFullYear();
+}
+
 /** Fecha (dd/mm/aaaa) en es-AR, SIEMPRE en zona horaria de Argentina. */
 export function formatDateAr(d: Date): string {
   return d.toLocaleDateString('es-AR', { timeZone: AR_TIMEZONE });

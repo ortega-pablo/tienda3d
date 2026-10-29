@@ -1455,6 +1455,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
     - `WebOrder` (vinculado a `Customer`), `WebOrderItem` (con `webVariantId`, `productId`, `colorSelections` y `productionOrderId?`) y `WebOrderEvent`.
     - Código `W-AAAA-NNNN` con `DocumentCodeService` (scope `WEB_ORDER:W`), usando el año de Argentina.
   - Cierra cuando: la migración aplica y hay un test del código correlativo.
+  - Hecho así: `source`/`externalId` de `Customer` ya estaban (F13·8). Modelos `WebOrder` (código único, `externalId` = id del pedido en el sitio para la idempotencia de F14·3, número visible, cliente, `paymentStatus` y `fulfillmentStatus` con los estados de §5.6, entrega y dirección, montos en centavos como el sitio, seguimiento, notas internas, motivo de cancelación, fecha del pedido y del pago), `WebOrderItem` (variante web, producto del sistema, SKU, nombre, etiqueta, lo elegido en `selections`, precio, `reservedQuantity` para devolver el stock al cancelar y `productionOrderId`) y `WebOrderEvent` (historial con el usuario del panel o nulo si vino del sitio). `WebOrdersService.nextCode` usa `DocumentCodeService` con el scope `WEB_ORDER:W:<año>` y el año de Argentina (`yearInArgentina`: el 31/12 a las 23:30 de acá ya es 2027 en UTC). Tests: correlativo, ocho pedidos simultáneos sin repetir y el cambio de año; la migración aplica en el ecosistema.
 - [ ] **F14·3 [t3d][sf] Un pedido se confirma solo si el sistema valida precio y stock**
   - Para qué: no vender a un precio viejo ni más unidades de las que hay (D2).
   - Qué hacer:

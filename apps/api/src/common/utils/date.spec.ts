@@ -1,4 +1,4 @@
-import { addBusinessDays, addBusinessMonths, startOfBusinessMonth } from './date';
+import { addBusinessDays, addBusinessMonths, startOfBusinessMonth, yearInArgentina } from './date';
 
 /** Día de la semana (0=dom..6=sáb) en hora de pared argentina. */
 function arDow(d: Date): number {
@@ -69,7 +69,9 @@ describe('startOfBusinessMonth', () => {
 
 describe('addBusinessMonths', () => {
   const closedMonthFor = (isoDate: string) =>
-    addBusinessMonths(startOfBusinessMonth(new Date(isoDate)), -1).toISOString().slice(0, 10);
+    addBusinessMonths(startOfBusinessMonth(new Date(isoDate)), -1)
+      .toISOString()
+      .slice(0, 10);
 
   it('no desborda el día en meses cortos', () => {
     // Estos cuatro casos daban el mes EN CURSO con el cálculo viejo.
@@ -83,5 +85,13 @@ describe('addBusinessMonths', () => {
     const jan = startOfBusinessMonth(new Date(Date.UTC(2026, 0, 10, 12)));
     expect(addBusinessMonths(jan, -1).toISOString()).toBe('2025-12-01T00:00:00.000Z');
     expect(addBusinessMonths(jan, 12).toISOString()).toBe('2027-01-01T00:00:00.000Z');
+  });
+});
+
+describe('yearInArgentina', () => {
+  it('usa el año de Argentina, no el de UTC', () => {
+    // 31/12/2026 23:30 en Argentina = 1/1/2027 02:30 UTC.
+    expect(yearInArgentina(new Date('2027-01-01T02:30:00Z'))).toBe(2026);
+    expect(yearInArgentina(new Date('2027-01-01T03:00:00Z'))).toBe(2027);
   });
 });
