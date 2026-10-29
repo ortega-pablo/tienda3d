@@ -154,6 +154,32 @@ describe('[int] Solicitudes de personalización en el panel', () => {
     ).toBe(1);
   });
 
+  it('cada cambio de estado le llega al sitio; la nota sola, no (F15·4)', async () => {
+    const id = await receive();
+    await prisma.outboxEvent.deleteMany();
+    const patch = (body: object) =>
+      http()
+        .patch(`/web-quote-requests/${id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(body)
+        .expect(200);
+    await patch({ status: 'IN_REVIEW' });
+    await patch({ adminNote: 'Solo una nota.' });
+    await patch({ status: 'IN_REVIEW' });
+    await patch({ status: 'DISCARDED' });
+    const sent = await prisma.outboxEvent.findMany({ orderBy: { createdAt: 'asc' } });
+    expect(sent.map((e) => [e.type, e.payload])).toEqual([
+      [
+        'quote_request.status_changed',
+        { externalId: 'qr-1', status: 'IN_REVIEW', changedAt: expect.any(String) },
+      ],
+      [
+        'quote_request.status_changed',
+        { externalId: 'qr-1', status: 'DISCARDED', changedAt: expect.any(String) },
+      ],
+    ]);
+  });
+
   it('de una solicitud sale una cotización R-AAAA-NNNN vinculada a ella y al cliente', async () => {
     const id = await receive();
     const { customerId } = await prisma.webQuoteRequest.findUniqueOrThrow({ where: { id } });
@@ -184,8 +210,17 @@ describe('[int] Solicitudes de personalización en el panel', () => {
           ],
         });
 
+    await prisma.outboxEvent.deleteMany();
     const created = await quote(id).expect(201);
     expect(created.body.code).toMatch(/^R-\d{4}-\d{4}$/);
+    // Cotizada: el cliente lo ve en Mi cuenta (F15·4).
+    expect(
+      (
+        await prisma.outboxEvent.findFirstOrThrow({
+          where: { type: 'quote_request.status_changed' },
+        })
+      ).payload,
+    ).toMatchObject({ externalId: 'qr-1', status: 'QUOTED' });
     expect(await prisma.quote.findUniqueOrThrow({ where: { id: created.body.id } })).toMatchObject({
       customerId,
     });
