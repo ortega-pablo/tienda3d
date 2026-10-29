@@ -7,8 +7,11 @@ import {
   Param,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { Public } from '@/common/decorators/public.decorator';
@@ -23,6 +26,12 @@ import {
   webOrderEventSchema,
   type WebOrderEventInput,
 } from './storefront-order-events.service';
+import {
+  QUOTE_ATTACHMENT,
+  StorefrontQuoteRequestsService,
+  webQuoteRequestSchema,
+  type ReceivedFile,
+} from './storefront-quote-requests.service';
 import {
   StorefrontOrdersService,
   webOrderSchema,
@@ -49,6 +58,7 @@ export class StorefrontIntegrationController {
     private readonly webCustomers: WebCustomersService,
     private readonly orders: StorefrontOrdersService,
     private readonly orderEvents: StorefrontOrderEventsService,
+    private readonly quoteRequests: StorefrontQuoteRequestsService,
   ) {}
 
   /** Health de la integración: la clave sirve y la API responde. */
@@ -95,5 +105,31 @@ export class StorefrontIntegrationController {
   ) {
     if (!idempotencyKey) throw new BadRequestException('Falta Idempotency-Key');
     return this.orderEvents.apply(externalId, body, idempotencyKey);
+  }
+
+  /**
+   * Una solicitud de personalización (F15·2), multipart: `data` (JSON) y el
+   * archivo opcional en `attachment`. Idempotente por `externalId`.
+   */
+  @IntegrationScopes('quote-requests:write')
+  @Post('quote-requests')
+  @UseInterceptors(
+    FileInterceptor('attachment', { limits: { fileSize: QUOTE_ATTACHMENT.maxBytes, files: 1 } }),
+  )
+  receiveQuoteRequest(
+    @Body('data') data: string | undefined,
+    @UploadedFile() file: ReceivedFile | undefined,
+  ) {
+    let json: unknown;
+    try {
+      json = JSON.parse(data ?? '');
+    } catch {
+      throw new BadRequestException('Falta el campo data (JSON)');
+    }
+    const parsed = webQuoteRequestSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new BadRequestException({ message: 'Solicitud inválida', issues: parsed.error.issues });
+    }
+    return this.quoteRequests.receive(parsed.data, file ?? null);
   }
 }
