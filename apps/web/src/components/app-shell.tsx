@@ -22,7 +22,10 @@ function visibleItems(permissions: string[]) {
   })).filter((g) => g.items.length > 0);
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+/** Contadores junto a una entrada del menú, por su href (p. ej. pedidos web para atender). */
+export type NavBadges = Record<string, number>;
+
+function SidebarContent({ onNavigate, badges }: { onNavigate?: () => void; badges: NavBadges }) {
   const user = useCurrentUser();
   const pathname = usePathname();
   const groups = visibleItems(user.permissions);
@@ -62,7 +65,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                      {!!badges[item.href] && (
+                        <span
+                          className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground"
+                          title={`${badges[item.href]} para atender`}
+                        >
+                          {badges[item.href]}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -104,7 +115,7 @@ function UserMenu() {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, badges = {} }: { children: ReactNode; badges?: NavBadges }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   // En desktop el sidebar arranca visible. La preferencia del usuario se
   // hidrata desde localStorage post-mount para evitar mismatch de SSR.
@@ -132,7 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           !desktopVisible && 'md:hidden',
         )}
       >
-        <SidebarContent />
+        <SidebarContent badges={badges} />
       </aside>
 
       {/* Mobile drawer */}
@@ -140,7 +151,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-foreground/40" onClick={() => setMobileOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-card shadow-xl">
-            <SidebarContent onNavigate={() => setMobileOpen(false)} />
+            <SidebarContent onNavigate={() => setMobileOpen(false)} badges={badges} />
           </aside>
         </div>
       )}

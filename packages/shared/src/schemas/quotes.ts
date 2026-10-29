@@ -11,13 +11,7 @@ import { z } from 'zod';
  * que agregar un estado nuevo en el schema rompe el build si no se refleja acá.
  */
 
-export const quoteStatusSchema = z.enum([
-  'DRAFT',
-  'SENT',
-  'ACCEPTED',
-  'REJECTED',
-  'EXPIRED',
-]);
+export const quoteStatusSchema = z.enum(['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED']);
 export type QuoteStatusValue = z.infer<typeof quoteStatusSchema>;
 
 export const quoteTypeSchema = z.enum(['PRODUCT', 'ADHOC']);
@@ -69,10 +63,7 @@ export const adhocItemSchema = z.object({
   payload: adhocPayloadSchema,
 });
 
-export const quoteItemSchema = z.discriminatedUnion('type', [
-  productItemSchema,
-  adhocItemSchema,
-]);
+export const quoteItemSchema = z.discriminatedUnion('type', [productItemSchema, adhocItemSchema]);
 
 export const quoteCreateSchema = z.object({
   customerId: z.string().min(1).nullable().optional(),

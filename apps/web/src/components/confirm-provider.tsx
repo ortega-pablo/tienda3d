@@ -1,10 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState } from 'react';
-import {
-  ConfirmDialog,
-  type ConfirmOptions,
-} from '@/components/ui/confirm-dialog';
+import { ConfirmDialog, type ConfirmOptions } from '@/components/ui/confirm-dialog';
 
 type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
 

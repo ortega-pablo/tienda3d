@@ -19,6 +19,7 @@ const SECCIONES: Array<{ titulo: string; detalle: string; href?: string }> = [
     titulo: 'Pedidos web',
     detalle:
       'Los pedidos que entran por la tienda: pago, preparación, envío y orden de producción.',
+    href: '/tienda-online/pedidos',
   },
   {
     titulo: 'Solicitudes de personalización',

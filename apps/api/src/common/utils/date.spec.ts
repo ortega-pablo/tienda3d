@@ -1,4 +1,10 @@
-import { addBusinessDays, addBusinessMonths, startOfBusinessMonth, yearInArgentina } from './date';
+import {
+  addBusinessDays,
+  addBusinessMonths,
+  startOfBusinessMonth,
+  startOfDayInArgentina,
+  yearInArgentina,
+} from './date';
 
 /** Día de la semana (0=dom..6=sáb) en hora de pared argentina. */
 function arDow(d: Date): number {
@@ -93,5 +99,11 @@ describe('yearInArgentina', () => {
     // 31/12/2026 23:30 en Argentina = 1/1/2027 02:30 UTC.
     expect(yearInArgentina(new Date('2027-01-01T02:30:00Z'))).toBe(2026);
     expect(yearInArgentina(new Date('2027-01-01T03:00:00Z'))).toBe(2027);
+  });
+});
+
+describe('startOfDayInArgentina', () => {
+  it('el día empieza a las 03:00 UTC', () => {
+    expect(startOfDayInArgentina('2026-10-29').toISOString()).toBe('2026-10-29T03:00:00.000Z');
   });
 });
