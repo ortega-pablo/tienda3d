@@ -1400,6 +1400,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
   - Para qué: no perder clientes que se olvidaron la clave.
   - Qué hacer: `/mi-cuenta/olvide-mi-clave` → link de 1 h → `/mi-cuenta/restablecer`, que cierra todas las sesiones.
   - Cierra cuando: un link usado o vencido no funciona (test).
+  - Hecho así: `requestPasswordReset` manda el link (`/mi-cuenta/restablecer/?token=…`, 1 h, hasta 3 por hora y por cuenta, más un límite por IP); la pantalla responde lo mismo exista o no la cuenta. La página valida el link sin usarlo (`no-referrer`, para que el token no viaje) y muestra el formulario o el motivo (usado, vencido, inválido) con "Pedir otro link". `resetPassword`, en una transacción: marca el link usado, cambia la clave, desbloquea la cuenta, da el email por verificado, anula los otros links de restablecer y borra todas las sesiones; después lleva al ingreso con "Guardamos tu contraseña nueva". Tests: el vencimiento en el dominio (`emailTokenState`); e2e en el ecosistema (escritorio y celular): mail en Mailpit → clave nueva → la sesión abierta en otro navegador se cierra, la clave vieja no entra y la nueva sí, y el link ya usado muestra "Ese link ya se usó".
 - [ ] **F13·5 [sf] El cliente ve sus compras y sus datos en Mi cuenta**
   - Para qué: consultar cómo va cada compra sin escribirle a la tienda.
   - Qué hacer:
