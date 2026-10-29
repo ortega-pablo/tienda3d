@@ -165,6 +165,10 @@ describe('[int] Pedidos web en el panel', () => {
       actions: { confirmTransfer: true, fulfillment: [], cancel: true },
     });
     expect(detail.body.events).toHaveLength(1);
+
+    // El link del aviso a la tienda usa el código (F14·9).
+    const byCode = await get(`/${detail.body.code}`).expect(200);
+    expect(byCode.body.id).toBe(id);
   });
 
   it('filtra por pago, entrega y día de Argentina', async () => {
