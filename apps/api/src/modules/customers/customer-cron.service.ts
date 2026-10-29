@@ -3,11 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { CustomerSuspensionReason } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import {
-  AR_TIMEZONE,
-  addBusinessMonths,
-  startOfBusinessMonth,
-} from '@/common/utils/date';
+import { AR_TIMEZONE, addBusinessMonths, startOfBusinessMonth } from '@/common/utils/date';
 
 export interface MonthlyCloseSummary {
   /** Mes que se cerró (primer día UTC). */

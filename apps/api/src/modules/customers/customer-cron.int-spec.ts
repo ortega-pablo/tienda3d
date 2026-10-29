@@ -65,9 +65,7 @@ describe('[int] Cierre mensual', () => {
       where: { customerId },
     });
     expect(commitment.isWholesaleSuspended).toBe(true);
-    expect(commitment.suspensionReason).toBe(
-      CustomerSuspensionReason.MONTHLY_COMMITMENT_MISSED,
-    );
+    expect(commitment.suspensionReason).toBe(CustomerSuspensionReason.MONTHLY_COMMITMENT_MISSED);
   });
 
   it('NO suspende al cliente que sí llegó', async () => {

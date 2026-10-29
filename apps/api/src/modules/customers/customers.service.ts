@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CustomerSuspensionReason, CustomerType, Prisma } from '@prisma/client';
+import { CustomerSource, CustomerSuspensionReason, CustomerType, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec, decOrNull } from '@/common/utils/decimal';
 import type { CustomerPricingProfile } from '../pricing/pricing.types';
@@ -13,6 +13,8 @@ export interface CustomerLite {
   id: string;
   name: string;
   type: CustomerType;
+  /** Cargado en el sistema o creado por una cuenta de la tienda online (F13·8). */
+  source: CustomerSource;
   email: string | null;
   phone: string | null;
   taxId: string | null;
@@ -225,7 +227,9 @@ export class CustomersService {
     }
 
     const minTierQty =
-      commitment && !commitment.isWholesaleSuspended ? commitment.minTierQty ?? undefined : undefined;
+      commitment && !commitment.isWholesaleSuspended
+        ? (commitment.minTierQty ?? undefined)
+        : undefined;
 
     return {
       skipChannelCommission: customer.skipChannelCommission,
@@ -288,6 +292,7 @@ export class CustomersService {
     id: string;
     name: string;
     type: CustomerType;
+    source: CustomerSource;
     email: string | null;
     phone: string | null;
     taxId: string | null;
@@ -302,6 +307,7 @@ export class CustomersService {
       id: c.id,
       name: c.name,
       type: c.type,
+      source: c.source,
       email: c.email,
       phone: c.phone,
       taxId: c.taxId,
@@ -444,10 +450,7 @@ export class CustomersWriteService {
     // y a CONSIGNMENT (solo on/off por categoría — los campos wholesale se
     // ignoran). STANDARD es walk-in y SPECIAL filtra por productos, no por
     // categorías.
-    if (
-      customer.type !== CustomerType.WHOLESALE &&
-      customer.type !== CustomerType.CONSIGNMENT
-    ) {
+    if (customer.type !== CustomerType.WHOLESALE && customer.type !== CustomerType.CONSIGNMENT) {
       throw new BadRequestException(
         'Las categorías habilitadas solo aplican a clientes WHOLESALE o CONSIGNMENT',
       );
@@ -466,8 +469,8 @@ export class CustomersWriteService {
     // Para CONSIGNMENT los campos wholesale-only siempre van a null —
     // garantía server-side aunque el frontend los envíe por error.
     const isWholesale = customer.type === CustomerType.WHOLESALE;
-    const minTierQty = isWholesale ? input.minTierQty ?? null : null;
-    const monthlyCommitmentQty = isWholesale ? input.monthlyCommitmentQty ?? null : null;
+    const minTierQty = isWholesale ? (input.minTierQty ?? null) : null;
+    const monthlyCommitmentQty = isWholesale ? (input.monthlyCommitmentQty ?? null) : null;
 
     const row = await this.prisma.customerCategoryCommitment.upsert({
       where: { customerId_categoryId: { customerId, categoryId: input.categoryId } },
@@ -554,9 +557,7 @@ export class CustomersWriteService {
         notes: input.notes ?? null,
       },
       update: {
-        ...(input.customMarkupPct !== undefined
-          ? { customMarkupPct: input.customMarkupPct }
-          : {}),
+        ...(input.customMarkupPct !== undefined ? { customMarkupPct: input.customMarkupPct } : {}),
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
       },
     });

@@ -59,10 +59,7 @@ export class CustomerPricingService {
    * categoría — sigue funcionando porque el commitment vive en
    * `CustomerCategoryCommitment.categoryId`, no en producto.
    */
-  async forCustomerProduct(
-    customerId: string,
-    productId: string,
-  ): Promise<ProductPricesResponse> {
+  async forCustomerProduct(customerId: string, productId: string): Promise<ProductPricesResponse> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: { id: true, name: true, categoryId: true },
@@ -93,9 +90,7 @@ export class CustomerPricingService {
     // Cost recombinado según flags de fabricación del cliente.
     const costInputs = this.pricing.applyCustomerCostAdjustments(cost, profile);
 
-    const sorted = [...productChannels].sort(
-      (a, b) => a.channel.sortOrder - b.channel.sortOrder,
-    );
+    const sorted = [...productChannels].sort((a, b) => a.channel.sortOrder - b.channel.sortOrder);
 
     const blocks = await Promise.all(
       sorted
@@ -111,10 +106,7 @@ export class CustomerPricingService {
           };
 
           // Tiers de la categoría para este canal (con herencia padre).
-          const tiersResolution = await this.categoryTiers.list(
-            product.categoryId,
-            pc.channelId,
-          );
+          const tiersResolution = await this.categoryTiers.list(product.categoryId, pc.channelId);
 
           // Tier piso del cliente: fusionamos las tiers por debajo del piso
           // con la tier que CONTIENE el piso. Mismo algoritmo de antes, ahora
@@ -145,8 +137,7 @@ export class CustomerPricingService {
           }));
 
           const needsConfig =
-            (base?.missingCommission ?? false) ||
-            tierLines.some((t) => t.line.missingCommission);
+            (base?.missingCommission ?? false) || tierLines.some((t) => t.line.missingCommission);
 
           return {
             channelId: pc.channelId,

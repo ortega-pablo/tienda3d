@@ -7,13 +7,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -125,15 +119,15 @@ export function CustomerSpecialProducts({
       <CardHeader>
         <CardTitle>Productos asignados (especial)</CardTitle>
         <CardDescription>
-          Solo estos productos van a estar disponibles para este cliente. Opcionalmente podés
-          fijar un markup% específico que pisa el del producto y al de las tiers.
+          Solo estos productos van a estar disponibles para este cliente. Opcionalmente podés fijar
+          un markup% específico que pisa el del producto y al de las tiers.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {customer.productOverrides.length === 0 && (
           <p className="rounded-md border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-            Sin productos asignados todavía. El cliente no podrá cotizar nada hasta que le
-            asignes al menos uno.
+            Sin productos asignados todavía. El cliente no podrá cotizar nada hasta que le asignes
+            al menos uno.
           </p>
         )}
 

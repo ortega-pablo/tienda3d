@@ -5,13 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 
 interface QuoteRow {
@@ -184,7 +178,9 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
                       </td>
                       <td className="py-2 pr-4">{q.itemCount}</td>
                       <td className="py-2 pr-4">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${STATUS_COLOR[q.status]}`}>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs ${STATUS_COLOR[q.status]}`}
+                        >
                           {STATUS_LABEL[q.status]}
                         </span>
                       </td>
@@ -212,8 +208,8 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
           <div className="space-y-3">
             {volumeMatrix.months.length === 0 ? (
               <p className="rounded-md border bg-muted/20 p-4 text-center text-sm text-muted-foreground">
-                Sin volúmenes registrados todavía. Cuando se acepten cotizaciones para este
-                cliente, las cantidades se imputan acá.
+                Sin volúmenes registrados todavía. Cuando se acepten cotizaciones para este cliente,
+                las cantidades se imputan acá.
               </p>
             ) : (
               <table className="w-full text-sm">
@@ -233,15 +229,20 @@ export function CustomerHistory({ customerId }: { customerId: string }) {
                       <td className="py-2 pr-4 font-medium">{catName}</td>
                       {volumeMatrix.months.map((m) => {
                         const cell = volumeMatrix.cells.get(`${catId}:${m}`);
-                        if (!cell) return <td key={m} className="py-2 pr-4 text-muted-foreground">—</td>;
-                        const fulfilled = cell.committedQty == null
-                          ? null
-                          : cell.unitsSold >= cell.committedQty;
-                        const className = fulfilled === null
-                          ? 'text-muted-foreground'
-                          : fulfilled
-                            ? 'text-emerald-700 dark:text-emerald-300'
-                            : 'text-destructive';
+                        if (!cell)
+                          return (
+                            <td key={m} className="py-2 pr-4 text-muted-foreground">
+                              —
+                            </td>
+                          );
+                        const fulfilled =
+                          cell.committedQty == null ? null : cell.unitsSold >= cell.committedQty;
+                        const className =
+                          fulfilled === null
+                            ? 'text-muted-foreground'
+                            : fulfilled
+                              ? 'text-emerald-700 dark:text-emerald-300'
+                              : 'text-destructive';
                         return (
                           <td key={m} className={`py-2 pr-4 font-mono ${className}`}>
                             {formatNumber(cell.unitsSold, 0)}

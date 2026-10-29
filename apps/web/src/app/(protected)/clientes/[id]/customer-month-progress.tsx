@@ -5,13 +5,7 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
 import { formatDate, formatNumber } from '@/lib/format';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import type { CustomerWithRelations } from '../types';
 
@@ -41,9 +35,7 @@ export function CustomerMonthProgress({ customer }: { customer: CustomerWithRela
 
   // Solo mostramos commitments que tienen monthlyCommitmentQty (sino no hay
   // nada que trackear).
-  const tracked = customer.categoryCommitments.filter(
-    (c) => c.monthlyCommitmentQty != null,
-  );
+  const tracked = customer.categoryCommitments.filter((c) => c.monthlyCommitmentQty != null);
   if (tracked.length === 0) return null;
 
   // Identificamos el "mes en curso" como el monthStart más reciente que
@@ -57,8 +49,7 @@ export function CustomerMonthProgress({ customer }: { customer: CustomerWithRela
     if (!volumes) return 0;
     const match = volumes.find(
       (v) =>
-        v.categoryId === categoryId &&
-        new Date(v.monthStart).getTime() === currentMonth.getTime(),
+        v.categoryId === categoryId && new Date(v.monthStart).getTime() === currentMonth.getTime(),
     );
     return match?.unitsSold ?? 0;
   };
@@ -68,8 +59,8 @@ export function CustomerMonthProgress({ customer }: { customer: CustomerWithRela
       <CardHeader>
         <CardTitle>Compromisos del mes</CardTitle>
         <CardDescription>
-          {formatDate(now, { month: 'long', year: 'numeric' })} ·{' '}
-          {daysRemaining} día{daysRemaining === 1 ? '' : 's'} restantes en el mes.
+          {formatDate(now, { month: 'long', year: 'numeric' })} · {daysRemaining} día
+          {daysRemaining === 1 ? '' : 's'} restantes en el mes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

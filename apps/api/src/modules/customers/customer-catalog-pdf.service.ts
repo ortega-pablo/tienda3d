@@ -60,10 +60,7 @@ export interface CatalogPdfOptions {
 
 @Injectable()
 export class CustomerCatalogPdfService {
-  async render(
-    catalog: CustomerCatalog,
-    options: CatalogPdfOptions = {},
-  ): Promise<Buffer> {
+  async render(catalog: CustomerCatalog, options: CatalogPdfOptions = {}): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       const doc = new PDFDocument({ size: 'A4', margin: 40 });
       const chunks: Buffer[] = [];
@@ -151,8 +148,7 @@ export class CustomerCatalogPdfService {
     const tiersCount = product.tiers.length > 0 ? product.tiers.length : 1;
     // Estimación de altura: título (14) + sku (10) + desc (14 si existe) +
     // header tabla (16) + tiers × 14 + padding (10).
-    const estHeight =
-      14 + 10 + (product.description ? 14 : 0) + 16 + tiersCount * 14 + 10;
+    const estHeight = 14 + 10 + (product.description ? 14 : 0) + 16 + tiersCount * 14 + 10;
     this.ensureSpace(doc, estHeight);
 
     // Título + SKU + descripción (todos con X = PAGE_LEFT + padding, sin
@@ -186,30 +182,18 @@ export class CustomerCatalogPdfService {
       doc
         .fontSize(9)
         .fillColor('#94a3b8')
-        .text(
-          'Sin precio configurado para este canal.',
-          PAGE_LEFT + CARD_PADDING,
-          doc.y,
-        );
+        .text('Sin precio configurado para este canal.', PAGE_LEFT + CARD_PADDING, doc.y);
     } else if (product.tiers.length === 0 && product.basePrice != null) {
       doc
         .fontSize(10)
         .fillColor('#0f172a')
-        .text(
-          `Precio: ${MONEY.format(product.basePrice)}`,
-          PAGE_LEFT + CARD_PADDING,
-          doc.y,
-        );
+        .text(`Precio: ${MONEY.format(product.basePrice)}`, PAGE_LEFT + CARD_PADDING, doc.y);
     } else {
       this.renderTiersTable(doc, product, columns, showMargins);
     }
 
     doc.moveDown(0.3);
-    doc
-      .moveTo(PAGE_LEFT, doc.y)
-      .lineTo(PAGE_RIGHT, doc.y)
-      .strokeColor('#e2e8f0')
-      .stroke();
+    doc.moveTo(PAGE_LEFT, doc.y).lineTo(PAGE_RIGHT, doc.y).strokeColor('#e2e8f0').stroke();
     doc.moveDown(0.4);
   }
 
@@ -241,11 +225,7 @@ export class CustomerCatalogPdfService {
     doc.y = headerY + 12;
 
     // Línea fina debajo del header.
-    doc
-      .moveTo(columns.qtyX, doc.y)
-      .lineTo(columns.endX, doc.y)
-      .strokeColor('#e2e8f0')
-      .stroke();
+    doc.moveTo(columns.qtyX, doc.y).lineTo(columns.endX, doc.y).strokeColor('#e2e8f0').stroke();
     doc.y += 2;
 
     // Filas
