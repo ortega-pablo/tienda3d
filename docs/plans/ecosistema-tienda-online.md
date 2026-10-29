@@ -1386,6 +1386,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
     - Reenvío limitado a 3 por hora.
     - El registro no revela si el email ya existe ("Si el email no estaba registrado, te mandamos un link").
   - Cierra cuando: e2e de registro → mail en Mailpit → verificación.
+  - Hecho así: `src/server/accounts/service.ts` crea la cuenta (scrypt, aceptación de términos con fecha) y manda el link de verificación (`/mi-cuenta/verificar/?token=…`, 24 h, un uso, la base guarda el hash). La ruta verifica y redirige a `/mi-cuenta/email-confirmado/` con el resultado (confirmado, ya usado, vencido o inválido; en los dos últimos se pide otro link). Hasta 3 links por hora por cuenta, más un límite por IP. La pantalla dice siempre "Si el email no estaba registrado, te mandamos un link": si el email ya tenía cuenta, su dueño recibe otro link (si no la verificó) o un mail con cómo ingresar o recuperar la clave. Se quitó la redirección heredada de `/mi-cuenta/*`. e2e en el ecosistema (escritorio y celular), leyendo los mails de Mailpit por su API: registro → mail → confirmación, el mismo link otra vez da "ya se usó", un segundo registro con el mismo email llega como "Ya tenés una cuenta", y los datos inválidos no crean nada.
 - [ ] **F13·3 [sf] El cliente ingresa a su cuenta de forma segura**
   - Para qué: proteger las cuentas de intentos de adivinar contraseñas.
   - Qué hacer:
