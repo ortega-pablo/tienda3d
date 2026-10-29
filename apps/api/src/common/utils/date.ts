@@ -13,6 +13,11 @@ export function yearInArgentina(d: Date): number {
   return new Date(d.getTime() - AR_OFFSET_MS).getUTCFullYear();
 }
 
+/** El instante en que empieza un día de Argentina (`AAAA-MM-DD`), en UTC. */
+export function startOfDayInArgentina(day: string): Date {
+  return new Date(`${day}T00:00:00-03:00`);
+}
+
 /** Fecha (dd/mm/aaaa) en es-AR, SIEMPRE en zona horaria de Argentina. */
 export function formatDateAr(d: Date): string {
   return d.toLocaleDateString('es-AR', { timeZone: AR_TIMEZONE });

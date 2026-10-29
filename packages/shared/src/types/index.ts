@@ -16,3 +16,4 @@ export interface AuthenticatedUser {
   permissions: string[];
 }
 export * from './web-catalog';
+export * from './web-orders';

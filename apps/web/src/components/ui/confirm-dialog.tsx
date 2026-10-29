@@ -72,9 +72,7 @@ export function ConfirmDialog({
               <h2 id="confirm-title" className="text-lg font-semibold">
                 {title}
               </h2>
-              {description && (
-                <div className="text-sm text-muted-foreground">{description}</div>
-              )}
+              {description && <div className="text-sm text-muted-foreground">{description}</div>}
             </div>
           </div>
 

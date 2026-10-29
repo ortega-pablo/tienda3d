@@ -15,6 +15,7 @@ import {
   Package,
   PackageSearch,
   Plug,
+  Receipt,
   ShieldCheck,
   ShoppingBag,
   Store,
@@ -187,6 +188,7 @@ export const NAVIGATION: NavGroup[] = [
   {
     // Solo el rol admin tiene ecommerce:*. Cada sección suma su entrada al
     // habilitarse (publicaciones, pedidos web, solicitudes, categorías, ajustes).
+    // "Pedidos web" muestra cuántos esperan al taller (ver ProtectedLayout).
     label: 'Tienda online',
     items: [
       {
@@ -195,6 +197,12 @@ export const NAVIGATION: NavGroup[] = [
         icon: Store,
         permissions: ['ecommerce:read'],
         exact: true,
+      },
+      {
+        label: 'Pedidos web',
+        href: '/tienda-online/pedidos',
+        icon: Receipt,
+        permissions: ['ecommerce:orders'],
       },
       {
         label: 'Publicaciones',

@@ -5,13 +5,7 @@ import type { AuthenticatedUser } from '@/lib/auth';
 
 const UserContext = createContext<AuthenticatedUser | null>(null);
 
-export function UserProvider({
-  user,
-  children,
-}: {
-  user: AuthenticatedUser;
-  children: ReactNode;
-}) {
+export function UserProvider({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {
   return <UserContext.Provider value={user}>{children}</UserContext.Provider>;
 }
 
