@@ -32,6 +32,7 @@ import {
 } from './domain/order-flow';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const ORDER_CODE = /^W-\d{4}-\d{4,}$/;
 
 const SUMMARY_SELECT = {
   id: true,
@@ -102,9 +103,10 @@ export class WebOrdersService {
     return this.prisma.webOrder.count({ where: ATTENTION_WHERE });
   }
 
-  async get(id: string): Promise<WebOrderDetailDto> {
+  /** Por id o por código (`W-2026-0013`): el link del aviso de pedido nuevo usa el código (F14·9). */
+  async get(idOrCode: string): Promise<WebOrderDetailDto> {
     const order = await this.prisma.webOrder.findUnique({
-      where: { id },
+      where: ORDER_CODE.test(idOrCode) ? { code: idOrCode } : { id: idOrCode },
       select: {
         ...SUMMARY_SELECT,
         shippingStreet: true,
