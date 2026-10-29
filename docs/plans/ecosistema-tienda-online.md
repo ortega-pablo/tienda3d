@@ -1473,6 +1473,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
   - Para qué: poder vender antes de conectar Mercado Pago (D7).
   - Qué hacer: la transferencia muestra las instrucciones de los ajustes y deja el pedido en `AWAITING_TRANSFER`. El pago simulado solo existe en local (ya validado en `env.ts`).
   - Cierra cuando: e2e completa con transferencia en el ecosistema.
+  - Hecho así: el checkout ya cubría la transferencia desde F14·1/F14·3: se ofrece solo con `bankTransferEnabled` en los ajustes, el pedido nace en `AWAITING_TRANSFER`, la página del pedido muestra las instrucciones de los ajustes y "Esperando tu transferencia", y sale el mail con los datos para transferir. El pago simulado lo rechaza `env.ts` fuera de local. Lo nuevo es la e2e `tests/e2e/orders.spec.ts` [sf], que en el ecosistema registra un cliente, compra la Trapecio Marrón 280 con retiro y transferencia, y comprueba el pedido, el alias de los ajustes, el mail al cliente, el aviso a la tienda y la compra en Mi cuenta (escritorio y móvil). Requiere en local la transferencia habilitada en _Tienda online → Ajustes_, con instrucciones (`Alias: TIENDA.PLASTIK.PRUEBA`) y email de avisos (`tienda.local@example.com`).
 - [ ] **F14·5 [t3d] El admin gestiona los pedidos web desde el sistema**
   - Para qué: confirmar pagos, preparar, enviar y cancelar desde un solo lugar.
   - Qué hacer:
