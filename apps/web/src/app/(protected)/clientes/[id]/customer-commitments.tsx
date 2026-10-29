@@ -8,13 +8,7 @@ import { api } from '@/lib/api-client';
 import { formatDate } from '@/lib/format';
 import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -188,9 +182,7 @@ export function CustomerCommitments({
   // wholesale-only (piso de tier, compromiso mensual, suspensión) no se
   // muestran ni se envían. Mismo componente, render condicional.
   const isWholesale = customer.type === 'WHOLESALE';
-  const cardTitle = isWholesale
-    ? 'Categorías asociadas (mayorista)'
-    : 'Categorías habilitadas';
+  const cardTitle = isWholesale ? 'Categorías asociadas (mayorista)' : 'Categorías habilitadas';
   const cardDescription = isWholesale
     ? 'Cada categoría tiene su propio piso de tier y compromiso mensual. La suspensión es granular: si el cliente no cumple en una, se suspende solo esa.'
     : 'Categorías del catálogo a las que este cliente tiene acceso. Sin categorías habilitadas, no ve productos.';
@@ -233,9 +225,7 @@ export function CustomerCommitments({
                     c.isWholesaleSuspended ? (
                       <p className="text-xs text-destructive">
                         Mayoreo suspendido
-                        {c.suspendedAt
-                          ? ` desde ${formatDate(c.suspendedAt)}`
-                          : ''}
+                        {c.suspendedAt ? ` desde ${formatDate(c.suspendedAt)}` : ''}
                         {c.suspensionReason ? ` (${c.suspensionReason})` : ''}
                       </p>
                     ) : (
@@ -291,9 +281,7 @@ export function CustomerCommitments({
                         type="number"
                         min={1}
                         value={editDraft.minTierQty}
-                        onChange={(e) =>
-                          setEditDraft({ ...editDraft, minTierQty: e.target.value })
-                        }
+                        onChange={(e) => setEditDraft({ ...editDraft, minTierQty: e.target.value })}
                         placeholder="opcional"
                       />
                     </div>
@@ -345,12 +333,8 @@ export function CustomerCommitments({
             <p className="mb-2 text-sm font-medium">
               {isWholesale ? 'Asociar categoría' : 'Habilitar categoría'}
             </p>
-            <div
-              className={`grid gap-2 ${isWholesale ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}
-            >
-              <div
-                className={isWholesale ? 'sm:col-span-2 space-y-1.5' : 'space-y-1.5'}
-              >
+            <div className={`grid gap-2 ${isWholesale ? 'sm:grid-cols-4' : 'sm:grid-cols-2'}`}>
+              <div className={isWholesale ? 'sm:col-span-2 space-y-1.5' : 'space-y-1.5'}>
                 <Label className="text-xs">Categoría</Label>
                 <select
                   value={draft.categoryId}
@@ -382,9 +366,7 @@ export function CustomerCommitments({
                       type="number"
                       min={1}
                       value={draft.monthlyCommitmentQty}
-                      onChange={(e) =>
-                        setDraft({ ...draft, monthlyCommitmentQty: e.target.value })
-                      }
+                      onChange={(e) => setDraft({ ...draft, monthlyCommitmentQty: e.target.value })}
                       placeholder="opcional"
                     />
                   </div>

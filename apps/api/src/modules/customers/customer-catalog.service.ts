@@ -97,9 +97,7 @@ export class CustomerCatalogService {
       try {
         const prices = await this.customerPricing.forCustomerProduct(customerId, p.id);
         const candidate =
-          prices.channels.find(
-            (c) => ventaDirecta && c.channelId === ventaDirecta.id,
-          ) ??
+          prices.channels.find((c) => ventaDirecta && c.channelId === ventaDirecta.id) ??
           prices.channels.find((c) => !c.needsConfig && (c.base != null || c.tiers.length > 0)) ??
           null;
 

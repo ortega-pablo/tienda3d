@@ -4,14 +4,15 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { TYPE_LABEL, type CustomerLite, type CustomerType } from './types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TYPE_LABEL, type CustomerLite, type CustomerSource, type CustomerType } from './types';
+
+/** Origen (F13·8): los compradores de la tienda online entran solos como "Web". */
+const SOURCE_OPTIONS: { key: CustomerSource | 'ALL'; label: string }[] = [
+  { key: 'ALL', label: 'Todo origen' },
+  { key: 'WEB', label: 'Web' },
+  { key: 'SYSTEM', label: 'Sistema' },
+];
 
 const FILTER_OPTIONS: Array<{ key: CustomerType | 'ALL'; label: string }> = [
   { key: 'ALL', label: 'Todos' },
@@ -28,19 +29,21 @@ export function CustomersList({
   canWrite: boolean;
 }) {
   const [filter, setFilter] = useState<CustomerType | 'ALL'>('ALL');
+  const [source, setSource] = useState<CustomerSource | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return customers.filter((c) => {
       if (filter !== 'ALL' && c.type !== filter) return false;
+      if (source !== 'ALL' && c.source !== source) return false;
       if (q) {
         const hay = `${c.name} ${c.email ?? ''} ${c.taxId ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [customers, filter, search]);
+  }, [customers, filter, source, search]);
 
   return (
     <div className="space-y-6">
@@ -48,8 +51,8 @@ export function CustomersList({
         <div>
           <h1 className="text-3xl font-bold">Clientes</h1>
           <p className="text-muted-foreground">
-            Mayoristas, consignación y especiales. Los compradores ocasionales (estándar) no se
-            registran acá: van como walk-in en la cotización.
+            Mayoristas, consignación y especiales, más los compradores de la tienda online (origen
+            web), que entran solos. Los ocasionales del taller van como walk-in en la cotización.
           </p>
         </div>
         {canWrite && (
@@ -78,6 +81,21 @@ export function CustomersList({
             </button>
           ))}
         </div>
+        <div className="flex gap-1 rounded-md border bg-muted/30 p-1 text-sm" aria-label="Origen">
+          {SOURCE_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setSource(opt.key)}
+              className={
+                source === opt.key
+                  ? 'rounded px-3 py-1.5 font-medium bg-secondary text-secondary-foreground'
+                  : 'rounded px-3 py-1.5 text-muted-foreground hover:bg-accent'
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -89,7 +107,9 @@ export function CustomersList({
       <Card>
         <CardHeader>
           <CardTitle>{filtered.length} clientes</CardTitle>
-          <CardDescription>{filtered.length === customers.length ? 'Todos.' : 'Filtrados.'}</CardDescription>
+          <CardDescription>
+            {filtered.length === customers.length ? 'Todos.' : 'Filtrados.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -107,7 +127,14 @@ export function CustomersList({
               {filtered.map((c) => (
                 <tr key={c.id}>
                   <td className="py-3 pr-4">
-                    <div className="font-medium">{c.name}</div>
+                    <div className="font-medium">
+                      {c.name}
+                      {c.source === 'WEB' && (
+                        <span className="ml-2 inline-flex rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-normal text-sky-700 dark:text-sky-300">
+                          Web
+                        </span>
+                      )}
+                    </div>
                     {c.taxId && (
                       <div className="font-mono text-xs text-muted-foreground">{c.taxId}</div>
                     )}
@@ -115,9 +142,7 @@ export function CustomersList({
                   <td className="py-3 pr-4">{TYPE_LABEL[c.type]}</td>
                   <td className="py-3 pr-4 text-muted-foreground">
                     {c.email ?? '—'}
-                    {c.phone && (
-                      <div className="text-xs">{c.phone}</div>
-                    )}
+                    {c.phone && <div className="text-xs">{c.phone}</div>}
                   </td>
                   <td className="py-3 pr-4">
                     {c.hasPortalAccess ? (

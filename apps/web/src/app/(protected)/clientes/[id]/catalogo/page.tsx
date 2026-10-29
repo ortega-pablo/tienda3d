@@ -3,11 +3,7 @@ import { api, ApiError } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
 import { CatalogView, type Catalog } from './catalog-view';
 
-export default async function CustomerCatalogPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function CustomerCatalogPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission('customer:read');
   const { id } = await params;
 

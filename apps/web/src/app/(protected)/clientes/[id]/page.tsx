@@ -17,11 +17,7 @@ import {
   type ProductSummaryDto,
 } from '../types';
 
-export default async function CustomerDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission('customer:read');
   const { id } = await params;
 
@@ -53,9 +49,7 @@ export default async function CustomerDetailPage({
               </span>
             )}
           </div>
-          {customer.email && (
-            <p className="text-muted-foreground">{customer.email}</p>
-          )}
+          {customer.email && <p className="text-muted-foreground">{customer.email}</p>}
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline">

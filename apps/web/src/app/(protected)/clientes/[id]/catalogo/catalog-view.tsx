@@ -126,13 +126,7 @@ export function CatalogView({ catalog }: { catalog: Catalog }) {
   );
 }
 
-function ProductRow({
-  product,
-  showMargins,
-}: {
-  product: CatalogProduct;
-  showMargins: boolean;
-}) {
+function ProductRow({ product, showMargins }: { product: CatalogProduct; showMargins: boolean }) {
   return (
     <div className="rounded-md border p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -179,9 +173,7 @@ function ProductRow({
                 {showMargins && (
                   <td className="py-1 pr-4 font-mono">{formatNumber(t.markupPct)}%</td>
                 )}
-                <td className="py-1 pr-4 font-mono font-semibold">
-                  {formatMoney(t.finalPrice)}
-                </td>
+                <td className="py-1 pr-4 font-mono font-semibold">{formatMoney(t.finalPrice)}</td>
                 {showMargins && (
                   <td className="py-1 pr-4 font-mono text-emerald-700 dark:text-emerald-300">
                     {formatMoney(t.profit)}

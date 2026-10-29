@@ -7,13 +7,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -141,12 +135,13 @@ export function CustomerEditor({
           skipRegime: form.skipRegime,
           skipReinvestment: form.skipReinvestment,
         };
-        const result = mode === 'create'
-          ? await api<{ id: string }>('/customers', { method: 'POST', body })
-          : await api<{ id: string }>(`/customers/${customer!.id}`, {
-              method: 'PATCH',
-              body,
-            });
+        const result =
+          mode === 'create'
+            ? await api<{ id: string }>('/customers', { method: 'POST', body })
+            : await api<{ id: string }>(`/customers/${customer!.id}`, {
+                method: 'PATCH',
+                body,
+              });
         if (mode === 'create') router.replace(`/clientes/${result.id}`);
         else router.refresh();
       },
@@ -278,8 +273,8 @@ export function CustomerEditor({
               onChange={(e) => setForm({ ...form, skipReinvestment: e.target.checked })}
             />
             <p className="text-xs text-muted-foreground sm:col-span-2">
-              Ajustes que el motor aplica automáticamente al cotizar para este cliente. El
-              preset (tipo) sugiere defaults; podés sobrescribir cualquier flag manualmente.
+              Ajustes que el motor aplica automáticamente al cotizar para este cliente. El preset
+              (tipo) sugiere defaults; podés sobrescribir cualquier flag manualmente.
             </p>
           </div>
 

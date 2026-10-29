@@ -9,8 +9,8 @@ export default async function NewCustomerPage() {
       <header>
         <h1 className="text-3xl font-bold">Nuevo cliente</h1>
         <p className="text-muted-foreground">
-          Cargá los datos básicos. Las categorías asociadas y los productos asignados se
-          configuran después de crear el cliente.
+          Cargá los datos básicos. Las categorías asociadas y los productos asignados se configuran
+          después de crear el cliente.
         </p>
       </header>
       <CustomerEditor mode="create" />

@@ -1,9 +1,13 @@
 export type CustomerType = 'STANDARD' | 'WHOLESALE' | 'CONSIGNMENT' | 'SPECIAL';
 
+export type CustomerSource = 'SYSTEM' | 'WEB';
+
 export interface CustomerLite {
   id: string;
   name: string;
   type: CustomerType;
+  /** Cargado en el sistema o creado por una cuenta de la tienda online. */
+  source: CustomerSource;
   email: string | null;
   phone: string | null;
   taxId: string | null;

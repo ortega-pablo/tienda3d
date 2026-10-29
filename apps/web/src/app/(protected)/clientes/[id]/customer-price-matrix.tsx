@@ -5,13 +5,7 @@ import { Coins, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
 import { formatMoney, formatNumber } from '@/lib/format';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import type { CustomerWithRelations, ProductSummaryDto } from '../types';
 
@@ -118,9 +112,7 @@ export function CustomerPriceMatrix({
               onChange={(e) => setProductId(e.target.value)}
               className="flex h-9 w-72 rounded-md border border-input bg-background px-2 py-1 text-sm"
             >
-              {eligibleProducts.length === 0 && (
-                <option value="">Sin productos elegibles</option>
-              )}
+              {eligibleProducts.length === 0 && <option value="">Sin productos elegibles</option>}
               {eligibleProducts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -187,7 +179,12 @@ export function CustomerPriceMatrix({
                   const rows: React.ReactElement[] = [];
                   if (c.base) {
                     rows.push(
-                      <PriceRow key={`${c.channelId}-base`} channel={c.channelName} tierLabel="Base" line={c.base} />,
+                      <PriceRow
+                        key={`${c.channelId}-base`}
+                        channel={c.channelName}
+                        tierLabel="Base"
+                        line={c.base}
+                      />,
                     );
                   }
                   for (const t of c.tiers) {

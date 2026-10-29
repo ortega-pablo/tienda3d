@@ -708,6 +708,12 @@ model AuditLog {
 // strings libres en Quote.customerName. Acá viven solo los clientes con
 // trato persistente: WHOLESALE, CONSIGNMENT, SPECIAL.
 
+/// De dónde viene el cliente: cargado en el sistema o creado por una cuenta de la tienda online (D4).
+enum CustomerSource {
+  SYSTEM
+  WEB
+}
+
 enum CustomerType {
   STANDARD // existe en el enum por flexibilidad pero no se usa en MVP
   WHOLESALE
@@ -729,6 +735,11 @@ model Customer {
   taxId    String?
   notes    String?
   isActive Boolean      @default(true)
+
+  /// Tienda online (F13·8): `WEB` si lo creó una cuenta del sitio; `externalId`
+  /// es el id de esa cuenta (también en un cliente del sistema vinculado por email).
+  source     CustomerSource @default(SYSTEM)
+  externalId String?        @unique
 
   // Pricing flags. El preset (type) sugiere defaults al crear desde la UI;
   // los flags son la fuente de verdad y son sobrescribibles.
@@ -758,6 +769,7 @@ model Customer {
   quotes              Quote[]
 
   @@index([type, isActive])
+  @@index([source])
   @@map("customers")
 }
 
