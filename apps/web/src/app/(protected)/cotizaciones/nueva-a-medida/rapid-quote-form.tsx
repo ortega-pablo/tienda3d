@@ -91,6 +91,16 @@ export interface GroupDraft {
  * (re-cotizar). Lo arma el server-side desde el `QuoteDto` (ver
  * `quote-prefill.ts`). Ausente = form vacío / defaults de siempre.
  */
+/** La solicitud de personalización que se está cotizando (F15·3). */
+export interface QuoteFromRequest {
+  id: string;
+  customerId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  idea: string;
+}
+
 export interface RapidQuoteInitialState {
   customerId: string;
   customerName: string;
@@ -188,6 +198,7 @@ export function RapidQuoteForm({
   keychainDefaults,
   initialState,
   prefillNotice,
+  fromRequest,
 }: {
   filaments: FilamentLite[];
   nonFilaments: MaterialLite[];
@@ -214,9 +225,16 @@ export function RapidQuoteForm({
    * form arranca con el placeholder genérico ("Pieza" vacía).
    */
   keychainDefaults?: KeychainDefaultsLite;
+  /**
+   * Cotizar una solicitud de personalización de la tienda (F15·3): precarga el
+   * cliente y su idea, y al guardar la cotización queda vinculada.
+   */
+  fromRequest?: QuoteFromRequest;
 }) {
   const router = useRouter();
-  const [customerId, setCustomerId] = useState(initialState?.customerId ?? '');
+  const [customerId, setCustomerId] = useState(
+    initialState?.customerId ?? fromRequest?.customerId ?? '',
+  );
   const [customer, setCustomer] = useState(
     initialState
       ? {
@@ -225,7 +243,14 @@ export function RapidQuoteForm({
           phone: initialState.customerPhone,
           notes: initialState.customerNotes,
         }
-      : { name: '', email: '', phone: '', notes: '' },
+      : fromRequest
+        ? {
+            name: fromRequest.name,
+            email: fromRequest.email,
+            phone: fromRequest.phone ?? '',
+            notes: fromRequest.idea,
+          }
+        : { name: '', email: '', phone: '', notes: '' },
   );
   // Sin tildar = con factura = Venta Directa. Tildado = sin factura = Efectivo.
   const [withoutInvoice, setWithoutInvoice] = useState(initialState?.withoutInvoice ?? false);
@@ -275,8 +300,7 @@ export function RapidQuoteForm({
             keychainDefaults.piecePrintMinutes > 0
               ? String(keychainDefaults.piecePrintMinutes)
               : '',
-          filamentId:
-            keychainDefaults.pieceFilamentId ?? filaments[0]?.id ?? '',
+          filamentId: keychainDefaults.pieceFilamentId ?? filaments[0]?.id ?? '',
           groupId: DEFAULT_GROUP_ID,
           scope: 'BATCH',
         },
@@ -520,21 +544,12 @@ export function RapidQuoteForm({
     if (orphanPieces.length > 0 || orphanMaterials.length > 0) {
       const designForThis = designAssigned ? 0 : designTotal;
       items.push(
-        buildOne(
-          'Grupo Adicional',
-          1,
-          orphanPieces,
-          orphanMaterials,
-          '0',
-          '0',
-          designForThis,
-        ),
+        buildOne('Grupo Adicional', 1, orphanPieces, orphanMaterials, '0', '0', designForThis),
       );
     }
 
     return items;
   };
-
 
   const calc = async () => {
     setPreview('loading');
@@ -634,6 +649,7 @@ export function RapidQuoteForm({
           notes: notes || null,
           discount: Number(discount || '0'),
           items,
+          ...(fromRequest && { webQuoteRequestId: fromRequest.id }),
         },
       });
       toast.success(
@@ -770,9 +786,8 @@ export function RapidQuoteForm({
     pieces.some((p) => p.groupId === gid && p.filamentId && Number(p.grams || '0') > 0) ||
     materials.some((m) => m.groupId === gid && m.materialId);
   const orphanHasContent =
-    pieces.some(
-      (p) => !groupIds.has(p.groupId) && p.filamentId && Number(p.grams || '0') > 0,
-    ) || materials.some((m) => !groupIds.has(m.groupId) && m.materialId);
+    pieces.some((p) => !groupIds.has(p.groupId) && p.filamentId && Number(p.grams || '0') > 0) ||
+    materials.some((m) => !groupIds.has(m.groupId) && m.materialId);
   const groupsValid = hasMultipleGroups
     ? groups.every((g) => {
         if (!groupHasContent(g.id)) return true; // grupos vacíos se filtran al guardar
@@ -790,9 +805,8 @@ export function RapidQuoteForm({
       <div className="space-y-4 lg:col-span-2">
         {initialState && (
           <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-sm">
-            📋 Precargado desde otra cotización. Revisá los valores y editá lo que necesites
-            antes de guardar — se crea una <strong>cotización nueva</strong> con precios
-            recalculados.
+            📋 Precargado desde otra cotización. Revisá los valores y editá lo que necesites antes
+            de guardar — se crea una <strong>cotización nueva</strong> con precios recalculados.
             {prefillNotice && prefillNotice.length > 0 && (
               <ul className="mt-2 list-disc pl-5 text-xs text-destructive">
                 {prefillNotice.map((n, i) => (
@@ -989,9 +1003,7 @@ export function RapidQuoteForm({
                         <Input
                           type="number"
                           value={g.assemblyMinutes}
-                          onChange={(e) =>
-                            updateGroup(g.id, { assemblyMinutes: e.target.value })
-                          }
+                          onChange={(e) => updateGroup(g.id, { assemblyMinutes: e.target.value })}
                         />
                       </div>
                       <div className="sm:col-span-2">
@@ -999,9 +1011,7 @@ export function RapidQuoteForm({
                         <Input
                           type="number"
                           value={g.managementMinutes}
-                          onChange={(e) =>
-                            updateGroup(g.id, { managementMinutes: e.target.value })
-                          }
+                          onChange={(e) => updateGroup(g.id, { managementMinutes: e.target.value })}
                         />
                       </div>
                       <div className="flex items-end justify-end sm:col-span-2">
@@ -1020,8 +1030,8 @@ export function RapidQuoteForm({
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Las piezas e insumos huérfanos (asignados a un grupo que ya no existe) caen
-                  en un &ldquo;Grupo adicional&rdquo; automático al guardar.
+                  Las piezas e insumos huérfanos (asignados a un grupo que ya no existe) caen en un
+                  &ldquo;Grupo adicional&rdquo; automático al guardar.
                 </p>
               </div>
             )}
@@ -1052,8 +1062,8 @@ export function RapidQuoteForm({
                     <div>
                       <p className="text-sm font-medium">Piezas — producto individual</p>
                       <p className="text-xs text-muted-foreground">
-                        Piezas para imprimir 1 llavero. Base del precio para 1-4 unidades
-                        (opcional — si la dejás vacía, 1-4 usa la tanda ÷ {batchSize}).
+                        Piezas para imprimir 1 llavero. Base del precio para 1-4 unidades (opcional
+                        — si la dejás vacía, 1-4 usa la tanda ÷ {batchSize}).
                       </p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => addPiece('INDIVIDUAL')}>
@@ -1073,8 +1083,8 @@ export function RapidQuoteForm({
                     <div>
                       <p className="text-sm font-medium">Piezas — tanda (placa de {batchSize})</p>
                       <p className="text-xs text-muted-foreground">
-                        Piezas del mismo llavero dispuestas en una placa de {batchSize}. Base
-                        del precio para 5 o más (se divide por {batchSize}).
+                        Piezas del mismo llavero dispuestas en una placa de {batchSize}. Base del
+                        precio para 5 o más (se divide por {batchSize}).
                       </p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => addPiece('BATCH')}>
@@ -1215,8 +1225,8 @@ export function RapidQuoteForm({
             </div>
             {Number(designMinutes || '0') > 0 && (
               <p className="text-xs text-muted-foreground">
-                El cargo de diseño se suma una sola vez a la línea (no escala con la
-                cantidad). Tarifa configurable en Parámetros → &ldquo;Hora de diseño 3D&rdquo;.
+                El cargo de diseño se suma una sola vez a la línea (no escala con la cantidad).
+                Tarifa configurable en Parámetros → &ldquo;Hora de diseño 3D&rdquo;.
               </p>
             )}
           </CardContent>
@@ -1234,152 +1244,146 @@ export function RapidQuoteForm({
       </div>
 
       <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-      <Card>
-        <CardHeader>
-          <CardTitle>Precio</CardTitle>
-          <CardDescription>
-            {withoutInvoice ? 'Aplicado al canal Efectivo.' : 'Aplicado a Venta Directa.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {preview === null && (
-            <p className="text-muted-foreground">Click en &ldquo;Calcular precio&rdquo; para previsualizar.</p>
-          )}
-          {preview === 'loading' && <p className="text-muted-foreground">Calculando…</p>}
-          {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}
-          {preview && typeof preview === 'object' && (
-            <>
-              <PricingWarnings warnings={preview.warnings} className="mb-1" />
-              {groupPreviews && groupPreviews.length > 1 ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Desglose por grupo
-                  </p>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                        <th className="py-1 pr-2 font-medium">Grupo</th>
-                        <th className="py-1 pr-2 font-medium text-right">Cant.</th>
-                        <th className="py-1 pr-2 font-medium text-right">Unitario</th>
-                        <th className="py-1 pr-0 font-medium text-right">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {groupPreviews.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="py-1 pr-2">{row.description}</td>
-                          <td className="py-1 pr-2 text-right font-mono">{row.quantity}</td>
-                          <td className="py-1 pr-2 text-right font-mono">
-                            {formatMoney(row.preview.unitPrice)}
-                          </td>
-                          <td className="py-1 pr-0 text-right font-mono font-semibold">
-                            {formatMoney(row.preview.lineTotal)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <>
-                  <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
-                  {isKeychain && (
-                    <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
-                      {qtyNumber < 5
-                        ? 'Base individual (piezas para 1 unidad).'
-                        : `Base tanda: piezas de la placa ÷ ${batchSize}. Insumos y adicionales por unidad.`}
-                    </p>
-                  )}
-                  <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
-                  <div className="flex justify-between rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1">
-                    <span className="text-emerald-700 dark:text-emerald-300">
-                      Ganancia / unidad
-                    </span>
-                    <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">
-                      {formatMoney(preview.unitProfit)}
-                    </span>
-                  </div>
-                  <Row label="Cantidad" value={quantity} />
-                </>
-              )}
-              {preview.designSurcharge > 0 && (
-                <Row
-                  label="Cargo único de diseño"
-                  value={formatMoney(preview.designSurcharge)}
-                />
-              )}
-              <div className="flex justify-between border-t pt-2">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono">{formatMoney(preview.lineTotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Descuento</span>
-                <span className="font-mono">- {formatMoney(Number(discount || '0'))}</span>
-              </div>
-              <div className="flex justify-between border-t pt-2">
-                <span className="font-medium">Total</span>
-                <span className="font-mono font-semibold">{formatMoney(total)}</span>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {isKeychain && matrix != null && (
         <Card>
           <CardHeader>
-            <CardTitle>Precios por escala</CardTitle>
+            <CardTitle>Precio</CardTitle>
             <CardDescription>
-              Precio unitario y precio por placa ({batchSize} llaveros).
+              {withoutInvoice ? 'Aplicado al canal Efectivo.' : 'Aplicado a Venta Directa.'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {matrix === 'loading' && (
-              <p className="text-sm text-muted-foreground">Calculando…</p>
+          <CardContent className="space-y-2 text-sm">
+            {preview === null && (
+              <p className="text-muted-foreground">
+                Click en &ldquo;Calcular precio&rdquo; para previsualizar.
+              </p>
             )}
-            {matrix === 'error' && (
-              <p className="text-sm text-destructive">No se pudo cargar la matriz.</p>
-            )}
-            {Array.isArray(matrix) && (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left uppercase tracking-wider text-muted-foreground">
-                    <th className="py-1.5 pr-2 font-medium">Escala</th>
-                    <th className="py-1.5 pr-2 font-medium text-right">Precio unitario</th>
-                    <th className="py-1.5 pr-0 font-medium text-right">
-                      Placa × {batchSize}u
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {matrix.map((row) => {
-                    const isActive = activeKeychainTier?.id === row.tierId;
-                    // El primer tier vende por unidad (qty < batchSize), no
-                    // por placas. Para los demás mostramos el precio de una
-                    // placa completa de N unidades al markup de esa escala.
-                    const placaPrice =
-                      row.minQty < batchSize ? null : row.unitPrice * batchSize;
-                    return (
-                      <tr
-                        key={row.tierId}
-                        className={isActive ? 'bg-primary/10 font-medium' : ''}
-                      >
-                        <td className="py-1.5 pr-2 font-mono">{row.tierLabel}</td>
-                        <td className="py-1.5 pr-2 text-right font-mono">
-                          {formatMoney(row.unitPrice)}
-                        </td>
-                        <td className="py-1.5 pr-0 text-right font-mono font-semibold">
-                          {placaPrice == null ? '—' : formatMoney(placaPrice)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            {preview === 'loading' && <p className="text-muted-foreground">Calculando…</p>}
+            {preview === 'error' && <p className="text-destructive">No se pudo calcular.</p>}
+            {preview && typeof preview === 'object' && (
+              <>
+                <PricingWarnings warnings={preview.warnings} className="mb-1" />
+                {groupPreviews && groupPreviews.length > 1 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Desglose por grupo
+                    </p>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <th className="py-1 pr-2 font-medium">Grupo</th>
+                          <th className="py-1 pr-2 font-medium text-right">Cant.</th>
+                          <th className="py-1 pr-2 font-medium text-right">Unitario</th>
+                          <th className="py-1 pr-0 font-medium text-right">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {groupPreviews.map((row, idx) => (
+                          <tr key={idx}>
+                            <td className="py-1 pr-2">{row.description}</td>
+                            <td className="py-1 pr-2 text-right font-mono">{row.quantity}</td>
+                            <td className="py-1 pr-2 text-right font-mono">
+                              {formatMoney(row.preview.unitPrice)}
+                            </td>
+                            <td className="py-1 pr-0 text-right font-mono font-semibold">
+                              {formatMoney(row.preview.lineTotal)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <>
+                    <Row label="Costo unitario" value={formatMoney(preview.unitCost)} />
+                    {isKeychain && (
+                      <p className="rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                        {qtyNumber < 5
+                          ? 'Base individual (piezas para 1 unidad).'
+                          : `Base tanda: piezas de la placa ÷ ${batchSize}. Insumos y adicionales por unidad.`}
+                      </p>
+                    )}
+                    <Row label="Precio unitario" value={formatMoney(preview.unitPrice)} />
+                    <div className="flex justify-between rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1">
+                      <span className="text-emerald-700 dark:text-emerald-300">
+                        Ganancia / unidad
+                      </span>
+                      <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">
+                        {formatMoney(preview.unitProfit)}
+                      </span>
+                    </div>
+                    <Row label="Cantidad" value={quantity} />
+                  </>
+                )}
+                {preview.designSurcharge > 0 && (
+                  <Row label="Cargo único de diseño" value={formatMoney(preview.designSurcharge)} />
+                )}
+                <div className="flex justify-between border-t pt-2">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-mono">{formatMoney(preview.lineTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Descuento</span>
+                  <span className="font-mono">- {formatMoney(Number(discount || '0'))}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2">
+                  <span className="font-medium">Total</span>
+                  <span className="font-mono font-semibold">{formatMoney(total)}</span>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
-      )}
+
+        {isKeychain && matrix != null && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Precios por escala</CardTitle>
+              <CardDescription>
+                Precio unitario y precio por placa ({batchSize} llaveros).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {matrix === 'loading' && <p className="text-sm text-muted-foreground">Calculando…</p>}
+              {matrix === 'error' && (
+                <p className="text-sm text-destructive">No se pudo cargar la matriz.</p>
+              )}
+              {Array.isArray(matrix) && (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-left uppercase tracking-wider text-muted-foreground">
+                      <th className="py-1.5 pr-2 font-medium">Escala</th>
+                      <th className="py-1.5 pr-2 font-medium text-right">Precio unitario</th>
+                      <th className="py-1.5 pr-0 font-medium text-right">Placa × {batchSize}u</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {matrix.map((row) => {
+                      const isActive = activeKeychainTier?.id === row.tierId;
+                      // El primer tier vende por unidad (qty < batchSize), no
+                      // por placas. Para los demás mostramos el precio de una
+                      // placa completa de N unidades al markup de esa escala.
+                      const placaPrice = row.minQty < batchSize ? null : row.unitPrice * batchSize;
+                      return (
+                        <tr
+                          key={row.tierId}
+                          className={isActive ? 'bg-primary/10 font-medium' : ''}
+                        >
+                          <td className="py-1.5 pr-2 font-mono">{row.tierLabel}</td>
+                          <td className="py-1.5 pr-2 text-right font-mono">
+                            {formatMoney(row.unitPrice)}
+                          </td>
+                          <td className="py-1.5 pr-0 text-right font-mono font-semibold">
+                            {placaPrice == null ? '—' : formatMoney(placaPrice)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
@@ -1410,4 +1414,3 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

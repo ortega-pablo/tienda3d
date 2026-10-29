@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { WebOrderAttentionDto } from '@tienda3d/shared';
+import type { WebOrderAttentionDto, WebQuoteRequestCountDto } from '@tienda3d/shared';
 import { api } from '@/lib/api-server';
 import { requireUser } from '@/lib/auth';
 import { AppShell, type NavBadges } from '@/components/app-shell';
@@ -9,9 +9,14 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
   const user = await requireUser();
   const badges: NavBadges = {};
   if (user.permissions.includes('ecommerce:orders')) {
-    // Pedidos web que esperan al taller. Si la API no responde, el menú sigue sin el contador.
-    const attention = await api<WebOrderAttentionDto>('/web-orders/attention').catch(() => null);
+    // Pedidos web que esperan al taller y solicitudes nuevas. Si la API no
+    // responde, el menú sigue sin los contadores.
+    const [attention, requests] = await Promise.all([
+      api<WebOrderAttentionDto>('/web-orders/attention').catch(() => null),
+      api<WebQuoteRequestCountDto>('/web-quote-requests/new-count').catch(() => null),
+    ]);
     if (attention) badges['/tienda-online/pedidos'] = attention.count;
+    if (requests) badges['/tienda-online/solicitudes'] = requests.count;
   }
   return (
     <UserProvider user={user}>

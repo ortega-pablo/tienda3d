@@ -40,4 +40,6 @@ export interface QuoteCreateInput {
   notes?: string | null;
   discount?: number;
   items: QuoteItemInput[];
+  /** La solicitud de personalización de la que sale (F15·3). */
+  webQuoteRequestId?: string;
 }
