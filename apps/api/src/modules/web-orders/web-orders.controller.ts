@@ -4,11 +4,13 @@ import {
   webOrderFulfillmentChangeSchema,
   webOrderListQuerySchema,
   webOrderNotesSchema,
+  webOrderProductionSchema,
   type WebOrderAttentionDto,
   type WebOrderCancelInput,
   type WebOrderFulfillmentChangeInput,
   type WebOrderListQuery,
   type WebOrderNotesInput,
+  type WebOrderProductionInput,
 } from '@tienda3d/shared';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
@@ -75,5 +77,23 @@ export class WebOrdersController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.orders.updateNotes(id, body.internalNotes, user.sub);
+  }
+
+  /** Lo que se va a fabricar para un ítem, para mostrarlo antes de generar la orden (F14·7). */
+  @Permissions('ecommerce:orders', 'production:read')
+  @Get(':id/items/:itemId/production-plan')
+  productionPlan(@Param('id') id: string, @Param('itemId') itemId: string) {
+    return this.orders.productionPlan(id, itemId);
+  }
+
+  @Permissions('ecommerce:orders', 'production:execute')
+  @Post(':id/items/:itemId/production-order')
+  createProductionOrder(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body(ZodValidation(webOrderProductionSchema)) body: WebOrderProductionInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.orders.createProductionOrder(id, itemId, body.quantity, user.sub);
   }
 }

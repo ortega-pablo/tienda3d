@@ -10,6 +10,7 @@ import type {
   WebOrderDetailDto,
   WebOrderFulfillmentChangeInput,
   WebOrderListQuery,
+  WebOrderProductionPlanDto,
   WebOrderSelectionDto,
   WebOrderSummaryDto,
 } from '@tienda3d/shared';
@@ -18,13 +19,16 @@ import { startOfDayInArgentina, yearInArgentina } from '@/common/utils/date';
 import { DocumentCodeService } from '@/common/utils/document-code';
 import { AuditService } from '@/modules/audit/audit.service';
 import { OutboxService } from '@/modules/outbox/outbox.service';
+import { ProductionsService } from '@/modules/productions/productions.service';
 import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
 import {
   allowedFulfillments,
   canConfirmTransfer,
   canMoveFulfillment,
+  canStartProduction,
   FULFILLMENT_LABEL,
   needsAttention,
+  productionColors,
 } from './domain/order-flow';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -66,6 +70,7 @@ export class WebOrdersService {
     private readonly audit: AuditService,
     private readonly events: CatalogEvents,
     private readonly outbox: OutboxService,
+    private readonly productions: ProductionsService,
   ) {}
 
   /** El próximo código; dentro de la transacción que crea el pedido. */
@@ -173,6 +178,7 @@ export class WebOrdersService {
       })),
       actions: {
         confirmTransfer: canConfirmTransfer(order),
+        production: canStartProduction(order),
         fulfillment: allowedFulfillments(order).filter(
           (s): s is WebOrderDetailDto['actions']['fulfillment'][number] => s !== 'CANCELLED',
         ),
@@ -320,6 +326,145 @@ export class WebOrdersService {
       after: { fulfillmentStatus: WebOrderFulfillment.CANCELLED, reason: input.reason, released },
     });
     return this.get(id);
+  }
+
+  /** Qué se va a fabricar para un ítem: producto, cantidad y el color de cada pieza (F14·7). */
+  async productionPlan(orderId: string, itemId: string): Promise<WebOrderProductionPlanDto> {
+    const { item, plan } = await this.loadProductionPlan(orderId, itemId);
+    const colorOf = new Map(
+      item.webVariant.selections.flatMap((s) => (s.material ? [[s.material.id, s.material]] : [])),
+    );
+    return {
+      itemId: item.id,
+      productId: item.productId,
+      productName: item.product.name,
+      variantLabel: item.variantLabel,
+      quantity: item.quantity,
+      suggestedQuantity: Math.max(1, item.quantity - item.reservedQuantity),
+      pieces: item.product.pieces.map((p) => {
+        const color = colorOf.get(plan.overrides[p.id] ?? '');
+        return {
+          pieceId: p.id,
+          pieceName: p.name,
+          colorName: color?.color ?? color?.name ?? null,
+          colorHex: color?.colorHex ?? null,
+        };
+      }),
+      missing: item.product.pieces.filter((p) => plan.missing.includes(p.id)).map((p) => p.name),
+    };
+  }
+
+  /**
+   * Genera la orden de producción de un ítem con los colores que eligió el
+   * cliente y la vincula al ítem (F14·7). Una sola por ítem.
+   */
+  async createProductionOrder(
+    orderId: string,
+    itemId: string,
+    quantity: number,
+    actorId: string,
+  ): Promise<WebOrderDetailDto> {
+    const { order, item, plan } = await this.loadProductionPlan(orderId, itemId);
+    if (!canStartProduction(order)) {
+      throw new UnprocessableEntityException(
+        'Solo se fabrica un pedido pagado que todavía no salió del taller.',
+      );
+    }
+    if (item.productionOrderId) {
+      throw new ConflictException('Este ítem ya tiene su orden de producción.');
+    }
+    if (plan.missing.length) {
+      const names = item.product.pieces
+        .filter((p) => plan.missing.includes(p.id))
+        .map((p) => p.name);
+      throw new UnprocessableEntityException(
+        `La publicación no define el color de: ${names.join(', ')}. Generá la orden desde Producción.`,
+      );
+    }
+    const production = await this.productions.create(
+      {
+        productId: item.productId,
+        quantity,
+        filamentOverrides: plan.overrides,
+        notes: `Pedido web ${order.code} · ${item.productName} (${item.variantLabel})`,
+      },
+      actorId,
+    );
+    const linked = await this.prisma.webOrderItem.updateMany({
+      where: { id: item.id, productionOrderId: null },
+      data: { productionOrderId: production.id },
+    });
+    if (linked.count === 0) {
+      // Otro admin la generó a la vez: la nuestra no queda suelta.
+      await this.productions.setStatus(production.id, 'CANCELLED', actorId);
+      throw new ConflictException('Este ítem ya tiene su orden de producción.');
+    }
+    await this.prisma.webOrderEvent.create({
+      data: {
+        webOrderId: order.id,
+        kind: 'production',
+        message: `Orden de producción ${production.code}: ${item.productName} × ${quantity}`,
+        actorId,
+      },
+    });
+    await this.audit.record({
+      actorId,
+      entity: 'WebOrder',
+      entityId: order.id,
+      action: 'production-order',
+      after: {
+        itemId: item.id,
+        productionOrderId: production.id,
+        quantity,
+        filamentOverrides: plan.overrides,
+      },
+    });
+    return this.get(order.id);
+  }
+
+  private async loadProductionPlan(orderId: string, itemId: string) {
+    const order = await this.load(orderId);
+    const item = await this.prisma.webOrderItem.findFirst({
+      where: { id: itemId, webOrderId: orderId },
+      include: {
+        product: {
+          select: {
+            name: true,
+            pieces: {
+              orderBy: { sortOrder: 'asc' },
+              select: {
+                id: true,
+                name: true,
+                defaultFilament: { select: { _count: { select: { children: true } } } },
+              },
+            },
+          },
+        },
+        webVariant: {
+          select: {
+            selections: {
+              where: { colorOptionId: { not: null }, materialId: { not: null } },
+              select: {
+                material: { select: { id: true, name: true, color: true, colorHex: true } },
+                colorOption: { select: { pieces: { select: { pieceId: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!item) throw new NotFoundException('Ítem inexistente');
+    const plan = productionColors(
+      item.product.pieces.map((p) => ({
+        id: p.id,
+        needsColor: (p.defaultFilament?._count.children ?? 0) > 0,
+      })),
+      item.webVariant.selections.map((s) => ({
+        materialId: s.material!.id,
+        pieceIds: s.colorOption!.pieces.map((p) => p.pieceId),
+      })),
+    );
+    return { order, item, plan };
   }
 
   async updateNotes(

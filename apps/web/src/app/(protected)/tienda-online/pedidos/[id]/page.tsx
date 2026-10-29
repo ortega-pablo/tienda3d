@@ -16,6 +16,7 @@ import {
 } from '../order-labels';
 import { OrderActions } from './order-actions';
 import { OrderNotes } from './order-notes';
+import { ProductionButton } from './production-button';
 
 export default async function PedidoWebPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission('ecommerce:orders');
@@ -117,6 +118,9 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
                             {item.productionOrderCode}
                           </Link>
                         </p>
+                      )}
+                      {order.actions.production && !item.productionOrderId && (
+                        <ProductionButton orderId={order.id} itemId={item.id} />
                       )}
                     </div>
                     <div className="text-right text-sm">
