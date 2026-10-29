@@ -18,6 +18,11 @@ import {
 import { IntegrationScopes } from '@/common/integration-auth/integration-scopes.decorator';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
 import {
+  StorefrontOrdersService,
+  webOrderSchema,
+  type WebOrderInput,
+} from './storefront-orders.service';
+import {
   webCustomerSchema,
   WebCustomersService,
   type WebCustomerInput,
@@ -34,7 +39,10 @@ import {
 @Throttle({ default: { limit: 600, ttl: 60_000 } })
 @Controller('integrations/storefront/v1')
 export class StorefrontIntegrationController {
-  constructor(private readonly webCustomers: WebCustomersService) {}
+  constructor(
+    private readonly webCustomers: WebCustomersService,
+    private readonly orders: StorefrontOrdersService,
+  ) {}
 
   /** Health de la integración: la clave sirve y la API responde. */
   @IntegrationScopes('ping')
@@ -53,5 +61,16 @@ export class StorefrontIntegrationController {
     if (!idempotencyKey) throw new BadRequestException('Falta Idempotency-Key');
     const { result, replayed } = await this.webCustomers.upsert(body, idempotencyKey);
     return { ...result, replayed };
+  }
+
+  /**
+   * Un pedido del sitio (F14·3): valida precio y stock, reserva y devuelve el
+   * código. Idempotente por `externalId`. 409 si cambió un precio o no alcanza
+   * el stock, 422 si algo ya no está a la venta (el motivo va en `details`).
+   */
+  @IntegrationScopes('orders:write')
+  @Post('orders')
+  placeOrder(@Body(ZodValidation(webOrderSchema)) body: WebOrderInput) {
+    return this.orders.place(body);
   }
 }

@@ -37,10 +37,8 @@ export class WebCustomersService {
     );
   }
 
-  private async apply(
-    tx: Prisma.TransactionClient,
-    input: WebCustomerInput,
-  ): Promise<WebCustomerResult> {
+  /** Lo mismo, dentro de otra transacción (el pedido trae los datos de su cliente, F14·3). */
+  async apply(tx: Prisma.TransactionClient, input: WebCustomerInput): Promise<WebCustomerResult> {
     const name = `${input.firstName} ${input.lastName}`.trim();
     const sameEmail = (excludeId?: string) =>
       tx.customer.findFirst({
