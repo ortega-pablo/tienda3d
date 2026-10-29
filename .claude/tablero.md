@@ -24,10 +24,10 @@ contradice, el tablero está desactualizado.
 
 ## Tipos de item
 
-| Tipo  | Dónde vive el issue                                                                                                                                                               | De dónde sale                                 | Cuándo nace                                                          |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------- |
-| Fase  | ortega-pablo/tienda3d                                                                                                                                                             | una fila de la tabla de fases de §6 (F0–F21)  | F0–F16 ya; F21 el 2026-10-29 (D18); F17–F20 cuando F16·5 decide "sí" |
-| Tarea | el repo donde aterriza su PR, según la etiqueta del título: `[t3d]` → tienda3d, `[sf]` → tienda-plastik-page, `[infra]` → tienda-plastik-infra. Si tiene varias, el de la primera | un bloque `- [ ] **F<n>·<m> [repo] …**` de §6 | cuando tiene "Cierra cuando"                                         |
+| Tipo  | Dónde vive el issue                                                                                                                                                               | De dónde sale                                 | Cuándo nace                                                                     |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------- |
+| Fase  | ortega-pablo/tienda3d                                                                                                                                                             | una fila de la tabla de fases de §6 (F0–F22)  | F0–F16 ya; F21 y F22 el 2026-10-29 (D18, D19); F17–F20 cuando F16·5 decide "sí" |
+| Tarea | el repo donde aterriza su PR, según la etiqueta del título: `[t3d]` → tienda3d, `[sf]` → tienda-plastik-page, `[infra]` → tienda-plastik-infra. Si tiene varias, el de la primera | un bloque `- [ ] **F<n>·<m> [repo] …**` de §6 | cuando tiene "Cierra cuando"                                                    |
 
 ## Qué nunca va al tablero
 
@@ -52,7 +52,7 @@ Tarea → sub-issue de su fase (cross-repo). La fase sigue a sus hijos.
 | ------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
 | `Status`      | Por hacer · En curso · En revisión · Bloqueada · Descartada · Hecha |                                                           |
 | `Tipo`        | Fase · Tarea                                                        |                                                           |
-| `Fase`        | F0 … F21                                                            | agrupar                                                   |
+| `Fase`        | F0 … F22                                                            | agrupar                                                   |
 | `Documento`   | texto: `docs/plans/ecosistema-tienda-online.md §6 F<n>`             |                                                           |
 | `Repositorio` | texto: `owner/repo`                                                 | dónde aterriza la tarea                                   |
 | `Rama`        | texto                                                               | la rama donde se mergea (`unificacion` o `main` en infra) |
