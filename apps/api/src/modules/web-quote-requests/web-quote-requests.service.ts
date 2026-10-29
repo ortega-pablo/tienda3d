@@ -9,6 +9,7 @@ import type {
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { StorageService } from '@/common/storage/storage.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { OutboxService } from '@/modules/outbox/outbox.service';
 
 const SUMMARY_SELECT = {
   id: true,
@@ -27,7 +28,8 @@ type SummaryRow = Prisma.WebQuoteRequestGetPayload<{ select: typeof SUMMARY_SELE
 /**
  * Las solicitudes de personalización en el panel (plan F15·3): el admin las
  * mira, les cambia el estado, descarga el archivo y las convierte en una
- * cotización a medida, que queda vinculada.
+ * cotización a medida, que queda vinculada. Cada cambio de estado le llega al
+ * sitio por el outbox, que se lo muestra al cliente en Mi cuenta (F15·4).
  */
 @Injectable()
 export class WebQuoteRequestsService {
@@ -35,6 +37,7 @@ export class WebQuoteRequestsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    private readonly outbox: OutboxService,
   ) {}
 
   async list(query: WebQuoteRequestListQuery): Promise<WebQuoteRequestSummaryDto[]> {
@@ -82,12 +85,18 @@ export class WebQuoteRequestsService {
     input: WebQuoteRequestUpdateInput,
     actorId: string,
   ): Promise<WebQuoteRequestDetailDto> {
-    const before = await this.prisma.webQuoteRequest.findUnique({
+    const found = await this.prisma.webQuoteRequest.findUnique({
       where: { id },
-      select: { status: true, adminNote: true },
+      select: { externalId: true, status: true, adminNote: true },
     });
-    if (!before) throw new NotFoundException('Solicitud inexistente');
-    await this.prisma.webQuoteRequest.update({ where: { id }, data: input });
+    if (!found) throw new NotFoundException('Solicitud inexistente');
+    const { externalId, ...before } = found;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webQuoteRequest.update({ where: { id }, data: input });
+      if (input.status && input.status !== before.status) {
+        await this.statusChanged(tx, externalId, input.status);
+      }
+    });
     await this.audit.record({
       actorId,
       entity: 'WebQuoteRequest',
@@ -133,6 +142,24 @@ export class WebQuoteRequestsService {
       data: { quoteId, status: WebQuoteRequestStatus.QUOTED },
     });
     if (linked.count === 0) throw new ConflictException('Esta solicitud ya tiene su cotización.');
+    const { externalId } = await tx.webQuoteRequest.findUniqueOrThrow({
+      where: { id },
+      select: { externalId: true },
+    });
+    await this.statusChanged(tx, externalId, WebQuoteRequestStatus.QUOTED);
+  }
+
+  /** Aviso al sitio del estado nuevo (§5.5); `changedAt` ordena los avisos. */
+  private statusChanged(
+    tx: Prisma.TransactionClient,
+    externalId: string,
+    status: WebQuoteRequestStatus,
+  ): Promise<void> {
+    return this.outbox.enqueue(tx, 'quote_request.status_changed', {
+      externalId,
+      status,
+      changedAt: new Date().toISOString(),
+    });
   }
 
   private summary(r: SummaryRow): WebQuoteRequestSummaryDto {

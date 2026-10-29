@@ -1539,6 +1539,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
     - [t3d] Emitir `quote_request.status_changed` por outbox cuando el admin cambia el estado de una solicitud (nueva, en análisis, cotizada, descartada).
     - [sf] `/mi-cuenta/solicitudes` con la lista, el estado y la fecha de cada una.
   - Cierra cuando: un cambio de estado en el panel se ve en Mi cuenta en menos de 30 s.
+  - Hecho así: [t3d] Cambiar el estado en el panel (o cotizar la solicitud, que la deja cotizada) escribe `quote_request.status_changed {externalId, status, changedAt}` en el outbox, en la misma transacción; cambiar solo la nota no avisa. [sf] Los estados de la solicitud pasan a ser los del sistema (`NEW`, `IN_REVIEW`, `QUOTED`, `DISCARDED`; migración que renombra `CONTACTED` y `CLOSED`, del panel viejo, sin uso) y `statusChangedAt` ordena los avisos. El aviso actualiza la solicitud (uno más viejo no la pisa) y **Mis solicitudes** (`/mi-cuenta/solicitudes`, nueva sección de Mi cuenta) muestra cada una con la fecha, la idea, el archivo y el estado (Recibida, En análisis, Cotizada, Descartada). Tests: [t3d] los avisos de cada cambio de estado y de la cotización; [sf] lectura del aviso; e2e en el ecosistema: **el cliente pide una cotización, el taller la pasa a En análisis desde el panel y Mis solicitudes lo muestra en segundos** (escritorio y móvil). Con esto queda la verificación de F15: esa e2e va del formulario al panel y vuelve a Mi cuenta.
 
 **Verificación:** e2e del formulario hasta el panel y de vuelta a Mi cuenta.
 
