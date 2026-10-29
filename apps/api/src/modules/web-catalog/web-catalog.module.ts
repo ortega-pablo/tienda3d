@@ -33,6 +33,6 @@ import { WebVariantsService } from './web-variants.service';
     { provide: RECALC_TIMER, useValue: realTimer },
     { provide: CatalogEvents, useClass: OutboxCatalogEvents },
   ],
-  exports: [WebProductsService],
+  exports: [WebProductsService, CatalogEvents],
 })
 export class WebCatalogModule {}
