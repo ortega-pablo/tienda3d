@@ -90,19 +90,17 @@ describe('[int] Vistas storefront_v1', () => {
         fx.userId,
       )
     ).id;
-    await moduleRef
-      .get(WebColorOptionsService)
-      .set(
-        pubId,
-        [
-          {
-            label: 'Color',
-            filamentLineId: fx.filamentId,
-            colorIds: [color.Negro!, color.Blanco!],
-          },
-        ],
-        fx.userId,
-      );
+    await moduleRef.get(WebColorOptionsService).set(
+      pubId,
+      [
+        {
+          label: 'Color',
+          filamentLineId: fx.filamentId,
+          colorIds: [color.Negro!, color.Blanco!],
+        },
+      ],
+      fx.userId,
+    );
     await moduleRef.get(WebVariantsService).regenerate(pubId, fx.userId);
     await prisma.webImage.create({
       data: { webProductId: pubId, path: 'catalog/x.webp', width: 10, height: 10 },
@@ -208,6 +206,10 @@ describe('[int] Vistas storefront_v1', () => {
         bank_transfer_enabled: false,
         bank_transfer_instructions: '',
         notification_email: '',
+        cash_enabled: false,
+        mercadopago_enabled: true,
+        modo_enabled: false,
+        gocuotas_enabled: false,
       },
     ]);
     await prisma.ecommerceSettings.create({

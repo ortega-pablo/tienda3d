@@ -23,8 +23,6 @@ const toForm = (s: EcommerceSettingsDto): Form => ({
   freeShippingFrom: s.freeShippingFrom == null ? '' : String(s.freeShippingFrom),
   pickupEnabled: s.pickupEnabled,
   pickupInstructions: s.pickupInstructions,
-  bankTransferEnabled: s.bankTransferEnabled,
-  bankTransferInstructions: s.bankTransferInstructions,
   notificationEmail: s.notificationEmail,
 });
 
@@ -154,35 +152,6 @@ export function SettingsForm({ initial }: { initial: EcommerceSettingsDto }) {
                 disabled={disabled}
                 placeholder="Dirección, días y horarios"
                 maxLength={2000}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Transferencia</CardTitle>
-            <CardDescription>
-              El admin confirma el pago a mano desde el pedido (D7).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Switch
-              checked={form.bankTransferEnabled}
-              onCheckedChange={(v) => set('bankTransferEnabled', v)}
-              disabled={disabled}
-              label="Se acepta transferencia"
-            />
-            <div className="space-y-1.5">
-              <Label htmlFor="aj-transferencia">Datos para transferir</Label>
-              <Textarea
-                id="aj-transferencia"
-                rows={4}
-                value={form.bankTransferInstructions}
-                onChange={(e) => set('bankTransferInstructions', e.target.value)}
-                disabled={disabled}
-                placeholder="CBU o alias, titular y CUIT"
-                maxLength={4000}
               />
             </div>
           </CardContent>

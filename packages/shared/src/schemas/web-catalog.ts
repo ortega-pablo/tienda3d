@@ -171,8 +171,9 @@ const moneySchema = z
   .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Hasta dos decimales');
 
 /**
- * Condiciones de venta de la tienda (plan F5·8): envío, retiro, transferencia
- * y el email que recibe los avisos de pedidos. Se guarda entero.
+ * Condiciones de venta de la tienda (plan F5·8): envío, retiro y el email que
+ * recibe los avisos de pedidos. Se guarda entero. Los medios de pago van
+ * aparte, con su propio permiso (`ecommercePaymentsSchema`, F22·2).
  */
 export const ecommerceSettingsSchema = z
   .object({
@@ -182,20 +183,48 @@ export const ecommerceSettingsSchema = z
     freeShippingFrom: moneySchema.nullable(),
     pickupEnabled: z.boolean(),
     pickupInstructions: z.string().trim().max(2000),
-    bankTransferEnabled: z.boolean(),
-    bankTransferInstructions: z.string().trim().max(4000),
     notificationEmail: z.union([z.literal(''), z.string().trim().email('Email inválido').max(254)]),
   })
   .strict()
-  .refine((s) => !s.bankTransferEnabled || s.bankTransferInstructions.length > 0, {
-    path: ['bankTransferInstructions'],
-    message: 'Con transferencia habilitada, cargá los datos para pagar (CBU o alias).',
-  })
   .refine((s) => s.pickupEnabled || s.shippingFlatRate !== null, {
     path: ['pickupEnabled'],
     message: 'La tienda tiene que ofrecer retiro o envío.',
   });
 export type EcommerceSettingsInput = z.infer<typeof ecommerceSettingsSchema>;
+
+/** Medios de pago de la tienda (D19). */
+export const WEB_PAYMENT_METHODS = [
+  'CASH',
+  'BANK_TRANSFER',
+  'MERCADOPAGO',
+  'MODO',
+  'GOCUOTAS',
+] as const;
+export type WebPaymentMethodKey = (typeof WEB_PAYMENT_METHODS)[number];
+/** Los que cobra un proveedor: necesitan credenciales en el sitio para prenderse. */
+export const ONLINE_PAYMENT_METHODS = ['MERCADOPAGO', 'MODO', 'GOCUOTAS'] as const;
+export type OnlinePaymentMethod = (typeof ONLINE_PAYMENT_METHODS)[number];
+
+/**
+ * Un switch por medio de pago (F22·2). Pide `ecommerce:payments`. El efectivo
+ * es solo con retiro, y un medio en línea se prende solo si el sitio tiene sus
+ * credenciales (lo controla el servidor).
+ */
+export const ecommercePaymentsSchema = z
+  .object({
+    cashEnabled: z.boolean(),
+    bankTransferEnabled: z.boolean(),
+    bankTransferInstructions: z.string().trim().max(4000),
+    mercadoPagoEnabled: z.boolean(),
+    modoEnabled: z.boolean(),
+    goCuotasEnabled: z.boolean(),
+  })
+  .strict()
+  .refine((s) => !s.bankTransferEnabled || s.bankTransferInstructions.length > 0, {
+    path: ['bankTransferInstructions'],
+    message: 'Con transferencia habilitada, cargá los datos para pagar (CBU o alias).',
+  });
+export type EcommercePaymentsInput = z.infer<typeof ecommercePaymentsSchema>;
 
 /** Datos editables de una foto de la galería (F6·2). El archivo no se reemplaza: se sube otra. */
 export const webImageUpdateSchema = z

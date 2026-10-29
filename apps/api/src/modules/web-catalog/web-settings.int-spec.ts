@@ -23,8 +23,6 @@ describe('[int] PUT /web-catalog/settings', () => {
     freeShippingFrom: 60000.5,
     pickupEnabled: true,
     pickupInstructions: 'Retiro por Palermo, de lunes a viernes.',
-    bankTransferEnabled: true,
-    bankTransferInstructions: 'Alias: plastik.tienda',
     notificationEmail: 'pedidos@plastik.local',
   };
 
@@ -66,7 +64,6 @@ describe('[int] PUT /web-catalog/settings', () => {
       .expect(200);
     expect(res.body).toMatchObject({
       pickupEnabled: true,
-      bankTransferEnabled: false,
       updatedAt: null,
     });
   });
@@ -93,9 +90,8 @@ describe('[int] PUT /web-catalog/settings', () => {
     ['un monto negativo', { shippingFlatRate: -1 }, 'shippingFlatRate'],
     ['un monto con tres decimales', { freeShippingFrom: 10.005 }, 'freeShippingFrom'],
     ['un email inválido', { notificationEmail: 'pedidos@' }, 'notificationEmail'],
-    ['transferencia sin datos', { bankTransferInstructions: '' }, 'bankTransferInstructions'],
     ['sin retiro ni envío', { pickupEnabled: false, shippingFlatRate: null }, 'pickupEnabled'],
-    ['un campo desconocido', { mercadoPago: true }, ''],
+    ['un medio de pago (van aparte, F22·2)', { bankTransferEnabled: true }, ''],
   ])('rechaza %s', async (_caso, cambio, campo) => {
     const res = await put({ ...valid, ...cambio }).expect(400);
     if (campo) {
@@ -103,6 +99,13 @@ describe('[int] PUT /web-catalog/settings', () => {
       expect(issues.map((i) => i.path)).toContain(campo);
     }
     expect(await prisma.ecommerceSettings.count()).toBe(0);
+  });
+
+  it('con el efectivo prendido no se puede apagar el retiro (F22·2)', async () => {
+    await put(valid).expect(200);
+    await prisma.ecommerceSettings.update({ where: { id: 1 }, data: { cashEnabled: true } });
+    const res = await put({ ...valid, pickupEnabled: false }).expect(422);
+    expect(res.body.details).toMatchObject({ reason: 'CASH_NEEDS_PICKUP' });
   });
 
   it('sin el permiso ecommerce:settings no se puede leer ni guardar', async () => {

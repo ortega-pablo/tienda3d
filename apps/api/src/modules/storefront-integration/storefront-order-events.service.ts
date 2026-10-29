@@ -25,6 +25,7 @@ export interface WebOrderEventResult {
 const PAYMENT_MESSAGE: Record<WebOrderPayment, string> = {
   PENDING: 'Pago pendiente en la tienda',
   AWAITING_TRANSFER: 'Esperando la transferencia',
+  AWAITING_CASH: 'A pagar en efectivo en el local',
   APPROVED: 'Pago aprobado en la tienda',
   REJECTED: 'Pago rechazado en la tienda',
   REFUNDED: 'Pago reembolsado',

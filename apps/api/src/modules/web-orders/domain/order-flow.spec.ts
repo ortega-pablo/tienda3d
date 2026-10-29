@@ -3,7 +3,9 @@ import {
   canConfirmTransfer,
   canStartProduction,
   canMoveFulfillment,
+  initialPayment,
   needsAttention,
+  paymentStartIssue,
   productionColors,
   type OrderState,
 } from './order-flow';
@@ -120,5 +122,32 @@ describe('Orden de producción de un ítem (F14·7)', () => {
         { materialId: 'negro', pieceIds: ['base'] },
       ]),
     ).toEqual({ overrides: { pantalla: 'blanco', base: 'negro' }, missing: ['cable'] });
+  });
+});
+
+describe('Pedidos web: cómo empieza el pago de cada medio (F22·2)', () => {
+  it('la transferencia y el efectivo esperan al admin; los medios en línea, al proveedor', () => {
+    expect(initialPayment('BANK_TRANSFER')).toBe('AWAITING_TRANSFER');
+    expect(initialPayment('CASH')).toBe('AWAITING_CASH');
+    for (const method of ['MERCADOPAGO', 'MODO', 'GOCUOTAS'] as const)
+      expect(initialPayment(method)).toBe('PENDING');
+  });
+
+  it('el efectivo es solo con retiro, y el estado tiene que ser el del medio', () => {
+    const cash = {
+      paymentMethod: 'CASH',
+      paymentStatus: 'AWAITING_CASH',
+      deliveryMethod: 'PICKUP',
+    } as const;
+    expect(paymentStartIssue(cash)).toBeNull();
+    expect(paymentStartIssue({ ...cash, deliveryMethod: 'SHIPPING' })).toMatch(/solo con retiro/);
+    expect(paymentStartIssue({ ...cash, paymentStatus: 'APPROVED' })).toMatch(/no corresponde/);
+    expect(
+      paymentStartIssue({
+        paymentMethod: 'MODO',
+        paymentStatus: 'PENDING',
+        deliveryMethod: 'SHIPPING',
+      }),
+    ).toBeNull();
   });
 });

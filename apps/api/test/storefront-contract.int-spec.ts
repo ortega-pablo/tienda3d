@@ -91,6 +91,10 @@ const CONTRACT: Record<string, Array<[string, string]>> = {
     ['bank_transfer_enabled', 'boolean'],
     ['bank_transfer_instructions', 'text'],
     ['notification_email', 'text'],
+    ['cash_enabled', 'boolean'],
+    ['mercadopago_enabled', 'boolean'],
+    ['modo_enabled', 'boolean'],
+    ['gocuotas_enabled', 'boolean'],
   ],
 };
 

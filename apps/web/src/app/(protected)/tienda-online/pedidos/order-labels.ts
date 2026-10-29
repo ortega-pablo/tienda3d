@@ -13,6 +13,7 @@ type Variant = NonNullable<BadgeProps['variant']>;
 export const PAYMENT_LABEL: Record<WebOrderPaymentValue, { label: string; variant: Variant }> = {
   PENDING: { label: 'Pago pendiente', variant: 'outline' },
   AWAITING_TRANSFER: { label: 'Esperando transferencia', variant: 'warning' },
+  AWAITING_CASH: { label: 'A pagar en el local', variant: 'warning' },
   APPROVED: { label: 'Pagado', variant: 'success' },
   REJECTED: { label: 'Pago rechazado', variant: 'destructive' },
   REFUNDED: { label: 'Reembolsado', variant: 'secondary' },
@@ -33,6 +34,9 @@ export const FULFILLMENT_LABEL: Record<
 export const METHOD_LABEL: Record<WebPaymentMethodValue, string> = {
   MERCADOPAGO: 'Mercado Pago',
   BANK_TRANSFER: 'Transferencia',
+  CASH: 'Efectivo en el local',
+  MODO: 'MODO',
+  GOCUOTAS: 'Go Cuotas',
 };
 
 export const DELIVERY_LABEL: Record<WebDeliveryMethodValue, string> = {

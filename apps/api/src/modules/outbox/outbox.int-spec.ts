@@ -101,8 +101,6 @@ describe('[int] Outbox de avisos al sitio', () => {
         freeShippingFrom: null,
         pickupEnabled: true,
         pickupInstructions: '',
-        bankTransferEnabled: false,
-        bankTransferInstructions: '',
         notificationEmail: '',
       },
       fx.userId,

@@ -1265,6 +1265,11 @@ model EcommerceSettings {
   bankTransferEnabled      Boolean  @default(false)
   bankTransferInstructions String   @default("")
   notificationEmail        String   @default("")
+  /// Medios de pago (F22·2, D19): cada uno con su switch; los en línea, solo con credenciales en el sitio.
+  cashEnabled              Boolean  @default(false)
+  mercadoPagoEnabled       Boolean  @default(true)
+  modoEnabled              Boolean  @default(false)
+  goCuotasEnabled          Boolean  @default(false)
   updatedAt                DateTime @updatedAt
 
   @@map("ecommerce_settings")
@@ -1329,6 +1334,8 @@ model InboundEvent {
 enum WebOrderPayment {
   PENDING
   AWAITING_TRANSFER
+  /// Efectivo: se paga al retirar en el local (F22·2).
+  AWAITING_CASH
   APPROVED
   REJECTED
   REFUNDED
@@ -1347,6 +1354,9 @@ enum WebOrderFulfillment {
 enum WebPaymentMethod {
   MERCADOPAGO
   BANK_TRANSFER
+  CASH
+  MODO
+  GOCUOTAS
 }
 
 enum WebDeliveryMethod {

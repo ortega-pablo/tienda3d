@@ -168,8 +168,14 @@ Siempre **una fila** (con los valores por defecto si el admin todavía no guard�
 | `bank_transfer_enabled`      | boolean | Se acepta transferencia (D7).                       |
 | `bank_transfer_instructions` | text    | CBU o alias; no vacío si está habilitada.           |
 | `notification_email`         | text    | Adónde avisar de cada pedido nuevo (`''`: a nadie). |
+| `cash_enabled`               | boolean | Efectivo en el local, solo con retiro (F22·2).      |
+| `mercadopago_enabled`        | boolean | Mercado Pago.                                       |
+| `modo_enabled`               | boolean | MODO.                                               |
+| `gocuotas_enabled`           | boolean | Go Cuotas.                                          |
 
-Siempre hay retiro o envío (el sistema no deja guardar los dos apagados).
+Siempre hay retiro o envío (el sistema no deja guardar los dos apagados). Con `cash_enabled`, el
+retiro está prendido. Un medio en línea prendido no alcanza: el sitio lo ofrece solo si tiene sus
+credenciales (el panel no deja prenderlo sin ellas, ver `POST /api/internal/payments/`).
 
 ## Cuándo cambia
 

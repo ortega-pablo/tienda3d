@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import type { EcommerceSettings } from '@prisma/client';
 import type { EcommerceSettingsDto, EcommerceSettingsInput } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
@@ -14,15 +14,14 @@ const DEFAULTS: EcommerceSettingsDto = {
   freeShippingFrom: null,
   pickupEnabled: true,
   pickupInstructions: '',
-  bankTransferEnabled: false,
-  bankTransferInstructions: '',
   notificationEmail: '',
   updatedAt: null,
 };
 
 /**
  * Condiciones de venta de la tienda (plan F5·8): se cambian desde el sistema
- * sin tocar el sitio, que las lee por la vista `store_settings` (F10).
+ * sin tocar el sitio, que las lee por la vista `store_settings` (F10). Los
+ * medios de pago van aparte (`WebPaymentsService`, F22·2).
  */
 @Injectable()
 export class WebSettingsService {
@@ -39,6 +38,16 @@ export class WebSettingsService {
 
   async save(input: EcommerceSettingsInput, actorId: string): Promise<EcommerceSettingsDto> {
     const before = await this.get();
+    if (!input.pickupEnabled) {
+      const row = await this.prisma.ecommerceSettings.findUnique({ where: { id: SETTINGS_ID } });
+      if (row?.cashEnabled) {
+        throw new UnprocessableEntityException({
+          message:
+            'El efectivo es solo con retiro: apagalo en Medios de pago antes de apagar el retiro.',
+          reason: 'CASH_NEEDS_PICKUP',
+        });
+      }
+    }
     const saved = await this.prisma.$transaction(async (tx) => {
       const row = await tx.ecommerceSettings.upsert({
         where: { id: SETTINGS_ID },
@@ -67,8 +76,6 @@ function toDto(s: EcommerceSettings): EcommerceSettingsDto {
     freeShippingFrom: s.freeShippingFrom === null ? null : Number(s.freeShippingFrom),
     pickupEnabled: s.pickupEnabled,
     pickupInstructions: s.pickupInstructions,
-    bankTransferEnabled: s.bankTransferEnabled,
-    bankTransferInstructions: s.bankTransferInstructions,
     notificationEmail: s.notificationEmail,
     updatedAt: s.updatedAt.toISOString(),
   };
