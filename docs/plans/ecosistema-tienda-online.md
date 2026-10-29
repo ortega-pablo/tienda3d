@@ -744,6 +744,7 @@ Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permi
   - Para qué: poder rotar una clave comprometida en minutos y sin cortar el servicio.
   - Qué hacer: escribir `docs/secretos.md` con la tabla de §5.8, el procedimiento de rotación de cada secreto (base, JWT, clave de API con dos activas, secretos de eventos, MP) y qué reiniciar en cada caso.
   - Cierra cuando: hay una rotación de prueba de `storefront_api_key` hecha siguiendo el runbook, sin cortar la integración (después de F11).
+  - Hecho así: `tienda-plastik-infra/docs/secretos.md` con dónde vive cada secreto, una tabla de qué recrear y cuánto corta cada cambio, y el procedimiento de cada uno. La clave de API rota con dos activas (registrar, recrear el sitio y el worker, revocar la vieja); los secretos de avisos, cambiando los dos lados (los avisos rechazados se reintentan solos); las contraseñas de la base, con `ALTER ROLE` leyendo el archivo y recreando sus servicios (segundos de corte, o rol nuevo para cero); JWT, cerrando las sesiones del panel. Aclara que un archivo de secreto reemplazado no llega al contenedor hasta recrearlo. Rotación de prueba de `storefront_api_key` en el ecosistema siguiendo el runbook: el ping del sitio dio 200 antes, con las dos claves y con la nueva; la vieja revocada da 401; queda registrada en el documento.
 
 **Verificación:** tests de los dos repos en verde; `gitleaks git` en verde en los tres repos.
 
