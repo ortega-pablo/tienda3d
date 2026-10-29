@@ -1,5 +1,7 @@
 # Plan: Portal de clientes (Fase 7)
 
+> **Reemplazado (2026-10-29):** el catálogo y los pedidos de los clientes B2B van en la tienda online, no en el panel. Ver la fase F21 y la decisión D18 de [ecosistema-tienda-online.md](ecosistema-tienda-online.md).
+
 > Plan vivo. Marcar tareas con `[x]` a medida que se avanza.
 > Continúa el plan principal en
 > [customer-types-and-pricing.md](./customer-types-and-pricing.md).
@@ -15,12 +17,12 @@ gestionar su perfil.
 Es la fase más grande del plan. Se subdivide en **4 sub-fases** entregables
 por separado:
 
-| Sub-fase | Alcance | Valor inmediato |
-|---|---|---|
-| **7.A** | Auth + onboarding + layout + perfil | Cliente puede loguearse y ver/editar sus datos. |
-| **7.B** | Catálogo + compromisos | Cliente ve su catálogo y avance del mes. |
-| **7.C** | Carrito + pedidos + mis pedidos | Cliente arma pedidos online (Quote SENT). |
-| **7.D** | Notificaciones por email | Onboarding por email + alertas de pedidos/cambios. |
+| Sub-fase | Alcance                             | Valor inmediato                                    |
+| -------- | ----------------------------------- | -------------------------------------------------- |
+| **7.A**  | Auth + onboarding + layout + perfil | Cliente puede loguearse y ver/editar sus datos.    |
+| **7.B**  | Catálogo + compromisos              | Cliente ve su catálogo y avance del mes.           |
+| **7.C**  | Carrito + pedidos + mis pedidos     | Cliente arma pedidos online (Quote SENT).          |
+| **7.D**  | Notificaciones por email            | Onboarding por email + alertas de pedidos/cambios. |
 
 Cada sub-fase es entregable. Recomendamos releases incrementales
 (7.A solo, después 7.B, etc.).
@@ -144,7 +146,7 @@ enum PortalAccessTokenType {
   - Link "Olvidé mi contraseña".
 - [ ] `apps/web/src/app/portal/recuperar-password/page.tsx`.
 - [ ] `apps/web/src/app/portal/establecer-password/[token]/page.tsx`
-  (sirve tanto para WELCOME como RESET — el backend distingue por tipo).
+      (sirve tanto para WELCOME como RESET — el backend distingue por tipo).
 
 ### 7.A.5 — UI: Perfil
 
@@ -155,20 +157,20 @@ enum PortalAccessTokenType {
   - Lista de **categorías asociadas** (read-only) — para que el cliente
     sepa qué puede comprar cuando llegue 7.B.
 - [ ] `apps/web/src/components/portal-shell.tsx` o equivalente: provider
-  con `currentCustomer` cargado del backend.
+      con `currentCustomer` cargado del backend.
 
 ### 7.A.6 — UI staff: crear cuenta de portal desde el detalle
 
 - [ ] En `clientes/[id]/page.tsx` (o nuevo componente
-  `customer-portal-section.tsx`):
+      `customer-portal-section.tsx`):
   - Si `customer.hasPortalAccess === false`: botón "Crear cuenta de portal"
     → confirma → llama a `POST /customers/:id/portal-account` que
     delega a `portal-auth.requestWelcomeToken`.
   - Si `customer.hasPortalAccess === true`: badge verde + botón "Resetear
     contraseña" + botón "Bloquear acceso" (setea `User.isActive = false`).
 - [ ] Endpoint nuevo `POST /customers/:id/portal-account` que el staff
-  llama. Devuelve un mensaje "Email enviado". El email mismo se envía en
-  7.D (por ahora puede loguear el token plano a la consola para testing).
+      llama. Devuelve un mensaje "Email enviado". El email mismo se envía en
+      7.D (por ahora puede loguear el token plano a la consola para testing).
 
 ### 7.A.7 — Tests
 
@@ -185,7 +187,7 @@ enum PortalAccessTokenType {
 - [ ] `pnpm typecheck` API + Web limpios.
 - [ ] Tests verdes.
 - [ ] Smoke real: flujo completo de onboarding desde el detalle de un
-  Customer.
+      Customer.
 
 ---
 
@@ -208,11 +210,11 @@ enum PortalAccessTokenType {
     minQty/maxQty/markupPct/finalPrice), basePrice.
 - [ ] Endpoint `GET /portal/catalog` (CustomerOnly).
 - [ ] Endpoint `GET /portal/catalog/:productId` para detalle (mismo
-  filtrado, sirve para la vista detallada de un producto).
+      filtrado, sirve para la vista detallada de un producto).
 - [ ] **Decisión**: el portal **muestra** el markup% para que el cliente
-  entienda por qué cambia el precio según la cantidad, **pero no muestra
-  ganancia ni costo**. Si querés ocultar también el markup, lo borramos
-  acá antes de devolver.
+      entienda por qué cambia el precio según la cantidad, **pero no muestra
+      ganancia ni costo**. Si querés ocultar también el markup, lo borramos
+      acá antes de devolver.
 
 ### 7.B.2 — Backend: lectura de compromisos del mes
 
@@ -224,7 +226,7 @@ enum PortalAccessTokenType {
   - Reusa la lógica del cron pero solo del mes en curso.
 - [ ] Endpoint `GET /portal/commitments` (CustomerOnly).
 - [ ] Si el cliente no es WHOLESALE o no tiene commitments con
-  compromiso, devolver array vacío. La UI no muestra el item del nav.
+      compromiso, devolver array vacío. La UI no muestra el item del nav.
 
 ### 7.B.3 — UI: Catálogo
 
@@ -253,7 +255,7 @@ enum PortalAccessTokenType {
   - Cards por categoría con barra de progreso color-coded, días
     restantes, X/Y unidades, alerta si está atrasado o suspendido.
 - [ ] Item "Compromisos" en el nav del portal aparece solo si el
-  cliente tiene al menos 1 commitment con compromiso.
+      cliente tiene al menos 1 commitment con compromiso.
 
 ### 7.B.5 — Tests + verificación
 
@@ -285,7 +287,7 @@ enum PortalAccessTokenType {
 ### 7.C.2 — Frontend: flujo de pedido
 
 - [ ] En la card/detalle del catálogo (Sub-fase 7.B): botón "Agregar al
-  pedido" con selector de cantidad.
+      pedido" con selector de cantidad.
 - [ ] `apps/web/src/app/portal/pedido/page.tsx`:
   - Resumen del carrito: items con cantidad editable, eliminar, recálculo
     en vivo de precios al cambiar qty (consulta `/portal/preview`).
@@ -305,7 +307,7 @@ enum PortalAccessTokenType {
     con `customers.canBuy`, valida que `defaultChannelId` esté seteado
     (sino devuelve 400 con mensaje "Tu canal no está configurado,
     contactá al staff"), llama a `quotes.create` con `customerId =
-    currentCustomer.id`. Devuelve el quote completo con código.
+currentCustomer.id`. Devuelve el quote completo con código.
 - [ ] Endpoints (CustomerOnly):
   - `POST /portal/preview` — { productId, quantity } → { unitPrice,
     lineTotal } (sin profit/cost).
@@ -322,27 +324,27 @@ enum PortalAccessTokenType {
   - Si está en SENT y todavía no fue aceptado: botón "Cancelar pedido"
     (PATCH a DRAFT). Notifica al staff.
 - [ ] Endpoint `GET /portal/orders` y `GET /portal/orders/:id`
-  (CustomerOnly, filtra por `customerId === currentCustomer.id`).
+      (CustomerOnly, filtra por `customerId === currentCustomer.id`).
 - [ ] Endpoint `PATCH /portal/orders/:id/cancel` (CustomerOnly, solo
-  si status = SENT).
+      si status = SENT).
 
 ### 7.C.5 — Validaciones de seguridad (cross-cutting)
 
 - [ ] El cliente del portal **NUNCA** puede acceder a quotes de otros
-  clientes — verificar en cada endpoint con `quote.customerId !==
-  currentCustomer.id` → 403.
+      clientes — verificar en cada endpoint con `quote.customerId !==
+currentCustomer.id` → 403.
 - [ ] Throttler estricto en `/api/portal/*` (ej. 30 req/min) para evitar
-  scraping/abuse.
+      scraping/abuse.
 - [ ] Cada pedido creado desde el portal queda en `AuditLog` con
-  `actorId` del User customer-portal.
+      `actorId` del User customer-portal.
 
 ### 7.C.6 — UI staff: alerta de pedidos pendientes
 
 - [ ] Dashboard del staff: nuevo widget "Pedidos del portal pendientes"
-  que cuenta quotes SENT con `customerId != null` creadas en las
-  últimas 24h.
+      que cuenta quotes SENT con `customerId != null` creadas en las
+      últimas 24h.
 - [ ] (Opcional) Filtro en `/cotizaciones` para ver solo pedidos del
-  portal.
+      portal.
 
 ### 7.C.7 — Smoke y verificación
 
@@ -350,7 +352,7 @@ enum PortalAccessTokenType {
 - [ ] Staff ve la quote SENT en `/cotizaciones` con badge "Portal".
 - [ ] Cliente ve el pedido en `/portal/pedidos`.
 - [ ] Cliente cancela → pasa a DRAFT, aparece en su histórico como
-  cancelado, staff lo ve también.
+      cancelado, staff lo ve también.
 
 ---
 
@@ -393,32 +395,32 @@ enum PortalAccessTokenType {
 ### 7.D.3 — Templates mínimos
 
 - [ ] `welcome.tsx` (o `.ts`): bienvenida con link de primera contraseña.
-  Variables: `customerName`, `welcomeUrl`, `expiresIn` (7d).
+      Variables: `customerName`, `welcomeUrl`, `expiresIn` (7d).
 - [ ] `reset-password.ts`: con link de reset (1h).
 - [ ] `order-sent-customer.ts`: confirmación al cliente (Q-2026-XXXX,
-  resumen items, total).
+      resumen items, total).
 - [ ] `order-received-staff.ts`: aviso al staff de pedido nuevo + link al
-  detalle interno.
+      detalle interno.
 - [ ] `order-accepted.ts` / `order-rejected.ts`: cliente recibe el cambio
-  de estado.
+      de estado.
 - [ ] (Opcional) `commitment-reminder.ts`: si quedan pocos días en el
-  mes y el cliente está lejos de su compromiso.
+      mes y el cliente está lejos de su compromiso.
 
 ### 7.D.4 — Wire-up
 
 - [ ] `portal-auth.service`: al crear cuenta o pedir reset, dispara el
-  email correspondiente.
+      email correspondiente.
 - [ ] `portal-orders.service.createOrder`: dispara email al cliente
-  + email al staff (a una lista de emails internos definida en config).
+  - email al staff (a una lista de emails internos definida en config).
 - [ ] `quotes.service.setStatus`: cuando una quote del portal pasa a
-  ACCEPTED/REJECTED, dispara el email correspondiente al cliente.
+      ACCEPTED/REJECTED, dispara el email correspondiente al cliente.
 - [ ] (Opcional) `customer-cron.service`: dispara reminder a clientes
-  con menos del 50 % del compromiso a 7 días del cierre.
+      con menos del 50 % del compromiso a 7 días del cierre.
 
 ### 7.D.5 — Tests + verificación
 
 - [ ] Tests unit del servicio: cada template renderiza sin error con
-  datos válidos.
+      datos válidos.
 - [ ] Smoke en dev:
   - Creo cuenta de portal → llega email de bienvenida (con Resend en
     sandbox / mailtrap / inbox real).
@@ -428,35 +430,35 @@ enum PortalAccessTokenType {
 ### 7.D.6 — Adicional: gestión de bloqueo / suspensión
 
 - [ ] Cuando el cron auto-suspende una categoría del cliente: opcional
-  email al cliente avisando ("este mes no llegaste al compromiso, el
-  mayoreo de Lámparas queda suspendido hasta que el admin lo reactive").
-  Decisión del usuario si activarlo.
+      email al cliente avisando ("este mes no llegaste al compromiso, el
+      mayoreo de Lámparas queda suspendido hasta que el admin lo reactive").
+      Decisión del usuario si activarlo.
 
 ---
 
 ## Roadmap de releases sugerido
 
-| Release | Sub-fases | Días estimados (referencial) |
-|---|---|---|
-| v0.7-portal-alpha | 7.A | 4-5 |
-| v0.7-portal-beta | 7.A + 7.B | +3-4 |
-| v0.7-portal-rc | 7.A + 7.B + 7.C | +5-6 |
-| **v0.7-portal-prod** | 7.A + 7.B + 7.C + 7.D | +2-3 |
+| Release              | Sub-fases             | Días estimados (referencial) |
+| -------------------- | --------------------- | ---------------------------- |
+| v0.7-portal-alpha    | 7.A                   | 4-5                          |
+| v0.7-portal-beta     | 7.A + 7.B             | +3-4                         |
+| v0.7-portal-rc       | 7.A + 7.B + 7.C       | +5-6                         |
+| **v0.7-portal-prod** | 7.A + 7.B + 7.C + 7.D | +2-3                         |
 
 (Días estimados son orientativos.)
 
 ## Riesgos y abiertos
 
-| Riesgo / abierto | Mitigación |
-|---|---|
-| Cliente del portal cambia su email — pierde acceso si olvida el nuevo. | Recovery email de 24h o requerir confirmación al viejo email antes de aplicar. Pendiente de decisión. |
-| Provider de email cae → el flujo de bienvenida queda incompleto. | El backend siempre devuelve el token plano por logs en dev; en prod, el staff puede regenerar el token desde el detalle del cliente. |
-| Pedido del portal con `defaultChannelId` no seteado. | El portal devuelve 400 con mensaje claro ("Tu canal no está configurado, contactá al staff"). UI bloquea el botón "Enviar". |
-| Cliente del portal con todas las categorías suspendidas. | Sigue viendo catálogo al precio público. UI le advierte. |
-| Carrito perdido al cerrar sesión. | localStorage por (browser, customerId). Persistencia inter-dispositivo fuera de alcance MVP — agregar tabla `Cart` si se demanda. |
-| 1 cliente = 1 usuario, pero clientes con varios compradores comparten credenciales. | Decisión actual aceptada. Si en el futuro hace falta, agregar tabla `CustomerUser` (1 customer → N users). |
-| Staff envía link de bienvenida pero el email del cliente está mal. | Endpoint para regenerar token. Token viejo queda invalidado. |
-| Throttler global ya configurado (120/min). El portal podría requerir más estricto. | Ajustar `@Throttle()` específico en el portal controller. |
+| Riesgo / abierto                                                                    | Mitigación                                                                                                                           |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Cliente del portal cambia su email — pierde acceso si olvida el nuevo.              | Recovery email de 24h o requerir confirmación al viejo email antes de aplicar. Pendiente de decisión.                                |
+| Provider de email cae → el flujo de bienvenida queda incompleto.                    | El backend siempre devuelve el token plano por logs en dev; en prod, el staff puede regenerar el token desde el detalle del cliente. |
+| Pedido del portal con `defaultChannelId` no seteado.                                | El portal devuelve 400 con mensaje claro ("Tu canal no está configurado, contactá al staff"). UI bloquea el botón "Enviar".          |
+| Cliente del portal con todas las categorías suspendidas.                            | Sigue viendo catálogo al precio público. UI le advierte.                                                                             |
+| Carrito perdido al cerrar sesión.                                                   | localStorage por (browser, customerId). Persistencia inter-dispositivo fuera de alcance MVP — agregar tabla `Cart` si se demanda.    |
+| 1 cliente = 1 usuario, pero clientes con varios compradores comparten credenciales. | Decisión actual aceptada. Si en el futuro hace falta, agregar tabla `CustomerUser` (1 customer → N users).                           |
+| Staff envía link de bienvenida pero el email del cliente está mal.                  | Endpoint para regenerar token. Token viejo queda invalidado.                                                                         |
+| Throttler global ya configurado (120/min). El portal podría requerir más estricto.  | Ajustar `@Throttle()` específico en el portal controller.                                                                            |
 
 ## Convenciones
 
