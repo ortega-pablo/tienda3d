@@ -1421,6 +1421,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
   - Para qué: informar cómo se usan los datos y permitir pedir la baja.
   - Qué hacer: página de política de privacidad (texto a acordar con la dueña), consentimiento registrado y "Pedir la baja de mi cuenta" (en v1, por mail a la tienda).
   - Cierra cuando: la página está publicada y enlazada en el registro y en el footer.
+  - Hecho así: `/politica-de-privacidad` con un **borrador** según la ley 25.326 (responsable y contacto, qué datos se guardan, para qué, cuánto tiempo, derechos de acceso, rectificación y supresión, seguridad, cookies solo necesarias y la leyenda obligatoria de la AAIP); el contenido está en `src/content/pages.ts` (`PRIVACY`) y **lo tiene que aprobar la dueña antes del lanzamiento**. Enlazada en el registro, en el pie y en el sitemap. El consentimiento queda registrado en `Customer.acceptedTermsAt` (F13·2). "Pedir la baja de mi cuenta" está en Mis datos: un mail a la tienda desde el email de la cuenta. La e2e de páginas principales suma la política.
 - [ ] **F13·8 [sf][t3d] Cada cliente de la web aparece en Clientes del sistema**
   - Para qué: que el taller vea quién compra, con su historial (D4).
   - Qué hacer:
