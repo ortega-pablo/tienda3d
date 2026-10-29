@@ -17,6 +17,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { startOfDayInArgentina, yearInArgentina } from '@/common/utils/date';
 import { DocumentCodeService } from '@/common/utils/document-code';
 import { AuditService } from '@/modules/audit/audit.service';
+import { OutboxService } from '@/modules/outbox/outbox.service';
 import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
 import {
   allowedFulfillments,
@@ -54,7 +55,8 @@ const ATTENTION_WHERE: Prisma.WebOrderWhereInput = {
  * Pedidos de la tienda online en el sistema (plan F14). El código es
  * `W-AAAA-NNNN`, correlativo por año de Argentina y libre de carreras. Desde el
  * panel el admin confirma la transferencia, mueve la preparación y cancela
- * (F14·5): cada paso respeta §5.6, queda en el historial y en auditoría.
+ * (F14·5): cada paso respeta §5.6, queda en el historial y en auditoría, y le
+ * llega al sitio por el outbox (F14·6), que se lo muestra al cliente.
  */
 @Injectable()
 export class WebOrdersService {
@@ -63,6 +65,7 @@ export class WebOrdersService {
     private readonly codes: DocumentCodeService,
     private readonly audit: AuditService,
     private readonly events: CatalogEvents,
+    private readonly outbox: OutboxService,
   ) {}
 
   /** El próximo código; dentro de la transacción que crea el pedido. */
@@ -186,9 +189,19 @@ export class WebOrdersService {
     }
     const paidAt = new Date();
     await this.prisma.$transaction(async (tx) => {
-      await this.claim(tx, order, { paymentStatus: WebOrderPayment.APPROVED, paidAt });
+      await this.claim(tx, order, {
+        paymentStatus: WebOrderPayment.APPROVED,
+        paidAt,
+        paymentChangedAt: paidAt,
+      });
       await tx.webOrderEvent.create({
         data: { webOrderId: id, kind: 'payment', message: 'Transferencia confirmada', actorId },
+      });
+      // El sitio es el dueño del pago: lo aplica y avisa de vuelta (§5.5).
+      await this.outbox.enqueue(tx, 'order.payment_confirmed_manually', {
+        externalId: order.externalId,
+        code: order.code,
+        paidAt: paidAt.toISOString(),
       });
     });
     await this.audit.record({
@@ -230,6 +243,7 @@ export class WebOrdersService {
       await tx.webOrderEvent.create({
         data: { webOrderId: id, kind: 'fulfillment', message, actorId },
       });
+      await this.fulfillmentChanged(tx, order, input.status, trackingCode);
     });
     await this.audit.record({
       actorId,
@@ -289,6 +303,8 @@ export class WebOrdersService {
           actorId,
         },
       });
+      // El motivo es interno: el cliente ve que se canceló.
+      await this.fulfillmentChanged(tx, order, WebOrderFulfillment.CANCELLED);
       // El stock devuelto cambia lo que muestra la tienda.
       for (const webProductId of new Set(items.map((i) => i.webVariant.webProductId))) {
         await this.events.productChanged(tx, webProductId);
@@ -333,6 +349,8 @@ export class WebOrdersService {
       where: { id },
       select: {
         id: true,
+        code: true,
+        externalId: true,
         paymentMethod: true,
         paymentStatus: true,
         fulfillmentStatus: true,
@@ -341,6 +359,25 @@ export class WebOrdersService {
     });
     if (!order) throw new NotFoundException('Pedido inexistente');
     return order;
+  }
+
+  /**
+   * Aviso al sitio de la nueva etapa (§5.5). `changedAt` ordena los avisos: el
+   * sitio no aplica uno más viejo que el último que aplicó.
+   */
+  private fulfillmentChanged(
+    tx: Prisma.TransactionClient,
+    order: { externalId: string; code: string },
+    status: WebOrderFulfillment,
+    trackingCode?: string | null,
+  ): Promise<void> {
+    return this.outbox.enqueue(tx, 'order.fulfillment_changed', {
+      externalId: order.externalId,
+      code: order.code,
+      status,
+      ...(trackingCode !== undefined && { trackingCode }),
+      changedAt: new Date().toISOString(),
+    });
   }
 
   /** Aplica el cambio solo si nadie lo movió mientras tanto (dos pestañas, dos admins). */

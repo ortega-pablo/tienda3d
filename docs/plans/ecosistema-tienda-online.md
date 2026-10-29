@@ -523,11 +523,11 @@ y precio calculado:
 
 **De tienda3d al storefront.** Eventos a `http://storefront:3100/api/internal/events/` (con barra final: el sitio usa `trailingSlash`):
 
-| Evento                                                      | Efecto en el sitio                                                     |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `catalog.changed {scope, ids}`                              | `revalidateTag` del catálogo, del producto o de los ajustes            |
-| `order.fulfillment_changed {externalId, status, tracking?}` | actualiza el pedido, suma al historial y manda mail al cliente         |
-| `order.payment_confirmed_manually {externalId}`             | marca la transferencia como pagada y emite `payment_updated` de vuelta |
+| Evento                                                                           | Efecto en el sitio                                                     |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `catalog.changed {scope, ids}`                                                   | `revalidateTag` del catálogo, del producto o de los ajustes            |
+| `order.fulfillment_changed {externalId, code, status, trackingCode?, changedAt}` | actualiza el pedido, suma al historial y manda mail al cliente         |
+| `order.payment_confirmed_manually {externalId, code, paidAt}`                    | marca la transferencia como pagada y emite `payment_updated` de vuelta |
 
 **Firma y entrega** (en los dos sentidos, para eventos):
 
@@ -1488,6 +1488,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
     - [t3d] Emitir `order.fulfillment_changed` y `order.payment_confirmed_manually` por outbox.
     - [sf] Aplicarlos, sumarlos al historial y mandar el mail correspondiente.
   - Cierra cuando: un cambio en el panel se ve en "Mis compras" en menos de 30 s, con el mail en Mailpit.
+  - Hecho así: [t3d] Confirmar la transferencia, cada paso de la preparación y cancelar escriben su aviso en el outbox, en la misma transacción: `order.payment_confirmed_manually {externalId, code, paidAt}` y `order.fulfillment_changed {externalId, code, status, trackingCode?, changedAt}` (el motivo de la cancelación no viaja: es interno). Nueva ruta `POST /orders/{externalId}/events` (alcance `orders:events`, Idempotency-Key): `payment_updated {paymentStatus, paidAt, changedAt}` refleja el pago del sitio en el pedido, con su historial y auditoría; `paymentChangedAt` (migración) hace que un aviso más viejo no pise uno nuevo, y un pedido que el sistema no tiene se confirma igual para que el sitio no lo reintente 48 h. [sf] `order.fulfillment_changed` refleja la etapa que decidió el taller (`fulfillmentChangedAt`, migración, ordena los avisos), la suma al historial y manda el mail de esa etapa; `order.payment_confirmed_manually` aprueba la transferencia (mail "Confirmamos tu pedido") y, como todo cambio del pago (`movePayment`), sale de vuelta a tienda3d por el outbox: así un pago de Mercado Pago aprobado en el sitio queda aprobado en el panel. Un aviso mal formado se registra y no se reintenta. Las transiciones de preparación del sitio se borraron: las aplica el panel (F14·5). [sf][infra] `RATE_LIMIT_SCALE` multiplica los límites por IP solo con `SITE_URL` en localhost (el sitio no arranca si se usa en otro lado); el ecosistema local usa ×10, porque la e2e completa entra desde una IP y superaba los de registro y compra. Tests: [t3d] los avisos que salen de cada acción, y la ruta (aplica una vez, repetido no duplica, uno viejo no pisa, pedido desconocido, sin Idempotency-Key 400); [sf] lectura de los avisos y el cuerpo del pago; e2e en el ecosistema con el admin de tienda3d (`E2E_SYSTEM_ADMIN_*`, ver `playwright.config.ts`): **confirmar la transferencia, preparar y listo para retirar desde el panel se ven en Mis compras en segundos con sus tres mails**, y un pago simulado aprobado llega al panel y su cancelación al cliente. E2e completa 32/32 (una corrida repetida por una recarga del modo desarrollo).
 - [ ] **F14·7 [t3d] Desde un pedido se genera su orden de producción con los colores elegidos**
   - Para qué: fabricar exactamente lo que pidió el cliente sin volver a cargarlo.
   - Qué hacer: botón "Generar orden de producción" en el ítem, que precarga producto, cantidad y `filamentOverrides`, armados con las piezas de cada opción de color y el color elegido. Vincula el ítem con la orden. Requiere F2·3 y F2·5.

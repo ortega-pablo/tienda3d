@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Headers,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -17,6 +18,11 @@ import {
 } from '@/common/integration-auth/integration-auth.guard';
 import { IntegrationScopes } from '@/common/integration-auth/integration-scopes.decorator';
 import { ZodValidation } from '@/common/pipes/zod-validation.pipe';
+import {
+  StorefrontOrderEventsService,
+  webOrderEventSchema,
+  type WebOrderEventInput,
+} from './storefront-order-events.service';
 import {
   StorefrontOrdersService,
   webOrderSchema,
@@ -42,6 +48,7 @@ export class StorefrontIntegrationController {
   constructor(
     private readonly webCustomers: WebCustomersService,
     private readonly orders: StorefrontOrdersService,
+    private readonly orderEvents: StorefrontOrderEventsService,
   ) {}
 
   /** Health de la integración: la clave sirve y la API responde. */
@@ -72,5 +79,21 @@ export class StorefrontIntegrationController {
   @Post('orders')
   placeOrder(@Body(ZodValidation(webOrderSchema)) body: WebOrderInput) {
     return this.orders.place(body);
+  }
+
+  /**
+   * Un cambio de un pedido en el sitio (F14·6): por ahora, cómo va el pago, que
+   * maneja el sitio. Idempotente por Idempotency-Key; uno más viejo que el
+   * último aplicado se ignora.
+   */
+  @IntegrationScopes('orders:events')
+  @Post('orders/:externalId/events')
+  orderEvent(
+    @Param('externalId') externalId: string,
+    @Body(ZodValidation(webOrderEventSchema)) body: WebOrderEventInput,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ) {
+    if (!idempotencyKey) throw new BadRequestException('Falta Idempotency-Key');
+    return this.orderEvents.apply(externalId, body, idempotencyKey);
   }
 }

@@ -1384,6 +1384,8 @@ model WebOrder {
   /// Cuándo se hizo el pedido en el sitio.
   placedAt           DateTime
   paidAt             DateTime?
+  /// Cuándo cambió el pago en el sitio (su dueño): un aviso más viejo no lo pisa (F14·6).
+  paymentChangedAt   DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
