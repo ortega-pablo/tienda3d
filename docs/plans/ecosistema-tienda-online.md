@@ -1575,6 +1575,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
   - Para qué: saber que funciona y cuánto tarda antes de necesitarlo.
   - Qué hacer: backup → borrar volúmenes → restaurar (F3·7). Medir el tiempo.
   - Cierra cuando: la restauración funciona y el tiempo queda en la bitácora.
+  - Hecho así: sobre el ecosistema local con sus datos (la copia de :5432 y los de prueba), en el perfil de producción: `make backup` (21 s; bases de 276 y 204 KB, archivos de 7,6 y 5,8 MB), una segunda copia del backup y la comprobación de que se lee (`pg_restore --list` y `tar tzf`), y recién ahí `docker compose down -v`, `make up` vacío y `make restore`. **Total desde cero hasta atender: 2 min 46 s** (borrar 23 s, levantar vacío 99 s, restaurar 40 s, atender 4 s). Quedaron las mismas filas en las dos bases y los mismos archivos en los volúmenes; el panel deja ingresar y la tienda muestra los productos. `restore.sh` apaga ahora también el worker del sitio, que escribe en la base. Procedimiento y bitácora en `tienda-plastik-infra/docs/restauracion.md`.
 - [ ] **F16·4 [infra] Sabemos cuántos recursos consume el ecosistema**
   - Para qué: elegir el tamaño y el costo del servidor.
   - Qué hacer: `docker stats` en reposo y con una carga simple (k6 o autocannon: 20 usuarios navegando y 2 compras por minuto durante 10 min).
