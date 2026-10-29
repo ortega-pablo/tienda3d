@@ -19,6 +19,11 @@ export interface CustomerLite {
   skipReinvestment: boolean;
 }
 
+/** Una fila del listado: suma cuántos pedidos hizo por la tienda online (F14·8). */
+export interface CustomerListItem extends CustomerLite {
+  webOrderCount: number;
+}
+
 export interface CategoryCommitmentDto {
   id: string;
   customerId: string;

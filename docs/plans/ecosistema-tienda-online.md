@@ -1498,6 +1498,7 @@ Publicar las 13 publicaciones migradas y comparar contra el sitio de hoy.
   - Para qué: conocer a quién compra por la web y cuánto.
   - Qué hacer: pestaña **Pedidos web** en el detalle de `/clientes/[id]` y columna con la cantidad de pedidos web en el listado. El precio de esos pedidos sigue siendo el publicado (D4).
   - Cierra cuando: un cliente con dos compras las muestra a las dos.
+  - Hecho así: el listado de `/clientes` suma la columna **Pedidos web** (`webOrderCount`, un `_count` en la misma consulta) y la ficha, en Histórico, la pestaña **Pedidos web** (con `ecommerce:orders`): cada pedido con código, número, fecha, pago, preparación y total, con link a su detalle, y el resumen de cuántos hay y cuánto se pagó, aclarando que es el precio publicado de la tienda (D4). La lista de pedidos web acepta `?customer=<id>`. Tests: con dos compras de Ana y una de Bea, la ficha de Ana trae las dos y el listado dice 2 y 1. Se miró en el ecosistema con un cliente de la e2e.
 - [ ] **F14·9 [sf] El cliente y la tienda reciben los mails de cada pedido**
   - Para qué: avisos automáticos en cada paso de la compra.
   - Qué hacer: portar y ajustar `server/mail/templates.ts` (pedido recibido con instrucciones de transferencia, pago confirmado, cada cambio de preparación y cancelación) y el aviso de pedido nuevo a `notification_email`.

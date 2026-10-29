@@ -82,6 +82,8 @@ describe('[int] Pedidos web en el panel', () => {
       deliveryMethod?: 'PICKUP' | 'SHIPPING';
       quantity?: number;
       placedAt?: string;
+      /** Otra clienta (por defecto, Ana). */
+      who?: { externalId: string; email: string; firstName: string };
     } = {},
   ) => {
     const [row] = await prisma.$queryRaw<Array<{ price_cents: number }>>`
@@ -93,9 +95,9 @@ describe('[int] Pedidos web en el panel', () => {
       externalId: randomUUID(),
       number: 1001,
       customer: {
-        externalId: 'web-ana',
-        email: 'ana@example.com',
-        firstName: 'Ana',
+        externalId: over.who?.externalId ?? 'web-ana',
+        email: over.who?.email ?? 'ana@example.com',
+        firstName: over.who?.firstName ?? 'Ana',
         lastName: 'Prueba',
         phone: '',
         documentNumber: null,
@@ -317,6 +319,28 @@ describe('[int] Pedidos web en el panel', () => {
       .expect(200);
     expect(res.body.internalNotes).toBe('Avisó que retira el viernes.');
     expect(await audits('notes')).toBe(1);
+  });
+
+  it('un cliente con dos compras las muestra a las dos (F14·8)', async () => {
+    const first = await place({ quantity: 1 });
+    const second = await place({ paymentMethod: 'MERCADOPAGO', quantity: 1 });
+    await place({
+      quantity: 1,
+      who: { externalId: 'web-bea', email: 'bea@example.com', firstName: 'Bea' },
+    });
+    const ana = await prisma.customer.findUniqueOrThrow({ where: { externalId: 'web-ana' } });
+
+    const orders = await get(`?customer=${ana.id}`).expect(200);
+    expect(orders.body.map((o: { id: string }) => o.id).sort()).toEqual([first, second].sort());
+
+    const customers = await http()
+      .get('/customers')
+      .set('Authorization', `Bearer ${firmar(['customer:read'])}`)
+      .expect(200);
+    const count = (email: string) =>
+      customers.body.find((c: { email: string }) => c.email === email)?.webOrderCount;
+    expect(count('ana@example.com')).toBe(2);
+    expect(count('bea@example.com')).toBe(1);
   });
 
   it('sin ecommerce:orders no se ve ni se toca nada', async () => {

@@ -89,6 +89,7 @@ export class WebOrdersService {
         ...(query.fulfillment && { fulfillmentStatus: query.fulfillment }),
         ...(query.payment && { paymentStatus: query.payment }),
         ...(query.delivery && { deliveryMethod: query.delivery }),
+        ...(query.customer && { customerId: query.customer }),
         ...((query.from || query.to) && { placedAt }),
       },
       select: SUMMARY_SELECT,

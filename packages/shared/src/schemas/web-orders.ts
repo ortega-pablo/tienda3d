@@ -45,6 +45,8 @@ export const webOrderListQuerySchema = z.object({
   to: daySchema.optional(),
   /** Solo los que esperan algo del taller (el contador del menú). */
   attention: z.literal('1').optional(),
+  /** Los pedidos de un cliente del sistema (su ficha, F14·8). */
+  customer: z.string().min(1).max(64).optional(),
 });
 export type WebOrderListQuery = z.infer<typeof webOrderListQuerySchema>;
 
