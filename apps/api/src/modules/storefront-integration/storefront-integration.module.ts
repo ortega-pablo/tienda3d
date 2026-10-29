@@ -5,6 +5,7 @@ import { IntegrationAuthGuard } from '@/common/integration-auth/integration-auth
 import { StorefrontIntegrationController } from './storefront-integration.controller';
 import { StorefrontOrderEventsService } from './storefront-order-events.service';
 import { StorefrontOrdersService } from './storefront-orders.service';
+import { StorefrontQuoteRequestsService } from './storefront-quote-requests.service';
 import { WebCustomersService } from './web-customers.service';
 
 /** Lo que el sitio le pide al sistema: pedidos, clientes, solicitudes (plan F11–F15). */
@@ -16,6 +17,7 @@ import { WebCustomersService } from './web-customers.service';
     WebCustomersService,
     StorefrontOrdersService,
     StorefrontOrderEventsService,
+    StorefrontQuoteRequestsService,
   ],
 })
 export class StorefrontIntegrationModule {}

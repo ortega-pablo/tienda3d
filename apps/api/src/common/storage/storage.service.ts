@@ -10,8 +10,24 @@ export type StorageArea = 'media' | 'private';
 export type StorageRoots = Record<StorageArea, string>;
 export const STORAGE_ROOTS = Symbol('STORAGE_ROOTS');
 
-/** Extensiones que el sistema guarda. Las fotos se convierten a WebP (F6·2). */
-const EXTENSIONS = new Set(['webp', 'pdf', 'json']);
+/**
+ * Extensiones que el sistema guarda. Las fotos se convierten a WebP (F6·2); los
+ * adjuntos de las solicitudes de personalización van tal cual al área privada (F15·2).
+ */
+const EXTENSIONS = new Set([
+  'webp',
+  'pdf',
+  'json',
+  'stl',
+  '3mf',
+  'obj',
+  'step',
+  'stp',
+  'jpg',
+  'jpeg',
+  'png',
+  'heic',
+]);
 
 /** Una carpeta la arma el sistema con ids: `catalog/<id>`, nada más. */
 const SEGMENT = /^[a-z0-9][a-z0-9_-]{0,63}$/i;

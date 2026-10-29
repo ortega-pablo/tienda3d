@@ -772,6 +772,7 @@ model Customer {
   quotes              Quote[]
   /// Pedidos de la tienda online (F14·2).
   webOrders           WebOrder[]
+  webQuoteRequests    WebQuoteRequest[]
 
   @@index([type, isActive])
   @@index([source])
@@ -1438,4 +1439,42 @@ model WebOrderEvent {
 
   @@index([webOrderId, createdAt])
   @@map("web_order_events")
+}
+
+/// Estado de una solicitud de personalización; el cliente lo ve en Mi cuenta (F15·4).
+enum WebQuoteRequestStatus {
+  NEW
+  IN_REVIEW
+  QUOTED
+  DISCARDED
+}
+
+/// Una solicitud de personalización de la tienda online (F15·2), con su archivo
+/// en el volumen privado del sistema.
+model WebQuoteRequest {
+  id             String                @id @default(cuid())
+  /// Id de la solicitud en el sitio: un reintento no la duplica.
+  externalId     String                @unique
+  customerId     String
+  customer       Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// Contacto como lo mandó el cliente al pedirla.
+  name           String
+  email          String
+  phone          String?
+  idea           String
+  /// En el volumen privado (`quote-requests/<uuid>.<ext>`); nunca sale al sitio.
+  attachmentPath String?
+  attachmentName String?
+  attachmentType String?
+  attachmentSize Int?
+  status         WebQuoteRequestStatus @default(NEW)
+  adminNote      String                @default("")
+  /// Cuándo la pidió el cliente en el sitio.
+  requestedAt    DateTime
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([status, requestedAt])
+  @@index([customerId])
+  @@map("web_quote_requests")
 }
