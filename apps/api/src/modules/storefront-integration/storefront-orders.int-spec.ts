@@ -240,4 +240,87 @@ describe('[int] Pedidos de la tienda online', () => {
     expect(res.body.details).toMatchObject({ reason: 'NOT_AVAILABLE', webVariantIds: [a!.id] });
     expect(await prisma.webOrder.count()).toBe(0);
   });
+
+  describe('avisos del sitio sobre el pedido (F14·6)', () => {
+    const event = (externalId: string, body: object, idem: string = randomUUID()) =>
+      request(app.getHttpServer())
+        .post(`/integrations/storefront/v1/orders/${externalId}/events`)
+        .set('Authorization', `Bearer ${key}`)
+        .set('Idempotency-Key', idem)
+        .send(body);
+    const approved = (changedAt: string) => ({
+      type: 'payment_updated',
+      paymentStatus: 'APPROVED',
+      paidAt: changedAt,
+      changedAt,
+    });
+
+    it('el pago aprobado en el sitio queda en el sistema, una sola vez', async () => {
+      const [a] = variants;
+      const body = {
+        ...order([{ id: a!.id, quantity: 1 }]),
+        paymentMethod: 'MERCADOPAGO',
+        paymentStatus: 'PENDING',
+      };
+      await post(body).expect(201);
+
+      const idem = randomUUID();
+      const first = await event(body.externalId, approved('2026-10-29T15:05:00Z'), idem).expect(
+        201,
+      );
+      expect(first.body).toEqual({ applied: true, replayed: false });
+      const again = await event(body.externalId, approved('2026-10-29T15:05:00Z'), idem).expect(
+        201,
+      );
+      expect(again.body).toEqual({ applied: true, replayed: true });
+
+      const saved = await prisma.webOrder.findUniqueOrThrow({
+        where: { externalId: body.externalId },
+        include: { events: { orderBy: { createdAt: 'asc' } } },
+      });
+      expect(saved).toMatchObject({
+        paymentStatus: 'APPROVED',
+        paidAt: new Date('2026-10-29T15:05:00Z'),
+      });
+      expect(saved.events.map((e) => [e.message, e.actorId])).toEqual([
+        ['Pedido #1001 recibido de la tienda', null],
+        ['Pago aprobado en la tienda', null],
+      ]);
+      expect(
+        await prisma.auditLog.count({ where: { entity: 'WebOrder', action: 'payment-updated' } }),
+      ).toBe(1);
+    });
+
+    it('un aviso más viejo que el último no lo pisa', async () => {
+      const [a] = variants;
+      const body = {
+        ...order([{ id: a!.id, quantity: 1 }]),
+        paymentMethod: 'MERCADOPAGO',
+        paymentStatus: 'PENDING',
+      };
+      await post(body).expect(201);
+      await event(body.externalId, approved('2026-10-29T15:05:00Z')).expect(201);
+      const stale = await event(body.externalId, {
+        type: 'payment_updated',
+        paymentStatus: 'PENDING',
+        paidAt: null,
+        changedAt: '2026-10-29T15:01:00Z',
+      }).expect(201);
+      expect(stale.body).toEqual({ applied: false, ignored: 'STALE', replayed: false });
+      expect(
+        (await prisma.webOrder.findUniqueOrThrow({ where: { externalId: body.externalId } }))
+          .paymentStatus,
+      ).toBe('APPROVED');
+    });
+
+    it('un pedido que el sistema no tiene se confirma igual, y sin Idempotency-Key no', async () => {
+      const res = await event(randomUUID(), approved('2026-10-29T15:05:00Z')).expect(201);
+      expect(res.body).toEqual({ applied: false, ignored: 'UNKNOWN_ORDER', replayed: false });
+      await request(app.getHttpServer())
+        .post(`/integrations/storefront/v1/orders/${randomUUID()}/events`)
+        .set('Authorization', `Bearer ${key}`)
+        .send(approved('2026-10-29T15:05:00Z'))
+        .expect(400);
+    });
+  });
 });

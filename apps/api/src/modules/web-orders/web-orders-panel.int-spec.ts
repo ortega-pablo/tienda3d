@@ -259,6 +259,38 @@ describe('[int] Pedidos web en el panel', () => {
     expect(await stock()).toBe(3);
   });
 
+  it('cada cambio le llega al sitio por el outbox (F14·6)', async () => {
+    const id = await place();
+    const { externalId, code } = await prisma.webOrder.findUniqueOrThrow({ where: { id } });
+    await prisma.outboxEvent.deleteMany();
+    const sent = async () =>
+      (await prisma.outboxEvent.findMany({ orderBy: { createdAt: 'asc' } })).map((e) => [
+        e.type,
+        e.payload,
+      ]);
+
+    await post(`/${id}/confirm-transfer`).expect(201);
+    await post(`/${id}/fulfillment`, { status: 'PREPARING' }).expect(201);
+    await post(`/${id}/cancel`, { reason: 'Se arrepintió' }).expect(201);
+    expect(await sent()).toEqual([
+      ['order.payment_confirmed_manually', { externalId, code, paidAt: expect.any(String) }],
+      [
+        'order.fulfillment_changed',
+        { externalId, code, status: 'PREPARING', changedAt: expect.any(String) },
+      ],
+      // El motivo es interno: no viaja.
+      [
+        'order.fulfillment_changed',
+        { externalId, code, status: 'CANCELLED', changedAt: expect.any(String) },
+      ],
+      // El stock devuelto cambia lo que muestra la tienda.
+      ['catalog.changed', { scope: 'product', ids: [expect.any(String)] }],
+    ]);
+    // Un rechazo no avisa nada.
+    await post(`/${id}/fulfillment`, { status: 'PREPARING' }).expect(422);
+    expect(await prisma.outboxEvent.count()).toBe(4);
+  });
+
   it('dos admins a la vez: el pago se confirma una sola vez', async () => {
     const id = await place();
     const results = await Promise.all([
