@@ -12,6 +12,8 @@ export interface ProductItemInput {
   productId: string;
   quantity: number;
   description?: string;
+  /** Colores por pieza de un pedido de la tienda (F21·3). */
+  filamentOverrides?: Record<string, string>;
 }
 
 export interface AdhocItemInput {
@@ -42,4 +44,6 @@ export interface QuoteCreateInput {
   items: QuoteItemInput[];
   /** La solicitud de personalización de la que sale (F15·3). */
   webQuoteRequestId?: string;
+  /** Pedido B2B de la tienda (F21·3): el id en el sitio; nace enviada. */
+  externalId?: string;
 }

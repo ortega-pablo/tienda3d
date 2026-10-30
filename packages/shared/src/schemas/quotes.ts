@@ -95,6 +95,8 @@ export const quoteListQuerySchema = z.object({
   type: quoteTypeSchema.optional(),
   /** Filtra cotizaciones cuyos items tienen `templateKind: 'KEYCHAIN'` en el payload. */
   templateKind: z.literal('KEYCHAIN').optional(),
+  /** Solo los pedidos que llegaron de la tienda (F21·3). */
+  source: z.literal('store').optional(),
 });
 
 export const adhocCostSchema = z.object({

@@ -41,6 +41,11 @@ import {
 } from './storefront-orders.service';
 import { StorefrontB2bCatalogService } from './storefront-b2b-catalog.service';
 import {
+  b2bOrderSchema,
+  StorefrontB2bOrdersService,
+  type B2bOrderInput,
+} from './storefront-b2b-orders.service';
+import {
   webCustomerSchema,
   WebCustomersService,
   type WebCustomerInput,
@@ -59,6 +64,7 @@ import {
 export class StorefrontIntegrationController {
   constructor(
     private readonly b2bCatalog: StorefrontB2bCatalogService,
+    private readonly b2bOrders: StorefrontB2bOrdersService,
     private readonly webCustomers: WebCustomersService,
     private readonly orders: StorefrontOrdersService,
     private readonly orderEvents: StorefrontOrderEventsService,
@@ -97,6 +103,16 @@ export class StorefrontIntegrationController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
+  }
+
+  /**
+   * Un pedido B2B (F21·3, D18): entra como cotización enviada, con los precios
+   * del sistema. Idempotente por `externalId`; 422 con el motivo en `details`.
+   */
+  @IntegrationScopes('b2b-orders:write')
+  @Post('b2b-orders')
+  placeB2bOrder(@Body(ZodValidation(b2bOrderSchema)) body: B2bOrderInput) {
+    return this.b2bOrders.place(body);
   }
 
   /** Una cuenta del sitio en Clientes del sistema (F13·8). */
