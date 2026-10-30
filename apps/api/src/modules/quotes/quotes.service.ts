@@ -323,6 +323,15 @@ export class QuotesService {
       if (input.webQuoteRequestId) {
         await this.webQuoteRequests.linkQuote(tx, input.webQuoteRequestId, quote.id);
       }
+      // Un pedido de la tienda (F21·4): el sitio guarda el código y avisa a la tienda.
+      if (input.externalId) {
+        await this.outbox.enqueue(tx, 'b2b_order.received', {
+          externalId: input.externalId,
+          quoteId: quote.id,
+          code: quote.code,
+          totalCents: Math.round(total * 100),
+        });
+      }
       return quote;
     });
     if (input.webQuoteRequestId) {

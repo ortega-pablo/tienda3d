@@ -133,6 +133,14 @@ describe('[int] Pedidos B2B de la tienda', () => {
     });
     expect(quote.items[0]!.filamentOverrides).toEqual({ [pieceId]: negro });
     expect(await prisma.auditLog.count({ where: { action: 'received-from-store' } })).toBe(1);
+    // El sitio se entera del código y le avisa a la tienda (F21·4).
+    const [received] = await prisma.outboxEvent.findMany({ where: { type: 'b2b_order.received' } });
+    expect(received!.payload).toEqual({
+      externalId: quote.externalId,
+      quoteId: quote.id,
+      code: quote.code,
+      totalCents: res.body.totalCents,
+    });
   });
 
   it('el precio es el del motor, no uno que mande el sitio', async () => {
