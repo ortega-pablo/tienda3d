@@ -65,7 +65,17 @@ export function paymentStartIssue(
   return null;
 }
 
-/** La transferencia la confirma el admin al ver el comprobante (D7). */
+/** El efectivo se cobra al retirar: solo en un pedido con retiro que espera el pago (F22·3). */
+export function canConfirmCash(order: OrderState): boolean {
+  return (
+    order.paymentMethod === 'CASH' &&
+    order.paymentStatus === 'AWAITING_CASH' &&
+    order.deliveryMethod === 'PICKUP' &&
+    order.fulfillmentStatus !== 'CANCELLED'
+  );
+}
+
+/** La transferencia la confirma el admin al verla acreditada en el banco (D7, F22·3). */
 export function canConfirmTransfer(order: OrderState): boolean {
   return (
     order.paymentMethod === 'BANK_TRANSFER' &&

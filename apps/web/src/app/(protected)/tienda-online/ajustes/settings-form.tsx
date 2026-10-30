@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { EcommerceSettingsDto, EcommerceSettingsInput } from '@tienda3d/shared';
 import { api } from '@/lib/api-client';
+import { parseAmount } from '@/lib/format';
 import { useEditMode } from '@/hooks/use-edit-mode';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,18 +26,6 @@ const toForm = (s: EcommerceSettingsDto): Form => ({
   pickupInstructions: s.pickupInstructions,
   notificationEmail: s.notificationEmail,
 });
-
-/**
- * Monto como lo escribe alguien en Argentina: "4.500" son cuatro mil
- * quinientos, "4.500,50" lleva decimales; también acepta "4500.50". Vacío → null.
- */
-function parseAmount(text: string): number | null {
-  const t = text.trim().replace(/\s|\$/g, '');
-  if (!t) return null;
-  if (t.includes(',')) return Number(t.replace(/\./g, '').replace(',', '.'));
-  if (/^\d{1,3}(\.\d{3})+$/.test(t)) return Number(t.replace(/\./g, ''));
-  return Number(t);
-}
 
 export function SettingsForm({ initial }: { initial: EcommerceSettingsDto }) {
   const router = useRouter();

@@ -52,7 +52,12 @@ describe('[int] Orden de producción desde un pedido web', () => {
     await truncateAll(prisma);
     await prisma.outboxEvent.deleteMany();
     fx = await seedFixtures(prisma);
-    token = firmar(['ecommerce:orders', 'production:read', 'production:execute']);
+    token = firmar([
+      'ecommerce:orders',
+      'ecommerce:payments',
+      'production:read',
+      'production:execute',
+    ]);
 
     const colors: Record<string, string> = {};
     for (const [nombre, hex] of [
@@ -150,11 +155,15 @@ describe('[int] Orden de producción desde un pedido web', () => {
       .post(`/web-orders/${orderId}/items/${itemId}/production-order`)
       .set('Authorization', `Bearer ${auth}`)
       .send({ quantity });
-  const pay = (orderId: string) =>
-    http()
+  /** La transferencia acreditada, con su monto y la operación (F22·3). */
+  const pay = async (orderId: string) => {
+    const { totalCents } = await prisma.webOrder.findUniqueOrThrow({ where: { id: orderId } });
+    return http()
       .post(`/web-orders/${orderId}/confirm-transfer`)
       .set('Authorization', `Bearer ${token}`)
+      .send({ amountCents: totalCents, operationNumber: 'OP-1' })
       .expect(201);
+  };
 
   it('el plan muestra el color elegido en cada pieza', async () => {
     const id = await place();

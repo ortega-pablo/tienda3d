@@ -7,6 +7,7 @@ import type {
 } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
+import { OutboxService } from '@/modules/outbox/outbox.service';
 import { CatalogEvents } from './catalog-events';
 import { StorefrontPaymentsClient, type PaymentsReadiness } from './storefront-payments.client';
 
@@ -49,6 +50,7 @@ export class WebPaymentsService {
     private readonly audit: AuditService,
     private readonly events: CatalogEvents,
     private readonly storefront: StorefrontPaymentsClient,
+    private readonly outbox: OutboxService,
   ) {}
 
   async get(): Promise<EcommercePaymentsDto> {
@@ -87,6 +89,16 @@ export class WebPaymentsService {
       }
     }
 
+    // Datos para transferir nuevos (o la transferencia que se prende): la tienda
+    // se entera por mail, contra el phishing de cuentas cambiadas (F22·3, A7).
+    const bankChanged =
+      input.bankTransferEnabled &&
+      (!before.bankTransferEnabled ||
+        input.bankTransferInstructions !== before.bankTransferInstructions);
+    const actor = bankChanged
+      ? await this.prisma.user.findUnique({ where: { id: actorId }, select: { name: true } })
+      : null;
+
     const saved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.ecommerceSettings.upsert({
         where: { id: SETTINGS_ID },
@@ -94,6 +106,12 @@ export class WebPaymentsService {
         update: input,
       });
       await this.events.changed(tx, { scope: 'settings', ids: [] });
+      if (bankChanged) {
+        await this.outbox.enqueue(tx, 'store.bank_details_changed', {
+          changedAt: updated.updatedAt.toISOString(),
+          changedBy: actor?.name ?? 'un usuario del panel',
+        });
+      }
       return updated;
     });
 

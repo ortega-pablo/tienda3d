@@ -1,5 +1,6 @@
 import {
   allowedFulfillments,
+  canConfirmCash,
   canConfirmTransfer,
   canStartProduction,
   canMoveFulfillment,
@@ -149,5 +150,30 @@ describe('Pedidos web: cómo empieza el pago de cada medio (F22·2)', () => {
         deliveryMethod: 'SHIPPING',
       }),
     ).toBeNull();
+  });
+});
+
+describe('Pedidos web: el cobro en efectivo (F22·3)', () => {
+  const cash: OrderState = {
+    paymentMethod: 'CASH',
+    paymentStatus: 'AWAITING_CASH',
+    fulfillmentStatus: 'RECEIVED',
+    deliveryMethod: 'PICKUP',
+  };
+  it('se cobra un pedido en efectivo con retiro que espera el pago', () => {
+    expect(canConfirmCash(cash)).toBe(true);
+    expect(canConfirmTransfer(cash)).toBe(false);
+  });
+  it('no se cobra pagado, cancelado, con envío ni de otro medio', () => {
+    expect(canConfirmCash({ ...cash, paymentStatus: 'APPROVED' })).toBe(false);
+    expect(canConfirmCash({ ...cash, fulfillmentStatus: 'CANCELLED' })).toBe(false);
+    expect(canConfirmCash({ ...cash, deliveryMethod: 'SHIPPING' })).toBe(false);
+    expect(
+      canConfirmCash({
+        ...cash,
+        paymentMethod: 'BANK_TRANSFER',
+        paymentStatus: 'AWAITING_TRANSFER',
+      }),
+    ).toBe(false);
   });
 });

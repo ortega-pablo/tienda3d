@@ -146,6 +146,24 @@ describe('[int] Medios de pago de la tienda', () => {
     expect(asked).toBe(1);
   });
 
+  it('si cambian los datos para transferir, la tienda se entera (F22·3)', async () => {
+    const avisos = () =>
+      prisma.outboxEvent.findMany({ where: { type: 'store.bank_details_changed' } });
+    await put(valid).expect(200);
+    expect(await avisos()).toHaveLength(1);
+    // Guardar lo mismo, o cambiar otra cosa, no avisa.
+    await put({ ...valid, cashEnabled: true }).expect(200);
+    expect(await avisos()).toHaveLength(1);
+
+    await put({ ...valid, bankTransferInstructions: 'Alias: otra.cuenta' }).expect(200);
+    const sent = await avisos();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.payload).toMatchObject({
+      changedAt: expect.any(String),
+      changedBy: expect.any(String),
+    });
+  });
+
   it('el efectivo es solo con retiro', async () => {
     await prisma.ecommerceSettings.create({
       data: { id: 1, pickupEnabled: false, shippingFlatRate: 4500 },

@@ -1397,6 +1397,9 @@ model WebOrder {
   /// Cuándo se hizo el pedido en el sitio.
   placedAt           DateTime
   paidAt             DateTime?
+  /// Cobro manual (F22·3): lo que el admin vio acreditado o cobró, y el número de operación de la transferencia.
+  paidAmountCents    Int?
+  paymentReference   String?
   /// Cuándo cambió el pago en el sitio (su dueño): un aviso más viejo no lo pisa (F14·6).
   paymentChangedAt   DateTime?
   createdAt          DateTime            @default(now())

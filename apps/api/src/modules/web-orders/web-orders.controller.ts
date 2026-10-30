@@ -1,16 +1,20 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   webOrderCancelSchema,
+  webOrderCashConfirmSchema,
   webOrderFulfillmentChangeSchema,
   webOrderListQuerySchema,
   webOrderNotesSchema,
   webOrderProductionSchema,
+  webOrderTransferConfirmSchema,
   type WebOrderAttentionDto,
   type WebOrderCancelInput,
+  type WebOrderCashConfirmInput,
   type WebOrderFulfillmentChangeInput,
   type WebOrderListQuery,
   type WebOrderNotesInput,
   type WebOrderProductionInput,
+  type WebOrderTransferConfirmInput,
 } from '@tienda3d/shared';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { Permissions } from '@/common/decorators/permissions.decorator';
@@ -43,10 +47,26 @@ export class WebOrdersController {
     return this.orders.get(id);
   }
 
-  @Permissions('ecommerce:orders')
+  /** Transferencia acreditada (F22·3): pide el permiso de pagos, no el de pedidos. */
+  @Permissions('ecommerce:payments')
   @Post(':id/confirm-transfer')
-  confirmTransfer(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
-    return this.orders.confirmTransfer(id, user.sub);
+  confirmTransfer(
+    @Param('id') id: string,
+    @Body(ZodValidation(webOrderTransferConfirmSchema)) body: WebOrderTransferConfirmInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.orders.confirmTransfer(id, body, user.sub);
+  }
+
+  /** Cobro en efectivo al retirar (F22·3). */
+  @Permissions('ecommerce:payments')
+  @Post(':id/confirm-cash')
+  confirmCash(
+    @Param('id') id: string,
+    @Body(ZodValidation(webOrderCashConfirmSchema)) body: WebOrderCashConfirmInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.orders.confirmCash(id, body, user.sub);
   }
 
   @Permissions('ecommerce:orders')
