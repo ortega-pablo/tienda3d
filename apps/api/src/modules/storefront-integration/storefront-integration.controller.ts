@@ -82,6 +82,13 @@ export class StorefrontIntegrationController {
     return this.b2bCatalog.forAccount(externalId);
   }
 
+  /** Si la cuenta tiene catálogo: la tienda lo consulta para mostrar el link en Mi cuenta. */
+  @IntegrationScopes('b2b:read')
+  @Get('customers/:externalId/catalog-access')
+  b2bCatalogAccess(@Param('externalId') externalId: string) {
+    return this.b2bCatalog.access(externalId);
+  }
+
   /** El mismo catálogo en PDF, sin las columnas internas. */
   @IntegrationScopes('b2b:read')
   @Get('customers/:externalId/catalog.pdf')

@@ -135,6 +135,9 @@ describe('[int] Catálogo B2B para la tienda', () => {
       data: { webProductId: pub.id, path: 'catalog/x.webp', width: 10, height: 10 },
     });
 
+    expect((await get('web-regaleria', key, 'catalog-access').expect(200)).body).toEqual({
+      enabled: true,
+    });
     const res = await get('web-regaleria').expect(200);
     expect(res.body).toMatchObject({
       customerName: 'Regalería Sur',
@@ -192,6 +195,9 @@ describe('[int] Catálogo B2B para la tienda', () => {
     await get('web-regaleria').expect(404);
     await get('web-regaleria', key, 'catalog.pdf').expect(404);
     await get('otra-cuenta').expect(404);
+    expect((await get('web-regaleria', key, 'catalog-access').expect(200)).body).toEqual({
+      enabled: false,
+    });
 
     await prisma.customer.deleteMany();
     await wholesaler({ type: CustomerType.STANDARD });
