@@ -12,6 +12,7 @@ import type {
   WebOrderFulfillmentChangeInput,
   WebOrderListQuery,
   WebOrderProductionPlanDto,
+  WebOrderRefundInput,
   WebOrderSelectionDto,
   WebOrderSummaryDto,
   WebOrderTransferConfirmInput,
@@ -23,16 +24,19 @@ import { AuditService } from '@/modules/audit/audit.service';
 import { OutboxService } from '@/modules/outbox/outbox.service';
 import { ProductionsService } from '@/modules/productions/productions.service';
 import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
+import { StorefrontPaymentsClient } from '@/modules/web-catalog/storefront-payments.client';
 import {
   allowedFulfillments,
   canConfirmCash,
   canExtendPayment,
   canConfirmTransfer,
   canMoveFulfillment,
+  canRefund,
   canStartProduction,
   FULFILLMENT_LABEL,
   needsAttention,
   PAYMENT_EXTENSION_MS,
+  pesos,
   productionColors,
 } from './domain/order-flow';
 
@@ -46,9 +50,6 @@ const argentinaDateTime = (d: Date) =>
     timeStyle: 'short',
   });
 
-/** "$ 39.450,00": los montos de los pedidos web van en centavos. */
-const pesos = (cents: number) =>
-  (cents / 100).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
 const ORDER_CODE = /^W-\d{4}-\d{4,}$/;
 
 const SUMMARY_SELECT = {
@@ -69,8 +70,16 @@ type SummaryRow = Prisma.WebOrderGetPayload<{ select: typeof SUMMARY_SELECT }>;
 
 /** Lo que espera al taller (ver `needsAttention`), como filtro de la base. */
 const ATTENTION_WHERE: Prisma.WebOrderWhereInput = {
-  fulfillmentStatus: WebOrderFulfillment.RECEIVED,
-  paymentStatus: { in: [WebOrderPayment.AWAITING_TRANSFER, WebOrderPayment.APPROVED] },
+  OR: [
+    {
+      fulfillmentStatus: WebOrderFulfillment.RECEIVED,
+      paymentStatus: { in: [WebOrderPayment.AWAITING_TRANSFER, WebOrderPayment.APPROVED] },
+    },
+    {
+      paymentStatus: WebOrderPayment.DISPUTED,
+      fulfillmentStatus: { not: WebOrderFulfillment.CANCELLED },
+    },
+  ],
 };
 
 /**
@@ -89,6 +98,7 @@ export class WebOrdersService {
     private readonly events: CatalogEvents,
     private readonly outbox: OutboxService,
     private readonly productions: ProductionsService,
+    private readonly storefront: StorefrontPaymentsClient,
   ) {}
 
   /** El próximo código; dentro de la transacción que crea el pedido. */
@@ -143,6 +153,7 @@ export class WebOrdersService {
         paidAt: true,
         paidAmountCents: true,
         paymentReference: true,
+        refundedCents: true,
         paymentDueAt: true,
         customer: { select: { id: true, name: true, email: true, phone: true, taxId: true } },
         items: {
@@ -186,6 +197,7 @@ export class WebOrdersService {
       paidAt: order.paidAt?.toISOString() ?? null,
       paidAmountCents: order.paidAmountCents,
       paymentReference: order.paymentReference,
+      refundedCents: order.refundedCents,
       paymentDueAt: order.paymentDueAt?.toISOString() ?? null,
       items: order.items.map((i) => ({
         id: i.id,
@@ -213,6 +225,7 @@ export class WebOrdersService {
         confirmTransfer: canConfirmTransfer(order),
         confirmCash: canConfirmCash(order),
         extendPayment: canExtendPayment(order) && order.paymentDueAt !== null,
+        refund: canRefund(order),
         production: canStartProduction(order),
         fulfillment: allowedFulfillments(order).filter(
           (s): s is WebOrderDetailDto['actions']['fulfillment'][number] => s !== 'CANCELLED',
@@ -316,9 +329,11 @@ export class WebOrdersService {
     const order = await this.load(id);
     if (!canMoveFulfillment(order, input.status)) {
       throw new UnprocessableEntityException(
-        order.paymentStatus !== WebOrderPayment.APPROVED
-          ? 'El pedido todavía no está pagado.'
-          : `Un pedido ${FULFILLMENT_LABEL[order.fulfillmentStatus].toLowerCase()} no puede pasar a ${FULFILLMENT_LABEL[input.status].toLowerCase()}.`,
+        order.paymentStatus === WebOrderPayment.DISPUTED
+          ? 'El pago está en disputa: la preparación queda frenada hasta que se resuelva.'
+          : order.paymentStatus !== WebOrderPayment.APPROVED
+            ? 'El pedido todavía no está pagado.'
+            : `Un pedido ${FULFILLMENT_LABEL[order.fulfillmentStatus].toLowerCase()} no puede pasar a ${FULFILLMENT_LABEL[input.status].toLowerCase()}.`,
       );
     }
     const trackingCode =
@@ -350,7 +365,8 @@ export class WebOrdersService {
 
   /**
    * Cancela el pedido y devuelve al stock lo que se había reservado (§5.6). Si
-   * ya estaba pagado, el reembolso se hace aparte (Mercado Pago o transferencia).
+   * ya estaba pagado, el reembolso se hace aparte (`refund`, o a mano si fue por
+   * transferencia o en efectivo).
    */
   async cancel(
     id: string,
@@ -364,6 +380,55 @@ export class WebOrdersService {
       );
     }
     await this.cancelOrder(order, input.reason, actorId);
+    return this.get(id);
+  }
+
+  /**
+   * Reembolso desde el panel (F22·5). El dueño del pago es el sitio: se lo pide en
+   * el momento, para que el admin vea si el proveedor lo hizo, y el estado vuelve
+   * por el aviso `payment_updated`, como cualquier cambio del pago.
+   */
+  async refund(
+    id: string,
+    input: WebOrderRefundInput,
+    actorId: string,
+  ): Promise<WebOrderDetailDto> {
+    const order = await this.load(id);
+    if (!canRefund(order)) {
+      throw new UnprocessableEntityException(
+        'Este pedido no tiene un pago en línea para devolver.',
+      );
+    }
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { name: true },
+    });
+    const result = await this.storefront.refund({
+      externalId: order.externalId,
+      ...(input.amountCents && { amountCents: input.amountCents }),
+      reason: input.reason,
+      requestedBy: actor?.name ?? 'un usuario del panel',
+    });
+    if (!result.ok) {
+      throw new UnprocessableEntityException({ message: result.message, reason: result.reason });
+    }
+    const amount = input.amountCents ? pesos(input.amountCents) : 'todo el pago';
+    await this.prisma.webOrderEvent.create({
+      data: {
+        webOrderId: id,
+        kind: 'payment',
+        message: `Reembolso de ${amount}: ${input.reason}`,
+        actorId,
+      },
+    });
+    await this.audit.record({
+      actorId,
+      entity: 'WebOrder',
+      entityId: id,
+      action: 'refund',
+      before: { paymentStatus: order.paymentStatus, refundedCents: order.refundedCents },
+      after: { amountCents: input.amountCents ?? null, reason: input.reason },
+    });
     return this.get(id);
   }
 
@@ -656,6 +721,7 @@ export class WebOrdersService {
         fulfillmentStatus: true,
         deliveryMethod: true,
         totalCents: true,
+        refundedCents: true,
         paymentDueAt: true,
       },
     });

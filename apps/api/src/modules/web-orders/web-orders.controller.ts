@@ -6,6 +6,7 @@ import {
   webOrderListQuerySchema,
   webOrderNotesSchema,
   webOrderProductionSchema,
+  webOrderRefundSchema,
   webOrderTransferConfirmSchema,
   type WebOrderAttentionDto,
   type WebOrderCancelInput,
@@ -14,6 +15,7 @@ import {
   type WebOrderListQuery,
   type WebOrderNotesInput,
   type WebOrderProductionInput,
+  type WebOrderRefundInput,
   type WebOrderTransferConfirmInput,
 } from '@tienda3d/shared';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
@@ -74,6 +76,17 @@ export class WebOrdersController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.orders.confirmCash(id, body, user.sub);
+  }
+
+  /** Reembolso total o parcial (F22·5): el sitio se lo pide al proveedor. */
+  @Permissions('ecommerce:payments')
+  @Post(':id/refund')
+  refund(
+    @Param('id') id: string,
+    @Body(ZodValidation(webOrderRefundSchema)) body: WebOrderRefundInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.orders.refund(id, body, user.sub);
   }
 
   @Permissions('ecommerce:orders')

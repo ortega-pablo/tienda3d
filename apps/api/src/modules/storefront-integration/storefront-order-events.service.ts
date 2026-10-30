@@ -3,15 +3,27 @@ import { WebOrderPayment } from '@prisma/client';
 import { z } from 'zod';
 import { AuditService } from '@/modules/audit/audit.service';
 import { InboundEventsService } from '@/modules/inbound-events/inbound-events.service';
+import { pesos } from '@/modules/web-orders/domain/order-flow';
 
-/** Lo que el sitio avisa de un pedido (§5.5). Por ahora, cómo va el pago. */
-export const webOrderEventSchema = z.object({
-  type: z.literal('payment_updated'),
-  paymentStatus: z.nativeEnum(WebOrderPayment),
-  paidAt: z.coerce.date().nullable(),
-  /** Cuándo cambió en el sitio: ordena los avisos. */
-  changedAt: z.coerce.date(),
-});
+/** Lo que el sitio avisa de un pedido (§5.5): cómo va el pago y lo que hay que mirar. */
+export const webOrderEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('payment_updated'),
+    paymentStatus: z.nativeEnum(WebOrderPayment),
+    paidAt: z.coerce.date().nullable(),
+    /** Cuánto se devolvió del pago hasta ahora (F22·5). */
+    refundedCents: z.number().int().min(0).optional(),
+    /** Cuándo cambió en el sitio: ordena los avisos. */
+    changedAt: z.coerce.date(),
+  }),
+  /** Un pago que necesita a una persona (F22·5): contracargo, cobro tardío o que no cierra. */
+  z.object({
+    type: z.literal('payment_alert'),
+    alert: z.string().min(1).max(40),
+    message: z.string().min(1).max(500),
+    at: z.coerce.date(),
+  }),
+]);
 export type WebOrderEventInput = z.infer<typeof webOrderEventSchema>;
 
 export interface WebOrderEventResult {
@@ -29,6 +41,7 @@ const PAYMENT_MESSAGE: Record<WebOrderPayment, string> = {
   APPROVED: 'Pago aprobado en la tienda',
   REJECTED: 'Pago rechazado en la tienda',
   REFUNDED: 'Pago reembolsado',
+  DISPUTED: 'Contracargo: pago en disputa',
 };
 
 /**
@@ -44,6 +57,7 @@ export class StorefrontOrderEventsService {
   ) {}
 
   async apply(externalId: string, input: WebOrderEventInput, idempotencyKey: string) {
+    if (input.type === 'payment_alert') return this.alert(externalId, input, idempotencyKey);
     let before: WebOrderPayment | null = null;
     let orderId: string | null = null;
     const outcome = await this.inbound.once<WebOrderEventResult>(
@@ -52,19 +66,22 @@ export class StorefrontOrderEventsService {
       async (tx) => {
         const order = await tx.webOrder.findUnique({
           where: { externalId },
-          select: { id: true, paymentStatus: true, paymentChangedAt: true },
+          select: { id: true, paymentStatus: true, paymentChangedAt: true, refundedCents: true },
         });
         // Se confirma igual: el sitio no tiene por qué reintentarlo 48 h.
         if (!order) return { applied: false, ignored: 'UNKNOWN_ORDER' };
         if (order.paymentChangedAt && order.paymentChangedAt >= input.changedAt) {
           return { applied: false, ignored: 'STALE' };
         }
-        const changed = order.paymentStatus !== input.paymentStatus;
+        const refundedCents = input.refundedCents ?? order.refundedCents;
+        const statusChanged = order.paymentStatus !== input.paymentStatus;
+        const changed = statusChanged || refundedCents !== order.refundedCents;
         await tx.webOrder.update({
           where: { id: order.id },
           data: {
             paymentStatus: input.paymentStatus,
             paymentChangedAt: input.changedAt,
+            refundedCents,
             ...(input.paidAt && { paidAt: input.paidAt }),
           },
         });
@@ -73,7 +90,10 @@ export class StorefrontOrderEventsService {
             data: {
               webOrderId: order.id,
               kind: 'payment',
-              message: PAYMENT_MESSAGE[input.paymentStatus],
+              // Un reembolso parcial no cambia el estado: se dice cuánto va.
+              message: statusChanged
+                ? PAYMENT_MESSAGE[input.paymentStatus]
+                : `Reembolsado hasta ahora: ${pesos(refundedCents)}`,
             },
           });
           before = order.paymentStatus;
@@ -89,7 +109,42 @@ export class StorefrontOrderEventsService {
         entityId: orderId,
         action: 'payment-updated',
         before: { paymentStatus: before },
-        after: { paymentStatus: input.paymentStatus },
+        after: { paymentStatus: input.paymentStatus, refundedCents: input.refundedCents },
+      });
+    }
+    return { ...outcome.result, replayed: outcome.replayed };
+  }
+
+  /** Va al historial del pedido, donde el panel la destaca. */
+  private async alert(
+    externalId: string,
+    input: Extract<WebOrderEventInput, { type: 'payment_alert' }>,
+    idempotencyKey: string,
+  ) {
+    let orderId: string | null = null;
+    const outcome = await this.inbound.once<WebOrderEventResult>(
+      'storefront:order-events',
+      idempotencyKey,
+      async (tx) => {
+        const order = await tx.webOrder.findUnique({
+          where: { externalId },
+          select: { id: true },
+        });
+        if (!order) return { applied: false, ignored: 'UNKNOWN_ORDER' };
+        await tx.webOrderEvent.create({
+          data: { webOrderId: order.id, kind: 'alert', message: input.message },
+        });
+        orderId = order.id;
+        return { applied: true };
+      },
+    );
+    if (orderId && !outcome.replayed) {
+      await this.audit.record({
+        actorId: null,
+        entity: 'WebOrder',
+        entityId: orderId,
+        action: 'payment-alert',
+        after: { alert: input.alert, message: input.message, at: input.at },
       });
     }
     return { ...outcome.result, replayed: outcome.replayed };
