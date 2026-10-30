@@ -119,7 +119,7 @@ export function CustomersList({
                 <th className="py-2 pr-4 font-medium">Tipo</th>
                 <th className="py-2 pr-4 font-medium">Contacto</th>
                 <th className="py-2 pr-4 font-medium">Pedidos web</th>
-                <th className="py-2 pr-4 font-medium">Portal</th>
+                <th className="py-2 pr-4 font-medium">Catálogo en la tienda</th>
                 <th className="py-2 pr-4 font-medium">Estado</th>
                 <th className="py-2 font-medium" />
               </tr>

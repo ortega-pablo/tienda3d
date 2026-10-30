@@ -753,10 +753,9 @@ model Customer {
   skipRegime            Boolean @default(false)
   skipReinvestment      Boolean @default(false)
 
-  /// Cuando true, este cliente tiene cuenta de portal. El User asociado vive
-  /// en User.customerId (1:1). El canal aplicado a su cotización se deriva
-  /// del checkbox "sin factura" (VD por default, Efectivo si se tilda),
-  /// igual que en el flujo del staff — no se persiste un default por cliente.
+  /// Casilla "Catálogo en la tienda" (F21·1, D18): la cuenta del sitio vinculada
+  /// a esta ficha ve su catálogo con sus precios en Mi cuenta. El nombre viene
+  /// del portal del panel, que no se construyó.
   hasPortalAccess Boolean @default(false)
   portalUser      User?   @relation("CustomerPortalUser")
 

@@ -7,11 +7,13 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { Public } from '@/common/decorators/public.decorator';
@@ -37,6 +39,7 @@ import {
   webOrderSchema,
   type WebOrderInput,
 } from './storefront-orders.service';
+import { StorefrontB2bCatalogService } from './storefront-b2b-catalog.service';
 import {
   webCustomerSchema,
   WebCustomersService,
@@ -55,6 +58,7 @@ import {
 @Controller('integrations/storefront/v1')
 export class StorefrontIntegrationController {
   constructor(
+    private readonly b2bCatalog: StorefrontB2bCatalogService,
     private readonly webCustomers: WebCustomersService,
     private readonly orders: StorefrontOrdersService,
     private readonly orderEvents: StorefrontOrderEventsService,
@@ -66,6 +70,26 @@ export class StorefrontIntegrationController {
   @Get('ping')
   ping(@Req() req: Request & { integrationClient: IntegrationClientRef }) {
     return { ok: true, client: req.integrationClient.name, time: new Date().toISOString() };
+  }
+
+  /**
+   * El catálogo de un cliente B2B (F21·1, D18): `externalId` es la cuenta del
+   * sitio. Sin márgenes. 404 si la cuenta no tiene catálogo.
+   */
+  @IntegrationScopes('b2b:read')
+  @Get('customers/:externalId/catalog')
+  b2bCatalogJson(@Param('externalId') externalId: string) {
+    return this.b2bCatalog.forAccount(externalId);
+  }
+
+  /** El mismo catálogo en PDF, sin las columnas internas. */
+  @IntegrationScopes('b2b:read')
+  @Get('customers/:externalId/catalog.pdf')
+  async b2bCatalogPdf(@Param('externalId') externalId: string, @Res() res: Response) {
+    const { buffer, filename } = await this.b2bCatalog.pdfForAccount(externalId);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
   }
 
   /** Una cuenta del sitio en Clientes del sistema (F13·8). */

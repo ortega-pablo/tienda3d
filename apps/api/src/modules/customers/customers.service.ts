@@ -15,6 +15,8 @@ export interface CustomerLite {
   type: CustomerType;
   /** Cargado en el sistema o creado por una cuenta de la tienda online (F13·8). */
   source: CustomerSource;
+  /** Hay una cuenta de la tienda vinculada a esta ficha (por email, F13·8). */
+  webAccountLinked: boolean;
   email: string | null;
   phone: string | null;
   taxId: string | null;
@@ -301,6 +303,7 @@ export class CustomersService {
     name: string;
     type: CustomerType;
     source: CustomerSource;
+    externalId: string | null;
     email: string | null;
     phone: string | null;
     taxId: string | null;
@@ -316,6 +319,7 @@ export class CustomersService {
       name: c.name,
       type: c.type,
       source: c.source,
+      webAccountLinked: c.externalId !== null,
       email: c.email,
       phone: c.phone,
       taxId: c.taxId,

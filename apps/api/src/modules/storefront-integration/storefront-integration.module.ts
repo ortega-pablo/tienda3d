@@ -1,3 +1,5 @@
+import { CustomersModule } from '@/modules/customers/customers.module';
+import { StorefrontB2bCatalogService } from './storefront-b2b-catalog.service';
 import { Module } from '@nestjs/common';
 import { WebCatalogModule } from '@/modules/web-catalog/web-catalog.module';
 import { WebOrdersModule } from '@/modules/web-orders/web-orders.module';
@@ -10,7 +12,7 @@ import { WebCustomersService } from './web-customers.service';
 
 /** Lo que el sitio le pide al sistema: pedidos, clientes, solicitudes (plan F11–F15). */
 @Module({
-  imports: [WebCatalogModule, WebOrdersModule],
+  imports: [WebCatalogModule, WebOrdersModule, CustomersModule],
   controllers: [StorefrontIntegrationController],
   providers: [
     IntegrationAuthGuard,
@@ -18,6 +20,7 @@ import { WebCustomersService } from './web-customers.service';
     StorefrontOrdersService,
     StorefrontOrderEventsService,
     StorefrontQuoteRequestsService,
+    StorefrontB2bCatalogService,
   ],
 })
 export class StorefrontIntegrationModule {}
