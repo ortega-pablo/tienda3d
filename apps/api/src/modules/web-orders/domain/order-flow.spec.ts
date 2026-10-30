@@ -2,10 +2,12 @@ import {
   allowedFulfillments,
   canConfirmCash,
   canConfirmTransfer,
+  canExtendPayment,
   canStartProduction,
   canMoveFulfillment,
   initialPayment,
   needsAttention,
+  paymentDueAt,
   paymentStartIssue,
   productionColors,
   type OrderState,
@@ -174,6 +176,30 @@ describe('Pedidos web: el cobro en efectivo (F22·3)', () => {
         paymentMethod: 'BANK_TRANSFER',
         paymentStatus: 'AWAITING_TRANSFER',
       }),
+    ).toBe(false);
+  });
+});
+
+describe('Pedidos web: el plazo para pagar (F22·4)', () => {
+  const placed = new Date('2026-10-29T15:00:00Z');
+  it('48 h en efectivo o transferencia, 2 h en línea', () => {
+    expect(paymentDueAt('BANK_TRANSFER', placed).toISOString()).toBe('2026-10-31T15:00:00.000Z');
+    expect(paymentDueAt('CASH', placed).toISOString()).toBe('2026-10-31T15:00:00.000Z');
+    for (const method of ['MERCADOPAGO', 'MODO', 'GOCUOTAS'] as const)
+      expect(paymentDueAt(method, placed).toISOString()).toBe('2026-10-29T17:00:00.000Z');
+  });
+  it('se extiende lo que espera el pago y no salió del taller', () => {
+    expect(
+      canExtendPayment({ paymentStatus: 'AWAITING_CASH', fulfillmentStatus: 'RECEIVED' }),
+    ).toBe(true);
+    expect(canExtendPayment({ paymentStatus: 'REJECTED', fulfillmentStatus: 'RECEIVED' })).toBe(
+      true,
+    );
+    expect(canExtendPayment({ paymentStatus: 'APPROVED', fulfillmentStatus: 'RECEIVED' })).toBe(
+      false,
+    );
+    expect(
+      canExtendPayment({ paymentStatus: 'AWAITING_TRANSFER', fulfillmentStatus: 'CANCELLED' }),
     ).toBe(false);
   });
 });

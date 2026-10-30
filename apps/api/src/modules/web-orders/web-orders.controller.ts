@@ -58,6 +58,13 @@ export class WebOrdersController {
     return this.orders.confirmTransfer(id, body, user.sub);
   }
 
+  /** 48 h más para pagar (F22·4): con el permiso de pagos. */
+  @Permissions('ecommerce:payments')
+  @Post(':id/extend-payment')
+  extendPayment(@Param('id') id: string, @CurrentUser() user: AccessPayload) {
+    return this.orders.extendPayment(id, user.sub);
+  }
+
   /** Cobro en efectivo al retirar (F22·3). */
   @Permissions('ecommerce:payments')
   @Post(':id/confirm-cash')

@@ -89,6 +89,8 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
   /** Cobro manual (F22·3): monto confirmado y número de operación de la transferencia. */
   paidAmountCents: number | null;
   paymentReference: string | null;
+  /** Hasta cuándo se puede pagar (F22·4); null en los pedidos de antes. */
+  paymentDueAt: string | null;
   items: WebOrderItemDto[];
   events: WebOrderEventDto[];
   /** Lo que el admin puede hacer ahora, según §5.6. */
@@ -96,6 +98,8 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
     confirmTransfer: boolean;
     /** Cobrar en efectivo: pedido en efectivo con retiro, esperando el pago (F22·3). */
     confirmCash: boolean;
+    /** Darle 48 h más para pagar (F22·4). */
+    extendPayment: boolean;
     /** Se puede generar la orden de producción de los ítems que no la tienen (F14·7). */
     production: boolean;
     fulfillment: Array<Exclude<WebOrderFulfillmentValue, 'RECEIVED' | 'CANCELLED'>>;

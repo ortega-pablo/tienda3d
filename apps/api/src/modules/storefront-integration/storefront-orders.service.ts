@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
 import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
-import { paymentStartIssue } from '@/modules/web-orders/domain/order-flow';
+import { paymentDueAt, paymentStartIssue } from '@/modules/web-orders/domain/order-flow';
 import { WebOrdersService } from '@/modules/web-orders/web-orders.service';
 import { webCustomerSchema, WebCustomersService } from './web-customers.service';
 
@@ -75,6 +75,8 @@ export interface PlacedOrder {
   code: string;
   webOrderId: string;
   replayed: boolean;
+  /** Hasta cuándo se puede pagar (F22·4): el sitio lo muestra. */
+  paymentDueAt: string | null;
 }
 
 /**
@@ -120,9 +122,16 @@ export class StorefrontOrdersService {
   private async find(externalId: string): Promise<PlacedOrder | null> {
     const order = await this.prisma.webOrder.findUnique({
       where: { externalId },
-      select: { id: true, code: true },
+      select: { id: true, code: true, paymentDueAt: true },
     });
-    return order ? { code: order.code, webOrderId: order.id, replayed: true } : null;
+    return order
+      ? {
+          code: order.code,
+          webOrderId: order.id,
+          replayed: true,
+          paymentDueAt: order.paymentDueAt?.toISOString() ?? null,
+        }
+      : null;
   }
 
   private async create(tx: Prisma.TransactionClient, input: WebOrderInput): Promise<PlacedOrder> {
@@ -210,6 +219,7 @@ export class StorefrontOrdersService {
         customerId,
         paymentMethod: input.paymentMethod,
         paymentStatus: input.paymentStatus,
+        paymentDueAt: paymentDueAt(input.paymentMethod, input.placedAt),
         deliveryMethod: input.deliveryMethod,
         ...(input.shipping && {
           shippingStreet: input.shipping.street,
@@ -256,6 +266,11 @@ export class StorefrontOrdersService {
     );
     for (const webProductId of products) await this.events.productChanged(tx, webProductId);
 
-    return { code, webOrderId: order.id, replayed: false };
+    return {
+      code,
+      webOrderId: order.id,
+      replayed: false,
+      paymentDueAt: order.paymentDueAt?.toISOString() ?? null,
+    };
   }
 }

@@ -26,15 +26,25 @@ import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
 import {
   allowedFulfillments,
   canConfirmCash,
+  canExtendPayment,
   canConfirmTransfer,
   canMoveFulfillment,
   canStartProduction,
   FULFILLMENT_LABEL,
   needsAttention,
+  PAYMENT_EXTENSION_MS,
   productionColors,
 } from './domain/order-flow';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** "31/10/2026, 18:40" en la hora de Argentina. */
+const argentinaDateTime = (d: Date) =>
+  d.toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
 
 /** "$ 39.450,00": los montos de los pedidos web van en centavos. */
 const pesos = (cents: number) =>
@@ -133,6 +143,7 @@ export class WebOrdersService {
         paidAt: true,
         paidAmountCents: true,
         paymentReference: true,
+        paymentDueAt: true,
         customer: { select: { id: true, name: true, email: true, phone: true, taxId: true } },
         items: {
           orderBy: { id: 'asc' },
@@ -175,6 +186,7 @@ export class WebOrdersService {
       paidAt: order.paidAt?.toISOString() ?? null,
       paidAmountCents: order.paidAmountCents,
       paymentReference: order.paymentReference,
+      paymentDueAt: order.paymentDueAt?.toISOString() ?? null,
       items: order.items.map((i) => ({
         id: i.id,
         webVariantId: i.webVariantId,
@@ -200,6 +212,7 @@ export class WebOrdersService {
       actions: {
         confirmTransfer: canConfirmTransfer(order),
         confirmCash: canConfirmCash(order),
+        extendPayment: canExtendPayment(order) && order.paymentDueAt !== null,
         production: canStartProduction(order),
         fulfillment: allowedFulfillments(order).filter(
           (s): s is WebOrderDetailDto['actions']['fulfillment'][number] => s !== 'CANCELLED',
@@ -350,10 +363,24 @@ export class WebOrdersService {
         `Un pedido ${FULFILLMENT_LABEL[order.fulfillmentStatus].toLowerCase()} no se puede cancelar.`,
       );
     }
+    await this.cancelOrder(order, input.reason, actorId);
+    return this.get(id);
+  }
+
+  /**
+   * Cancela, devuelve lo reservado al stock y le avisa al sitio. `actorId` null:
+   * lo canceló el sistema (un pedido que venció sin pagar, F22·4).
+   */
+  async cancelOrder(
+    order: Awaited<ReturnType<WebOrdersService['load']>>,
+    reason: string,
+    actorId: string | null,
+  ): Promise<void> {
+    const id = order.id;
     const released = await this.prisma.$transaction(async (tx) => {
       await this.claim(tx, order, {
         fulfillmentStatus: WebOrderFulfillment.CANCELLED,
-        cancelReason: input.reason,
+        cancelReason: reason,
       });
       const items = await tx.webOrderItem.findMany({
         where: { webOrderId: id, reservedQuantity: { gt: 0 } },
@@ -377,8 +404,7 @@ export class WebOrdersService {
           webOrderId: id,
           kind: 'cancelled',
           message:
-            `Cancelado: ${input.reason}` +
-            (units > 0 ? ` · ${units} unidad(es) vuelven al stock` : ''),
+            `Cancelado: ${reason}` + (units > 0 ? ` · ${units} unidad(es) vuelven al stock` : ''),
           actorId,
         },
       });
@@ -396,7 +422,63 @@ export class WebOrdersService {
       entityId: id,
       action: 'cancelled',
       before: { fulfillmentStatus: order.fulfillmentStatus },
-      after: { fulfillmentStatus: WebOrderFulfillment.CANCELLED, reason: input.reason, released },
+      after: { fulfillmentStatus: WebOrderFulfillment.CANCELLED, reason, released },
+    });
+  }
+
+  /**
+   * Un pedido sin pagar cuyo plazo venció (F22·4): se cancela como si lo hiciera
+   * el admin, pero sin usuario. Devuelve si lo canceló.
+   */
+  async expireIfDue(id: string, now: Date): Promise<boolean> {
+    const order = await this.load(id);
+    if (!canExtendPayment(order) || !order.paymentDueAt || order.paymentDueAt > now) return false;
+    try {
+      await this.cancelOrder(order, 'Venció el plazo para pagar', null);
+      return true;
+    } catch (error) {
+      // Lo pagaron o lo tocaron justo ahora: queda como esté.
+      if (error instanceof ConflictException) return false;
+      throw error;
+    }
+  }
+
+  /**
+   * 48 h más para pagar (F22·4): desde el vencimiento o, si ya pasó, desde ahora.
+   * Vuelve a avisar al cliente 24 h antes y el sitio muestra el plazo nuevo.
+   */
+  async extendPayment(id: string, actorId: string): Promise<WebOrderDetailDto> {
+    const order = await this.load(id);
+    if (!canExtendPayment(order) || !order.paymentDueAt) {
+      throw new UnprocessableEntityException(
+        'Este pedido no tiene un plazo para pagar que extender.',
+      );
+    }
+    const now = Date.now();
+    const due = new Date(Math.max(now, order.paymentDueAt.getTime()) + PAYMENT_EXTENSION_MS);
+    await this.prisma.$transaction(async (tx) => {
+      await this.claim(tx, order, { paymentDueAt: due, paymentReminderAt: null });
+      await tx.webOrderEvent.create({
+        data: {
+          webOrderId: id,
+          kind: 'payment',
+          message: `Plazo para pagar extendido hasta el ${argentinaDateTime(due)}`,
+          actorId,
+        },
+      });
+      await this.outbox.enqueue(tx, 'order.payment_deadline_changed', {
+        externalId: order.externalId,
+        code: order.code,
+        paymentDueAt: due.toISOString(),
+      });
+    });
+    await this.audit.record({
+      actorId,
+      entity: 'WebOrder',
+      entityId: id,
+      action: 'payment-extended',
+      before: { paymentDueAt: order.paymentDueAt },
+      after: { paymentDueAt: due },
     });
     return this.get(id);
   }
@@ -574,6 +656,7 @@ export class WebOrdersService {
         fulfillmentStatus: true,
         deliveryMethod: true,
         totalCents: true,
+        paymentDueAt: true,
       },
     });
     if (!order) throw new NotFoundException('Pedido inexistente');
