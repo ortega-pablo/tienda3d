@@ -10,6 +10,7 @@ import { z } from 'zod';
 export const webOrderPaymentSchema = z.enum([
   'PENDING',
   'AWAITING_TRANSFER',
+  'AWAITING_CASH',
   'APPROVED',
   'REJECTED',
   'REFUNDED',
@@ -26,7 +27,13 @@ export const webOrderFulfillmentSchema = z.enum([
 ]);
 export type WebOrderFulfillmentValue = z.infer<typeof webOrderFulfillmentSchema>;
 
-export const webPaymentMethodSchema = z.enum(['MERCADOPAGO', 'BANK_TRANSFER']);
+export const webPaymentMethodSchema = z.enum([
+  'MERCADOPAGO',
+  'BANK_TRANSFER',
+  'CASH',
+  'MODO',
+  'GOCUOTAS',
+]);
 export type WebPaymentMethodValue = z.infer<typeof webPaymentMethodSchema>;
 
 export const webDeliveryMethodSchema = z.enum(['PICKUP', 'SHIPPING']);

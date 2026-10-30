@@ -54,6 +54,7 @@ describe('[int] Idempotencia del seed', () => {
     const perms = await permissionsByRole();
     const ecommerce = [
       'ecommerce:orders',
+      'ecommerce:payments',
       'ecommerce:read',
       'ecommerce:settings',
       'ecommerce:write',

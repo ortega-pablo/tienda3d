@@ -241,6 +241,24 @@ describe('[int] Pedidos de la tienda online', () => {
     expect(await prisma.webOrder.count()).toBe(0);
   });
 
+  it('el efectivo es solo con retiro y empieza esperando el pago en el local (F22·2)', async () => {
+    const [a] = variants;
+    const cash = {
+      ...order([{ id: a!.id, quantity: 1 }]),
+      paymentMethod: 'CASH',
+      paymentStatus: 'AWAITING_CASH',
+    };
+    const conEnvio = await post({ ...cash, deliveryMethod: 'SHIPPING' }).expect(400);
+    expect(JSON.stringify(conEnvio.body)).toContain('solo con retiro');
+    await post({ ...cash, paymentStatus: 'AWAITING_TRANSFER' }).expect(400);
+    expect(await prisma.webOrder.count()).toBe(0);
+
+    await post(cash).expect(201);
+    expect(
+      await prisma.webOrder.findUniqueOrThrow({ where: { externalId: cash.externalId } }),
+    ).toMatchObject({ paymentMethod: 'CASH', paymentStatus: 'AWAITING_CASH' });
+  });
+
   describe('avisos del sitio sobre el pedido (F14·6)', () => {
     const event = (externalId: string, body: object, idem: string = randomUUID()) =>
       request(app.getHttpServer())

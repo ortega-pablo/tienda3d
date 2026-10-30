@@ -76,13 +76,15 @@ const PORTAL_PERMISSIONS = [
  * Permisos de la tienda online (plan de unificación, F4·1). Solo para el rol
  * admin: viven aparte de PERMISSIONS para que el filtro `endsWith(':read')` no
  * le dé `ecommerce:read` al viewer ni el operador los herede. Llegan a las
- * bases existentes por la migración `20261027000000_ecommerce_permissions`.
+ * bases existentes por las migraciones `20261027000000_ecommerce_permissions` y
+ * `20261029080000_medios_de_pago` (`ecommerce:payments`, F22·2).
  */
 const ECOMMERCE_PERMISSIONS = [
   'ecommerce:read',
   'ecommerce:write',
   'ecommerce:orders',
   'ecommerce:settings',
+  'ecommerce:payments',
 ] as const;
 
 const VIEWER_PERMS = PERMISSIONS.filter((p) => p.endsWith(':read'));

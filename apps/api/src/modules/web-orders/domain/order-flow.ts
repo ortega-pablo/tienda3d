@@ -42,6 +42,29 @@ export function canMoveFulfillment(order: OrderState, to: Fulfillment): boolean 
   return allowedFulfillments(order).includes(to);
 }
 
+/**
+ * Cómo empieza el pago de cada medio (F22·2): la transferencia y el efectivo
+ * esperan al admin; los medios en línea, al proveedor.
+ */
+export function initialPayment(method: PaymentMethod): Payment {
+  if (method === 'BANK_TRANSFER') return 'AWAITING_TRANSFER';
+  if (method === 'CASH') return 'AWAITING_CASH';
+  return 'PENDING';
+}
+
+/** Por qué un pedido no puede empezar así, o null. El efectivo es solo con retiro (D19). */
+export function paymentStartIssue(
+  order: Pick<OrderState, 'paymentMethod' | 'paymentStatus' | 'deliveryMethod'>,
+): string | null {
+  if (order.paymentStatus !== initialPayment(order.paymentMethod)) {
+    return 'El estado del pago no corresponde al medio elegido.';
+  }
+  if (order.paymentMethod === 'CASH' && order.deliveryMethod !== 'PICKUP') {
+    return 'El efectivo es solo con retiro por el taller.';
+  }
+  return null;
+}
+
 /** La transferencia la confirma el admin al ver el comprobante (D7). */
 export function canConfirmTransfer(order: OrderState): boolean {
   return (

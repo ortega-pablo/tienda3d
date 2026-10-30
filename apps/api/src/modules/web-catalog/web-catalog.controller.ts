@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
+  ecommercePaymentsSchema,
   ecommerceSettingsSchema,
   webAttributesSchema,
   webCategoryCreateSchema,
@@ -26,6 +27,7 @@ import {
   webProductMembersSchema,
   webProductUpdateSchema,
   webVariantUpdateSchema,
+  type EcommercePaymentsInput,
   type EcommerceSettingsInput,
   type SystemProductWebDto,
   type WebAttributesInput,
@@ -54,6 +56,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { WebPriceRecalcService } from './web-price-recalc.service';
 import { WebPriceService } from './web-price.service';
 import { WebPublicationService } from './web-publication.service';
+import { WebPaymentsService } from './web-payments.service';
 import { WebSettingsService } from './web-settings.service';
 import { WebVariantsService } from './web-variants.service';
 
@@ -69,6 +72,7 @@ export class WebCatalogController {
     private readonly categories: WebCategoriesService,
     private readonly publication: WebPublicationService,
     private readonly settings: WebSettingsService,
+    private readonly payments: WebPaymentsService,
     private readonly images: WebImagesService,
     private readonly priceRecalc: WebPriceRecalcService,
     private readonly prices: WebPriceService,
@@ -227,6 +231,22 @@ export class WebCatalogController {
     @CurrentUser() user: AccessPayload,
   ) {
     return this.settings.save(body, user.sub);
+  }
+
+  /** Medios de pago (F22·2): un switch por medio, con su propio permiso. */
+  @Permissions('ecommerce:payments')
+  @Get('settings/payments')
+  getPayments() {
+    return this.payments.get();
+  }
+
+  @Permissions('ecommerce:payments')
+  @Put('settings/payments')
+  savePayments(
+    @Body(ZodValidation(ecommercePaymentsSchema)) body: EcommercePaymentsInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.payments.save(body, user.sub);
   }
 
   /** Multipart en memoria (sin `dest`): el archivo se procesa antes de tocar el disco. */

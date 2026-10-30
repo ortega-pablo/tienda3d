@@ -185,9 +185,26 @@ export interface EcommerceSettingsDto {
   freeShippingFrom: number | null;
   pickupEnabled: boolean;
   pickupInstructions: string;
+  notificationEmail: string;
+  updatedAt: string | null;
+}
+
+/**
+ * Si el sitio tiene las credenciales de un medio en línea: `missing` no deja
+ * prenderlo; `unknown` es que el sitio no respondió (tampoco deja).
+ */
+export type PaymentReadiness = 'ready' | 'missing' | 'unknown';
+
+export interface EcommercePaymentsDto {
+  cashEnabled: boolean;
   bankTransferEnabled: boolean;
   bankTransferInstructions: string;
-  notificationEmail: string;
+  mercadoPagoEnabled: boolean;
+  modoEnabled: boolean;
+  goCuotasEnabled: boolean;
+  /** Retiro prendido: el efectivo es solo con retiro. */
+  pickupEnabled: boolean;
+  readiness: Record<'MERCADOPAGO' | 'MODO' | 'GOCUOTAS', PaymentReadiness>;
   updatedAt: string | null;
 }
 

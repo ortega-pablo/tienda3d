@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuditService } from '@/modules/audit/audit.service';
 import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
+import { paymentStartIssue } from '@/modules/web-orders/domain/order-flow';
 import { WebOrdersService } from '@/modules/web-orders/web-orders.service';
 import { webCustomerSchema, WebCustomersService } from './web-customers.service';
 
@@ -16,43 +17,49 @@ const selectionSchema = z.object({
 });
 
 /** Un pedido del sitio (F14·3). Los montos van en centavos, como en storefront_v1. */
-export const webOrderSchema = z.object({
-  externalId: z.string().uuid(),
-  number: z.number().int().positive(),
-  customer: webCustomerSchema,
-  paymentMethod: z.enum(['MERCADOPAGO', 'BANK_TRANSFER']),
-  paymentStatus: z.enum(['PENDING', 'AWAITING_TRANSFER']),
-  deliveryMethod: z.enum(['PICKUP', 'SHIPPING']),
-  shipping: z
-    .object({
-      street: z.string().max(120),
-      number: z.string().max(20),
-      apartment: z.string().max(40),
-      city: z.string().max(80),
-      province: z.string().max(4),
-      postalCode: z.string().max(10),
-    })
-    .nullable(),
-  shippingLabel: z.string().max(120),
-  shippingCents: z.number().int().nonnegative().nullable(),
-  subtotalCents: z.number().int().nonnegative(),
-  totalCents: z.number().int().nonnegative(),
-  customerNote: z.string().max(1000).default(''),
-  placedAt: z.coerce.date(),
-  items: z
-    .array(
-      z.object({
-        webVariantId: z.string().min(1),
-        quantity: z.number().int().min(1).max(999),
-        unitPriceCents: z.number().int().nonnegative(),
-        productName: z.string().max(160),
-        variantLabel: z.string().max(200),
-        selections: z.array(selectionSchema).max(10).default([]),
-      }),
-    )
-    .min(1)
-    .max(30),
-});
+export const webOrderSchema = z
+  .object({
+    externalId: z.string().uuid(),
+    number: z.number().int().positive(),
+    customer: webCustomerSchema,
+    paymentMethod: z.enum(['MERCADOPAGO', 'BANK_TRANSFER', 'CASH', 'MODO', 'GOCUOTAS']),
+    paymentStatus: z.enum(['PENDING', 'AWAITING_TRANSFER', 'AWAITING_CASH']),
+    deliveryMethod: z.enum(['PICKUP', 'SHIPPING']),
+    shipping: z
+      .object({
+        street: z.string().max(120),
+        number: z.string().max(20),
+        apartment: z.string().max(40),
+        city: z.string().max(80),
+        province: z.string().max(4),
+        postalCode: z.string().max(10),
+      })
+      .nullable(),
+    shippingLabel: z.string().max(120),
+    shippingCents: z.number().int().nonnegative().nullable(),
+    subtotalCents: z.number().int().nonnegative(),
+    totalCents: z.number().int().nonnegative(),
+    customerNote: z.string().max(1000).default(''),
+    placedAt: z.coerce.date(),
+    items: z
+      .array(
+        z.object({
+          webVariantId: z.string().min(1),
+          quantity: z.number().int().min(1).max(999),
+          unitPriceCents: z.number().int().nonnegative(),
+          productName: z.string().max(160),
+          variantLabel: z.string().max(200),
+          selections: z.array(selectionSchema).max(10).default([]),
+        }),
+      )
+      .min(1)
+      .max(30),
+  })
+  .superRefine((order, ctx) => {
+    const issue = paymentStartIssue(order);
+    if (issue)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paymentMethod'], message: issue });
+  });
 export type WebOrderInput = z.infer<typeof webOrderSchema>;
 
 /** Lo que el sitio ve de una variante: la vista storefront_v1.variants (contrato). */
