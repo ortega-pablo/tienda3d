@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import type { WebOrderDetailDto } from '@tienda3d/shared';
 import { api, ApiError } from '@/lib/api-server';
-import { requirePermission } from '@/lib/auth';
+import { hasPermission, requirePermission } from '@/lib/auth';
 import { formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,9 @@ import { OrderNotes } from './order-notes';
 import { ProductionButton } from './production-button';
 
 export default async function PedidoWebPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission('ecommerce:orders');
+  const user = await requirePermission('ecommerce:orders');
+  // Confirmar cobros pide su propio permiso (F22·3).
+  const canPayments = hasPermission(user, 'ecommerce:payments');
   const { id } = await params;
 
   let order: WebOrderDetailDto;
@@ -54,7 +56,7 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
             Pedido #{order.number} de la tienda · {formatDateTime(order.placedAt)}
           </p>
         </div>
-        <OrderActions order={order} />
+        <OrderActions order={order} canPayments={canPayments} />
       </header>
 
       {order.cancelReason && (
@@ -187,6 +189,11 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
                 </p>
               )}
               {order.customer.phone && <p>{order.customer.phone}</p>}
+              <p className="text-muted-foreground">
+                {order.customer.document
+                  ? `DNI o CUIT: ${order.customer.document}`
+                  : 'Sin DNI cargado en la cuenta'}
+              </p>
               {order.customerNote && (
                 <p className="mt-3 rounded-md bg-muted p-3">
                   <span className="block text-xs text-muted-foreground">Nota del cliente</span>
@@ -225,6 +232,12 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
                     ? `Pagado el ${formatDateTime(order.paidAt)}`
                     : PAYMENT_LABEL[order.paymentStatus].label}
                 </p>
+                {order.paidAmountCents != null && (
+                  <p className="text-muted-foreground">
+                    Confirmado: {formatCents(order.paidAmountCents)}
+                    {order.paymentReference && ` · operación ${order.paymentReference}`}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>

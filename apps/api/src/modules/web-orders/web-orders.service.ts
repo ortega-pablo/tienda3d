@@ -4,15 +4,17 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma, WebOrderFulfillment, WebOrderPayment } from '@prisma/client';
+import { Prisma, WebOrderFulfillment, WebOrderPayment, WebPaymentMethod } from '@prisma/client';
 import type {
   WebOrderCancelInput,
+  WebOrderCashConfirmInput,
   WebOrderDetailDto,
   WebOrderFulfillmentChangeInput,
   WebOrderListQuery,
   WebOrderProductionPlanDto,
   WebOrderSelectionDto,
   WebOrderSummaryDto,
+  WebOrderTransferConfirmInput,
 } from '@tienda3d/shared';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { startOfDayInArgentina, yearInArgentina } from '@/common/utils/date';
@@ -23,6 +25,7 @@ import { ProductionsService } from '@/modules/productions/productions.service';
 import { CatalogEvents } from '@/modules/web-catalog/catalog-events';
 import {
   allowedFulfillments,
+  canConfirmCash,
   canConfirmTransfer,
   canMoveFulfillment,
   canStartProduction,
@@ -32,6 +35,10 @@ import {
 } from './domain/order-flow';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** "$ 39.450,00": los montos de los pedidos web van en centavos. */
+const pesos = (cents: number) =>
+  (cents / 100).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
 const ORDER_CODE = /^W-\d{4}-\d{4,}$/;
 
 const SUMMARY_SELECT = {
@@ -124,6 +131,9 @@ export class WebOrdersService {
         internalNotes: true,
         cancelReason: true,
         paidAt: true,
+        paidAmountCents: true,
+        paymentReference: true,
+        customer: { select: { id: true, name: true, email: true, phone: true, taxId: true } },
         items: {
           orderBy: { id: 'asc' },
           include: { productionOrder: { select: { code: true } } },
@@ -138,7 +148,13 @@ export class WebOrdersService {
 
     return {
       ...this.summary(order),
-      customer: order.customer,
+      customer: {
+        id: order.customer.id,
+        name: order.customer.name,
+        email: order.customer.email,
+        phone: order.customer.phone,
+        document: order.customer.taxId,
+      },
       shipping: order.shippingStreet
         ? {
             street: order.shippingStreet,
@@ -157,6 +173,8 @@ export class WebOrdersService {
       internalNotes: order.internalNotes,
       cancelReason: order.cancelReason,
       paidAt: order.paidAt?.toISOString() ?? null,
+      paidAmountCents: order.paidAmountCents,
+      paymentReference: order.paymentReference,
       items: order.items.map((i) => ({
         id: i.id,
         webVariantId: i.webVariantId,
@@ -181,6 +199,7 @@ export class WebOrdersService {
       })),
       actions: {
         confirmTransfer: canConfirmTransfer(order),
+        confirmCash: canConfirmCash(order),
         production: canStartProduction(order),
         fulfillment: allowedFulfillments(order).filter(
           (s): s is WebOrderDetailDto['actions']['fulfillment'][number] => s !== 'CANCELLED',
@@ -191,37 +210,88 @@ export class WebOrdersService {
   }
 
   /** El admin vio el comprobante: el pago queda aprobado (D7). */
-  async confirmTransfer(id: string, actorId: string): Promise<WebOrderDetailDto> {
+  /**
+   * Transferencia acreditada (F22·3): el admin carga el monto que ve en el banco
+   * y el número de operación. Si el monto no es el del pedido, no se confirma.
+   */
+  async confirmTransfer(
+    id: string,
+    input: WebOrderTransferConfirmInput,
+    actorId: string,
+  ): Promise<WebOrderDetailDto> {
     const order = await this.load(id);
     if (!canConfirmTransfer(order)) {
       throw new UnprocessableEntityException('Este pedido no está esperando una transferencia.');
     }
+    return this.confirmManual(
+      order,
+      WebPaymentMethod.BANK_TRANSFER,
+      input.amountCents,
+      input.operationNumber,
+      actorId,
+    );
+  }
+
+  /** Cobro en efectivo al retirar (F22·3): el monto recibido tiene que ser el del pedido. */
+  async confirmCash(
+    id: string,
+    input: WebOrderCashConfirmInput,
+    actorId: string,
+  ): Promise<WebOrderDetailDto> {
+    const order = await this.load(id);
+    if (!canConfirmCash(order)) {
+      throw new UnprocessableEntityException('Este pedido no está esperando un pago en efectivo.');
+    }
+    return this.confirmManual(order, WebPaymentMethod.CASH, input.amountCents, null, actorId);
+  }
+
+  private async confirmManual(
+    order: Awaited<ReturnType<WebOrdersService['load']>>,
+    method: typeof WebPaymentMethod.BANK_TRANSFER | typeof WebPaymentMethod.CASH,
+    amountCents: number,
+    reference: string | null,
+    actorId: string,
+  ): Promise<WebOrderDetailDto> {
+    if (amountCents !== order.totalCents) {
+      throw new UnprocessableEntityException({
+        message: `El monto (${pesos(amountCents)}) no coincide con el total del pedido (${pesos(order.totalCents)}). No se confirma: revisalo antes de entregar.`,
+        reason: 'AMOUNT_MISMATCH',
+      });
+    }
     const paidAt = new Date();
+    const message =
+      method === WebPaymentMethod.CASH
+        ? `Cobrado en efectivo: ${pesos(amountCents)}`
+        : `Transferencia confirmada: ${pesos(amountCents)}, operación ${reference}`;
     await this.prisma.$transaction(async (tx) => {
       await this.claim(tx, order, {
         paymentStatus: WebOrderPayment.APPROVED,
         paidAt,
         paymentChangedAt: paidAt,
+        paidAmountCents: amountCents,
+        paymentReference: reference,
       });
       await tx.webOrderEvent.create({
-        data: { webOrderId: id, kind: 'payment', message: 'Transferencia confirmada', actorId },
+        data: { webOrderId: order.id, kind: 'payment', message, actorId },
       });
       // El sitio es el dueño del pago: lo aplica y avisa de vuelta (§5.5).
       await this.outbox.enqueue(tx, 'order.payment_confirmed_manually', {
         externalId: order.externalId,
         code: order.code,
         paidAt: paidAt.toISOString(),
+        method,
+        amountCents,
       });
     });
     await this.audit.record({
       actorId,
       entity: 'WebOrder',
-      entityId: id,
-      action: 'transfer-confirmed',
+      entityId: order.id,
+      action: method === WebPaymentMethod.CASH ? 'cash-confirmed' : 'transfer-confirmed',
       before: { paymentStatus: order.paymentStatus },
-      after: { paymentStatus: WebOrderPayment.APPROVED, paidAt },
+      after: { paymentStatus: WebOrderPayment.APPROVED, paidAt, amountCents, reference },
     });
-    return this.get(id);
+    return this.get(order.id);
   }
 
   /** Un paso de la preparación (preparar, listo, enviado, entregado). */
@@ -503,6 +573,7 @@ export class WebOrdersService {
         paymentStatus: true,
         fulfillmentStatus: true,
         deliveryMethod: true,
+        totalCents: true,
       },
     });
     if (!order) throw new NotFoundException('Pedido inexistente');

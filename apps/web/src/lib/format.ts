@@ -53,3 +53,15 @@ export function formatDateTime(value: DateInput, opts?: Intl.DateTimeFormatOptio
     ...opts,
   });
 }
+
+/**
+ * Monto como lo escribe alguien en Argentina: "4.500" son cuatro mil
+ * quinientos, "4.500,50" lleva decimales; también acepta "4500.50". Vacío → null.
+ */
+export function parseAmount(text: string): number | null {
+  const t = text.trim().replace(/\s|\$/g, '');
+  if (!t) return null;
+  if (t.includes(',')) return Number(t.replace(/\./g, '').replace(',', '.'));
+  if (/^\d{1,3}(\.\d{3})+$/.test(t)) return Number(t.replace(/\./g, ''));
+  return Number(t);
+}

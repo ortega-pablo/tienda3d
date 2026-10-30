@@ -6,13 +6,14 @@ import { toast } from 'sonner';
 import type { WebOrderDetailDto, WebOrderFulfillmentChangeInput } from '@tienda3d/shared';
 import { api } from '@/lib/api-client';
 import { handleApiError } from '@/lib/handle-error';
-import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { parseAmount } from '@/lib/format';
 import { formatCents } from '../order-labels';
 
 type Step = WebOrderDetailDto['actions']['fulfillment'][number];
@@ -24,16 +25,43 @@ const STEP: Record<Step, { label: string; toast: string }> = {
   DELIVERED: { label: 'Marcar entregado', toast: 'El pedido está entregado.' },
 };
 
-/** Las acciones que la API habilita para este pedido (§5.6); nada más. */
-export function OrderActions({ order }: { order: WebOrderDetailDto }) {
+/** Monto en pesos escrito a mano → centavos (null si no se entiende). */
+function toCents(text: string): number | null {
+  const amount = parseAmount(text);
+  return amount != null && Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) : null;
+}
+
+/**
+ * Las acciones que la API habilita para este pedido (§5.6); nada más. Los cobros
+ * piden el permiso de pagos (`canPayments`, F22·3).
+ */
+export function OrderActions({
+  order,
+  canPayments,
+}: {
+  order: WebOrderDetailDto;
+  canPayments: boolean;
+}) {
   const router = useRouter();
-  const confirm = useConfirm();
   const [pending, setPending] = useState(false);
   const [shipping, setShipping] = useState(false);
   const [trackingCode, setTrackingCode] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
+  const [paying, setPaying] = useState<'transfer' | 'cash' | null>(null);
+  const [amount, setAmount] = useState('');
+  const [operation, setOperation] = useState('');
+  const [credited, setCredited] = useState(false);
   const { actions } = order;
+  const confirmTransfer = canPayments && actions.confirmTransfer;
+  const confirmCash = canPayments && actions.confirmCash;
+  const amountCents = toCents(amount);
+  const closePaying = () => {
+    setPaying(null);
+    setAmount('');
+    setOperation('');
+    setCredited(false);
+  };
 
   const run = async (path: string, body: object, done: string) => {
     setPending(true);
@@ -42,6 +70,7 @@ export function OrderActions({ order }: { order: WebOrderDetailDto }) {
       toast.success(done);
       setShipping(false);
       setCancelling(false);
+      closePaying();
       router.refresh();
     } catch (err) {
       handleApiError(err);
@@ -50,35 +79,32 @@ export function OrderActions({ order }: { order: WebOrderDetailDto }) {
     }
   };
 
-  const confirmTransfer = async () => {
-    const ok = await confirm({
-      title: '¿Confirmar la transferencia?',
-      description: `Revisá que el comprobante sea por ${formatCents(order.totalCents)}. El pedido queda pagado y se puede empezar a preparar.`,
-      confirmLabel: 'Confirmar pago',
-    });
-    if (ok) await run('confirm-transfer', {}, 'Transferencia confirmada.');
-  };
-
   const move = (status: Step) => {
     if (status === 'SHIPPED') return setShipping(true);
     const body: WebOrderFulfillmentChangeInput = { status };
     return run('fulfillment', body, STEP[status].toast);
   };
 
-  if (!actions.confirmTransfer && actions.fulfillment.length === 0 && !actions.cancel) return null;
+  if (!confirmTransfer && !confirmCash && actions.fulfillment.length === 0 && !actions.cancel) {
+    return null;
+  }
 
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      {actions.confirmTransfer && (
-        <Button onClick={confirmTransfer} disabled={pending}>
-          {pending && <Spinner size="sm" />}
+      {confirmTransfer && (
+        <Button onClick={() => setPaying('transfer')} disabled={pending}>
           Confirmar transferencia
+        </Button>
+      )}
+      {confirmCash && (
+        <Button onClick={() => setPaying('cash')} disabled={pending}>
+          Cobrado en efectivo
         </Button>
       )}
       {actions.fulfillment.map((status, i) => (
         <Button
           key={status}
-          variant={i === 0 && !actions.confirmTransfer ? 'default' : 'outline'}
+          variant={i === 0 && !confirmTransfer && !confirmCash ? 'default' : 'outline'}
           onClick={() => move(status)}
           disabled={pending}
         >
@@ -93,6 +119,80 @@ export function OrderActions({ order }: { order: WebOrderDetailDto }) {
           Cancelar pedido
         </Button>
       )}
+
+      <Dialog
+        open={paying !== null}
+        onOpenChange={(open) => !open && closePaying()}
+        title={paying === 'cash' ? 'Cobrar en efectivo' : 'Confirmar la transferencia'}
+        description={
+          paying === 'cash'
+            ? `Pedí el documento: el pedido se entrega a ${order.customer.name}${order.customer.document ? ` (DNI o CUIT ${order.customer.document})` : ''}.`
+            : 'Confirmá solo si la ves acreditada en el homebanking: un comprobante no prueba nada.'
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={closePaying} disabled={pending}>
+              Volver
+            </Button>
+            <Button
+              onClick={() =>
+                paying === 'cash'
+                  ? run('confirm-cash', { amountCents }, 'Cobro en efectivo registrado.')
+                  : run(
+                      'confirm-transfer',
+                      { amountCents, operationNumber: operation.trim() },
+                      'Transferencia confirmada.',
+                    )
+              }
+              disabled={
+                pending ||
+                amountCents === null ||
+                (paying === 'transfer' && (operation.trim().length < 3 || !credited))
+              }
+            >
+              {pending && <Spinner size="sm" />}
+              {paying === 'cash' ? 'Registrar el cobro' : 'Confirmar pago'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm">
+            Total del pedido: <span className="font-medium">{formatCents(order.totalCents)}</span>
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="ped-monto">
+              {paying === 'cash' ? 'Monto cobrado ($)' : 'Monto acreditado ($)'}
+            </Label>
+            <Input
+              id="ped-monto"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Lo que recibiste, sin copiar el total"
+            />
+          </div>
+          {paying === 'transfer' && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="ped-operacion">Número de operación del banco</Label>
+                <Input
+                  id="ped-operacion"
+                  value={operation}
+                  onChange={(e) => setOperation(e.target.value)}
+                  maxLength={60}
+                />
+              </div>
+              <Checkbox
+                id="ped-acreditada"
+                checked={credited}
+                onChange={(e) => setCredited(e.target.checked)}
+                label="La vi acreditada en la cuenta del negocio"
+              />
+            </>
+          )}
+        </div>
+      </Dialog>
 
       <Dialog
         open={shipping}

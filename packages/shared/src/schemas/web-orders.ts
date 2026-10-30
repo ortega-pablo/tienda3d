@@ -27,6 +27,24 @@ export const webOrderFulfillmentSchema = z.enum([
 ]);
 export type WebOrderFulfillmentValue = z.infer<typeof webOrderFulfillmentSchema>;
 
+/**
+ * Confirmar una transferencia (F22·3): el monto que se ve acreditado en el
+ * banco y el número de operación. Un comprobante no alcanza.
+ */
+export const webOrderTransferConfirmSchema = z
+  .object({
+    amountCents: z.number().int().positive('Cargá el monto acreditado'),
+    operationNumber: z.string().trim().min(3, 'Cargá el número de operación del banco').max(60),
+  })
+  .strict();
+export type WebOrderTransferConfirmInput = z.infer<typeof webOrderTransferConfirmSchema>;
+
+/** Cobrar en efectivo al retirar (F22·3): el monto recibido. */
+export const webOrderCashConfirmSchema = z
+  .object({ amountCents: z.number().int().positive('Cargá el monto cobrado') })
+  .strict();
+export type WebOrderCashConfirmInput = z.infer<typeof webOrderCashConfirmSchema>;
+
 export const webPaymentMethodSchema = z.enum([
   'MERCADOPAGO',
   'BANK_TRANSFER',

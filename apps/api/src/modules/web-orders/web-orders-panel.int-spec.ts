@@ -49,7 +49,7 @@ describe('[int] Pedidos web en el panel', () => {
     await truncateAll(prisma);
     await prisma.outboxEvent.deleteMany();
     fx = await seedFixtures(prisma);
-    token = firmar(['ecommerce:read', 'ecommerce:orders']);
+    token = firmar(['ecommerce:read', 'ecommerce:orders', 'ecommerce:payments']);
 
     const pubId = (
       await app.get(WebProductsService).create(
@@ -78,7 +78,8 @@ describe('[int] Pedidos web en el panel', () => {
   /** Un pedido como lo registra el sitio (F14·3). */
   const place = async (
     over: {
-      paymentMethod?: 'BANK_TRANSFER' | 'MERCADOPAGO';
+      paymentMethod?: 'BANK_TRANSFER' | 'MERCADOPAGO' | 'CASH';
+      documentNumber?: string;
       deliveryMethod?: 'PICKUP' | 'SHIPPING';
       quantity?: number;
       placedAt?: string;
@@ -100,10 +101,15 @@ describe('[int] Pedidos web en el panel', () => {
         firstName: over.who?.firstName ?? 'Ana',
         lastName: 'Prueba',
         phone: '',
-        documentNumber: null,
+        documentNumber: over.documentNumber ?? null,
       },
       paymentMethod: method,
-      paymentStatus: method === 'BANK_TRANSFER' ? 'AWAITING_TRANSFER' : 'PENDING',
+      paymentStatus:
+        method === 'BANK_TRANSFER'
+          ? 'AWAITING_TRANSFER'
+          : method === 'CASH'
+            ? 'AWAITING_CASH'
+            : 'PENDING',
       deliveryMethod: over.deliveryMethod ?? 'PICKUP',
       shipping:
         over.deliveryMethod === 'SHIPPING'
@@ -141,6 +147,15 @@ describe('[int] Pedidos web en el panel', () => {
     http().get(`/web-orders${path}`).set('Authorization', `Bearer ${auth}`);
   const post = (path: string, body: object = {}) =>
     http().post(`/web-orders${path}`).set('Authorization', `Bearer ${token}`).send(body);
+  /** Confirma la transferencia como lo hace el admin: el monto acreditado y la operación (F22·3). */
+  const total = async (id: string) =>
+    (await prisma.webOrder.findUniqueOrThrow({ where: { id } })).totalCents;
+  const pay = async (id: string) =>
+    await post(`/${id}/confirm-transfer`, {
+      amountCents: await total(id),
+      operationNumber: 'OP-4471',
+    });
+  const outboxClear = () => prisma.outboxEvent.deleteMany();
   const stock = async () =>
     (await prisma.webVariant.findUniqueOrThrow({ where: { id: variantId } })).stockQuantity;
   const audits = (action: string) =>
@@ -190,14 +205,15 @@ describe('[int] Pedidos web en el panel', () => {
     const sinPago = await post(`/${id}/fulfillment`, { status: 'PREPARING' }).expect(422);
     expect(sinPago.body.message).toMatch(/todavía no está pagado/);
 
-    const confirmed = await post(`/${id}/confirm-transfer`).expect(201);
+    const confirmed = await pay(id);
+    expect(confirmed.status).toBe(201);
     expect(confirmed.body).toMatchObject({
       paymentStatus: 'APPROVED',
       paidAt: expect.any(String),
       needsAttention: true,
       actions: { confirmTransfer: false, fulfillment: ['PREPARING'], cancel: true },
     });
-    await post(`/${id}/confirm-transfer`).expect(422);
+    expect((await pay(id)).status).toBe(422);
 
     await post(`/${id}/fulfillment`, { status: 'PREPARING' }).expect(201);
     // Es retiro: no se envía.
@@ -213,7 +229,7 @@ describe('[int] Pedidos web en el panel', () => {
       'Entregado',
       'Listo para retirar',
       'En preparación',
-      'Transferencia confirmada',
+      expect.stringMatching(/^Transferencia confirmada: .* operación OP-4471$/),
       'Pedido #1001 recibido de la tienda',
     ]);
     expect(done.body.events[0].actorName).toEqual(expect.any(String));
@@ -225,7 +241,7 @@ describe('[int] Pedidos web en el panel', () => {
 
   it('el envío guarda el seguimiento', async () => {
     const id = await place({ deliveryMethod: 'SHIPPING' });
-    await post(`/${id}/confirm-transfer`).expect(201);
+    expect((await pay(id)).status).toBe(201);
     await post(`/${id}/fulfillment`, { status: 'PREPARING' }).expect(201);
     await post(`/${id}/fulfillment`, { status: 'READY_FOR_PICKUP' }).expect(422);
     const shipped = await post(`/${id}/fulfillment`, {
@@ -275,11 +291,20 @@ describe('[int] Pedidos web en el panel', () => {
         e.payload,
       ]);
 
-    await post(`/${id}/confirm-transfer`).expect(201);
+    expect((await pay(id)).status).toBe(201);
     await post(`/${id}/fulfillment`, { status: 'PREPARING' }).expect(201);
     await post(`/${id}/cancel`, { reason: 'Se arrepintió' }).expect(201);
     expect(await sent()).toEqual([
-      ['order.payment_confirmed_manually', { externalId, code, paidAt: expect.any(String) }],
+      [
+        'order.payment_confirmed_manually',
+        {
+          externalId,
+          code,
+          paidAt: expect.any(String),
+          method: 'BANK_TRANSFER',
+          amountCents: expect.any(Number),
+        },
+      ],
       [
         'order.fulfillment_changed',
         { externalId, code, status: 'PREPARING', changedAt: expect.any(String) },
@@ -299,10 +324,7 @@ describe('[int] Pedidos web en el panel', () => {
 
   it('dos admins a la vez: el pago se confirma una sola vez', async () => {
     const id = await place();
-    const results = await Promise.all([
-      post(`/${id}/confirm-transfer`),
-      post(`/${id}/confirm-transfer`),
-    ]);
+    const results = await Promise.all([pay(id), pay(id)]);
     expect(results.map((r) => r.status).filter((s) => s === 201)).toHaveLength(1);
     expect([409, 422]).toContain(results.find((r) => r.status !== 201)!.status);
     expect(await prisma.webOrderEvent.count({ where: { webOrderId: id, kind: 'payment' } })).toBe(
@@ -341,6 +363,78 @@ describe('[int] Pedidos web en el panel', () => {
       customers.body.find((c: { email: string }) => c.email === email)?.webOrderCount;
     expect(count('ana@example.com')).toBe(2);
     expect(count('bea@example.com')).toBe(1);
+  });
+
+  it('confirmar una transferencia pide el monto acreditado y la operación (F22·3)', async () => {
+    const id = await place();
+    await outboxClear();
+    await post(`/${id}/confirm-transfer`, {}).expect(400);
+    const distinto = await post(`/${id}/confirm-transfer`, {
+      amountCents: (await total(id)) - 100,
+      operationNumber: 'OP-1',
+    }).expect(422);
+    expect(distinto.body.details).toMatchObject({ reason: 'AMOUNT_MISMATCH' });
+    expect((await get(`/${id}`).expect(200)).body.paymentStatus).toBe('AWAITING_TRANSFER');
+
+    const ok = await pay(id);
+    expect(ok.status).toBe(201);
+    expect(ok.body).toMatchObject({
+      paymentStatus: 'APPROVED',
+      paidAmountCents: await total(id),
+      paymentReference: 'OP-4471',
+    });
+    expect(ok.body.events[0].message).toMatch(/Transferencia confirmada: .* operación OP-4471/);
+    const audit = await prisma.auditLog.findFirstOrThrow({
+      where: { entity: 'WebOrder', action: 'transfer-confirmed', entityId: id },
+    });
+    expect(audit.after).toMatchObject({ amountCents: await total(id), reference: 'OP-4471' });
+    const sent = await prisma.outboxEvent.findFirstOrThrow({
+      where: { type: 'order.payment_confirmed_manually' },
+    });
+    expect(sent.payload).toMatchObject({ method: 'BANK_TRANSFER', amountCents: await total(id) });
+  });
+
+  it('el efectivo se cobra al retirar, con el monto exacto y el documento a la vista (F22·3)', async () => {
+    const id = await place({ paymentMethod: 'CASH', documentNumber: '30123456' });
+    await outboxClear();
+    const detail = (await get(`/${id}`).expect(200)).body;
+    expect(detail).toMatchObject({
+      paymentStatus: 'AWAITING_CASH',
+      customer: { document: '30123456' },
+      actions: { confirmTransfer: false, confirmCash: true, fulfillment: [] },
+    });
+    expect((await pay(id)).status).toBe(422);
+    await post(`/${id}/confirm-cash`, { amountCents: 100 }).expect(422);
+
+    const ok = await post(`/${id}/confirm-cash`, { amountCents: await total(id) }).expect(201);
+    expect(ok.body).toMatchObject({
+      paymentStatus: 'APPROVED',
+      paidAmountCents: await total(id),
+      paymentReference: null,
+      actions: { confirmCash: false },
+    });
+    expect(await audits('cash-confirmed')).toBe(1);
+    const sent = await prisma.outboxEvent.findFirstOrThrow({
+      where: { type: 'order.payment_confirmed_manually' },
+    });
+    expect(sent.payload).toMatchObject({ method: 'CASH', amountCents: await total(id) });
+  });
+
+  it('sin ecommerce:payments se gestiona el pedido pero no se confirma un cobro (F22·3)', async () => {
+    const transferencia = await place({ quantity: 1 });
+    const efectivo = await place({ paymentMethod: 'CASH', quantity: 1 });
+    const soloPedidos = firmar(['ecommerce:read', 'ecommerce:orders']);
+    await get(`/${transferencia}`, soloPedidos).expect(200);
+    await http()
+      .post(`/web-orders/${transferencia}/confirm-transfer`)
+      .set('Authorization', `Bearer ${soloPedidos}`)
+      .send({ amountCents: await total(transferencia), operationNumber: 'OP-1' })
+      .expect(403);
+    await http()
+      .post(`/web-orders/${efectivo}/confirm-cash`)
+      .set('Authorization', `Bearer ${soloPedidos}`)
+      .send({ amountCents: await total(efectivo) })
+      .expect(403);
   });
 
   it('sin ecommerce:orders no se ve ni se toca nada', async () => {

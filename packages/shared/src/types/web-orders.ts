@@ -61,7 +61,14 @@ export interface WebOrderEventDto {
 }
 
 export interface WebOrderDetailDto extends WebOrderSummaryDto {
-  customer: { id: string; name: string; email: string | null; phone: string | null };
+  /** `document`: el DNI o CUIT de la cuenta, para controlar quién retira (F22·3). */
+  customer: {
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    document: string | null;
+  };
   shipping: {
     street: string;
     number: string;
@@ -79,11 +86,16 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
   internalNotes: string;
   cancelReason: string | null;
   paidAt: string | null;
+  /** Cobro manual (F22·3): monto confirmado y número de operación de la transferencia. */
+  paidAmountCents: number | null;
+  paymentReference: string | null;
   items: WebOrderItemDto[];
   events: WebOrderEventDto[];
   /** Lo que el admin puede hacer ahora, según §5.6. */
   actions: {
     confirmTransfer: boolean;
+    /** Cobrar en efectivo: pedido en efectivo con retiro, esperando el pago (F22·3). */
+    confirmCash: boolean;
     /** Se puede generar la orden de producción de los ítems que no la tienen (F14·7). */
     production: boolean;
     fulfillment: Array<Exclude<WebOrderFulfillmentValue, 'RECEIVED' | 'CANCELLED'>>;
