@@ -284,11 +284,18 @@ export function CustomerEditor({
               checked={form.isActive}
               onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
             />
-            <Checkbox
-              label="Acceso al portal"
-              checked={form.hasPortalAccess}
-              onChange={(e) => setForm({ ...form, hasPortalAccess: e.target.checked })}
-            />
+            <div className="space-y-1">
+              <Checkbox
+                label="Catálogo en la tienda"
+                checked={form.hasPortalAccess}
+                onChange={(e) => setForm({ ...form, hasPortalAccess: e.target.checked })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {customer?.webAccountLinked
+                  ? 'Tiene cuenta en la tienda: ve sus precios en Mi cuenta.'
+                  : 'El cliente tiene que registrarse en la tienda con el email de esta ficha.'}
+              </p>
+            </div>
           </div>
         </fieldset>
       </CardContent>

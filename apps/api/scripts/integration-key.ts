@@ -54,6 +54,8 @@ async function main(): Promise<void> {
       const keyHash = hashIntegrationKey(key);
       const existing = await prisma.integrationClient.findUnique({ where: { keyHash } });
       if (existing) {
+        // Un alcance nuevo le llega a la clave que ya estaba (F21·1).
+        await prisma.integrationClient.update({ where: { id: existing.id }, data: { scopes } });
         console.log(`La clave ya estaba registrada para "${existing.name}" (${existing.id}).`);
       } else {
         const client = await prisma.integrationClient.create({

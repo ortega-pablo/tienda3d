@@ -7,6 +7,7 @@ export const INTEGRATION_SCOPES = [
   'orders:events',
   'customers:write',
   'quote-requests:write',
+  'b2b:read',
 ] as const;
 export type IntegrationScope = (typeof INTEGRATION_SCOPES)[number];
 

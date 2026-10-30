@@ -8,6 +8,8 @@ export interface CustomerLite {
   type: CustomerType;
   /** Cargado en el sistema o creado por una cuenta de la tienda online. */
   source: CustomerSource;
+  /** Hay una cuenta de la tienda vinculada a esta ficha (por email). */
+  webAccountLinked: boolean;
   email: string | null;
   phone: string | null;
   taxId: string | null;

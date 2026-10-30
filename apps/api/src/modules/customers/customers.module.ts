@@ -27,6 +27,7 @@ import { CustomersService, CustomersWriteService } from './customers.service';
     CustomerPricingService,
     CustomerCronService,
     CustomerCatalogService,
+    CustomerCatalogPdfService,
   ],
 })
 export class CustomersModule {}
