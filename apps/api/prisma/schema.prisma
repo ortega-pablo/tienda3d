@@ -1400,6 +1400,10 @@ model WebOrder {
   /// Cobro manual (F22·3): lo que el admin vio acreditado o cobró, y el número de operación de la transferencia.
   paidAmountCents    Int?
   paymentReference   String?
+  /// Hasta cuándo se puede pagar (F22·4): 48 h en efectivo o transferencia, 2 h en línea. Null: sin plazo (pedidos de antes).
+  paymentDueAt       DateTime?
+  /// Cuándo se avisó al cliente que vence (efectivo y transferencia, 24 h antes).
+  paymentReminderAt  DateTime?
   /// Cuándo cambió el pago en el sitio (su dueño): un aviso más viejo no lo pisa (F14·6).
   paymentChangedAt   DateTime?
   createdAt          DateTime            @default(now())
@@ -1411,6 +1415,7 @@ model WebOrder {
   @@index([fulfillmentStatus, createdAt])
   @@index([paymentStatus])
   @@index([customerId])
+  @@index([paymentDueAt])
   @@map("web_orders")
 }
 

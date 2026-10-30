@@ -232,6 +232,11 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
                     ? `Pagado el ${formatDateTime(order.paidAt)}`
                     : PAYMENT_LABEL[order.paymentStatus].label}
                 </p>
+                {!order.paidAt && order.paymentDueAt && order.fulfillmentStatus !== 'CANCELLED' && (
+                  <p className="text-muted-foreground">
+                    Vence el {formatDateTime(order.paymentDueAt)}: si no se paga, se cancela solo.
+                  </p>
+                )}
                 {order.paidAmountCents != null && (
                   <p className="text-muted-foreground">
                     Confirmado: {formatCents(order.paidAmountCents)}

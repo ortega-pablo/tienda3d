@@ -55,6 +55,7 @@ export function OrderActions({
   const { actions } = order;
   const confirmTransfer = canPayments && actions.confirmTransfer;
   const confirmCash = canPayments && actions.confirmCash;
+  const extendPayment = canPayments && actions.extendPayment;
   const amountCents = toCents(amount);
   const closePaying = () => {
     setPaying(null);
@@ -85,7 +86,13 @@ export function OrderActions({
     return run('fulfillment', body, STEP[status].toast);
   };
 
-  if (!confirmTransfer && !confirmCash && actions.fulfillment.length === 0 && !actions.cancel) {
+  if (
+    !confirmTransfer &&
+    !confirmCash &&
+    !extendPayment &&
+    actions.fulfillment.length === 0 &&
+    !actions.cancel
+  ) {
     return null;
   }
 
@@ -99,6 +106,15 @@ export function OrderActions({
       {confirmCash && (
         <Button onClick={() => setPaying('cash')} disabled={pending}>
           Cobrado en efectivo
+        </Button>
+      )}
+      {extendPayment && (
+        <Button
+          variant="outline"
+          onClick={() => run('extend-payment', {}, 'El cliente tiene 48 h más para pagar.')}
+          disabled={pending}
+        >
+          Dar 48 h más para pagar
         </Button>
       )}
       {actions.fulfillment.map((status, i) => (

@@ -65,6 +65,36 @@ export function paymentStartIssue(
   return null;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Plazos para pagar (F22·4, D19): 48 h en efectivo o transferencia, con aviso
+ * 24 h antes; 2 h en un medio en línea (el link de pago vence a los 30 min).
+ */
+export const MANUAL_PAYMENT_WINDOW_MS = 48 * HOUR_MS;
+export const ONLINE_PAYMENT_WINDOW_MS = 2 * HOUR_MS;
+export const PAYMENT_REMINDER_BEFORE_MS = 24 * HOUR_MS;
+/** Lo que el admin suma desde el panel. */
+export const PAYMENT_EXTENSION_MS = 48 * HOUR_MS;
+
+export function isManualMethod(method: PaymentMethod): boolean {
+  return method === 'BANK_TRANSFER' || method === 'CASH';
+}
+
+/** Hasta cuándo se puede pagar un pedido hecho en `placedAt`. */
+export function paymentDueAt(method: PaymentMethod, placedAt: Date): Date {
+  const window = isManualMethod(method) ? MANUAL_PAYMENT_WINDOW_MS : ONLINE_PAYMENT_WINDOW_MS;
+  return new Date(placedAt.getTime() + window);
+}
+
+/** Un pedido que todavía espera el pago (y que, por eso, puede vencer). */
+export const UNPAID: Payment[] = ['PENDING', 'AWAITING_TRANSFER', 'AWAITING_CASH', 'REJECTED'];
+
+/** El admin puede darle 48 h más a un pedido sin pagar que no salió del taller. */
+export function canExtendPayment(order: Pick<OrderState, 'paymentStatus' | 'fulfillmentStatus'>) {
+  return UNPAID.includes(order.paymentStatus) && order.fulfillmentStatus === 'RECEIVED';
+}
+
 /** El efectivo se cobra al retirar: solo en un pedido con retiro que espera el pago (F22·3). */
 export function canConfirmCash(order: OrderState): boolean {
   return (
