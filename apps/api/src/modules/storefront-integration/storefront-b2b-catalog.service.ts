@@ -74,6 +74,11 @@ export class StorefrontB2bCatalogService {
     private readonly pdf: CustomerCatalogPdfService,
   ) {}
 
+  /** Si la cuenta tiene catálogo, sin calcular precios: la tienda lo pregunta para mostrar el link. */
+  async access(externalId: string): Promise<{ enabled: boolean }> {
+    return { enabled: (await this.find(externalId)) !== null };
+  }
+
   /** `externalId`: la cuenta del sitio vinculada a la ficha. */
   async forAccount(externalId: string, now = new Date()): Promise<B2bCatalog> {
     const customer = await this.enabled(externalId);
@@ -106,12 +111,16 @@ export class StorefrontB2bCatalogService {
 
   /** 404 si la cuenta no está vinculada, la casilla está apagada o el cliente es estándar. */
   private async enabled(externalId: string) {
-    const customer = await this.prisma.customer.findFirst({
+    const customer = await this.find(externalId);
+    if (!customer) throw new NotFoundException('Esta cuenta no tiene catálogo');
+    return customer;
+  }
+
+  private find(externalId: string) {
+    return this.prisma.customer.findFirst({
       where: { externalId, isActive: true, hasPortalAccess: true, type: { in: B2B_TYPES } },
       select: { id: true },
     });
-    if (!customer) throw new NotFoundException('Esta cuenta no tiene catálogo');
-    return customer;
   }
 
   private async images(productIds: string[]): Promise<Map<string, string>> {
