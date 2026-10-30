@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { parseAmount } from '@/lib/format';
-import { formatCents } from '../order-labels';
+import { formatCents, METHOD_LABEL } from '../order-labels';
 
 type Step = WebOrderDetailDto['actions']['fulfillment'][number];
 
@@ -52,16 +52,27 @@ export function OrderActions({
   const [amount, setAmount] = useState('');
   const [operation, setOperation] = useState('');
   const [credited, setCredited] = useState(false);
+  const [refunding, setRefunding] = useState(false);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
   const { actions } = order;
   const confirmTransfer = canPayments && actions.confirmTransfer;
   const confirmCash = canPayments && actions.confirmCash;
   const extendPayment = canPayments && actions.extendPayment;
+  const refund = canPayments && actions.refund;
   const amountCents = toCents(amount);
+  // En blanco, todo lo que queda: un monto escrito tiene que entenderse.
+  const refundCents = refundAmount.trim() ? toCents(refundAmount) : undefined;
   const closePaying = () => {
     setPaying(null);
     setAmount('');
     setOperation('');
     setCredited(false);
+  };
+  const closeRefund = () => {
+    setRefunding(false);
+    setRefundAmount('');
+    setRefundReason('');
   };
 
   const run = async (path: string, body: object, done: string) => {
@@ -72,6 +83,7 @@ export function OrderActions({
       setShipping(false);
       setCancelling(false);
       closePaying();
+      closeRefund();
       router.refresh();
     } catch (err) {
       handleApiError(err);
@@ -90,6 +102,7 @@ export function OrderActions({
     !confirmTransfer &&
     !confirmCash &&
     !extendPayment &&
+    !refund &&
     actions.fulfillment.length === 0 &&
     !actions.cancel
   ) {
@@ -130,6 +143,11 @@ export function OrderActions({
             : STEP[status].label}
         </Button>
       ))}
+      {refund && (
+        <Button variant="outline" onClick={() => setRefunding(true)} disabled={pending}>
+          Reembolsar
+        </Button>
+      )}
       {actions.cancel && (
         <Button variant="outline" onClick={() => setCancelling(true)} disabled={pending}>
           Cancelar pedido
@@ -211,6 +229,62 @@ export function OrderActions({
       </Dialog>
 
       <Dialog
+        open={refunding}
+        onOpenChange={(open) => !open && closeRefund()}
+        title="Reembolsar el pago"
+        description={`La plata vuelve por ${METHOD_LABEL[order.paymentMethod]}, y al cliente le llega un mail. No se puede deshacer.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={closeRefund} disabled={pending}>
+              Volver
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                run(
+                  'refund',
+                  { amountCents: refundCents, reason: refundReason.trim() },
+                  'Reembolso hecho. El estado se actualiza en unos segundos.',
+                )
+              }
+              disabled={pending || refundCents === null || refundReason.trim().length < 3}
+            >
+              {pending && <Spinner size="sm" />}
+              Reembolsar
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm">
+            Total del pedido: <span className="font-medium">{formatCents(order.totalCents)}</span>
+            {order.refundedCents > 0 && <> · ya devuelto: {formatCents(order.refundedCents)}</>}
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="ped-reembolso">Monto a devolver ($)</Label>
+            <Input
+              id="ped-reembolso"
+              inputMode="decimal"
+              value={refundAmount}
+              onChange={(e) => setRefundAmount(e.target.value)}
+              placeholder="En blanco, todo lo que queda"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ped-reembolso-motivo">Motivo</Label>
+            <Textarea
+              id="ped-reembolso-motivo"
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              maxLength={500}
+              rows={3}
+              placeholder="Por ejemplo: faltó una pieza."
+            />
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
         open={shipping}
         onOpenChange={setShipping}
         title="Marcar enviado"
@@ -255,7 +329,7 @@ export function OrderActions({
         title="Cancelar el pedido"
         description={
           order.paymentStatus === 'APPROVED'
-            ? 'Lo reservado vuelve al stock. El pedido ya está pagado: el reembolso se hace aparte.'
+            ? 'Lo reservado vuelve al stock. El pedido ya está pagado: el reembolso se hace aparte, con Reembolsar o a mano.'
             : 'Lo reservado vuelve al stock.'
         }
         footer={

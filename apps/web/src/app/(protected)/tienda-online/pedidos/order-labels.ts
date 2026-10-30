@@ -17,6 +17,7 @@ export const PAYMENT_LABEL: Record<WebOrderPaymentValue, { label: string; varian
   APPROVED: { label: 'Pagado', variant: 'success' },
   REJECTED: { label: 'Pago rechazado', variant: 'destructive' },
   REFUNDED: { label: 'Reembolsado', variant: 'secondary' },
+  DISPUTED: { label: 'En disputa', variant: 'destructive' },
 };
 
 export const FULFILLMENT_LABEL: Record<

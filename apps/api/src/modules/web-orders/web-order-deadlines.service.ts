@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { WebOrderFulfillment, WebOrderPayment } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { OutboxService } from '@/modules/outbox/outbox.service';
+import { StorefrontPaymentsClient } from '@/modules/web-catalog/storefront-payments.client';
 import { PAYMENT_REMINDER_BEFORE_MS, UNPAID } from './domain/order-flow';
 import { WebOrdersService } from './web-orders.service';
 
@@ -19,6 +20,7 @@ export class WebOrderDeadlinesService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly orders: WebOrdersService,
+    private readonly storefront: StorefrontPaymentsClient,
   ) {}
 
   @Cron('*/5 * * * *')
@@ -28,6 +30,18 @@ export class WebOrderDeadlinesService {
     const expired = await this.expireDue(now);
     if (reminded || expired) {
       this.logger.log(`Pedidos sin pagar: ${reminded} avisados, ${expired} vencidos`);
+    }
+  }
+
+  /**
+   * El sitio es el dueño del pago y el sistema, de los relojes (F22·4): cada 10 min
+   * le pide que concilie con el proveedor, por si se perdió un aviso (F22·5).
+   */
+  @Cron('*/10 * * * *')
+  async reconcilePayments(): Promise<void> {
+    const result = await this.storefront.reconcile();
+    if (result?.failed) {
+      this.logger.warn(`Conciliación de pagos: fallaron ${result.failed} de ${result.checked}`);
     }
   }
 

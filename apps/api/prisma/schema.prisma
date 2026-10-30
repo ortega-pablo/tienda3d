@@ -1344,6 +1344,8 @@ enum WebOrderPayment {
   APPROVED
   REJECTED
   REFUNDED
+  /// Contracargo o reclamo abierto (F22·5): si no salió del taller, se frena.
+  DISPUTED
 }
 
 /// Preparación del pedido web: la maneja el taller desde el panel (§5.6).
@@ -1405,6 +1407,8 @@ model WebOrder {
   /// Cobro manual (F22·3): lo que el admin vio acreditado o cobró, y el número de operación de la transferencia.
   paidAmountCents    Int?
   paymentReference   String?
+  /// Cuánto se devolvió del pago (F22·5): lo informa el sitio.
+  refundedCents      Int                 @default(0)
   /// Hasta cuándo se puede pagar (F22·4): 48 h en efectivo o transferencia, 2 h en línea. Null: sin plazo (pedidos de antes).
   paymentDueAt       DateTime?
   /// Cuándo se avisó al cliente que vence (efectivo y transferencia, 24 h antes).

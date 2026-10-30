@@ -14,6 +14,7 @@ export const webOrderPaymentSchema = z.enum([
   'APPROVED',
   'REJECTED',
   'REFUNDED',
+  'DISPUTED',
 ]);
 export type WebOrderPaymentValue = z.infer<typeof webOrderPaymentSchema>;
 
@@ -44,6 +45,18 @@ export const webOrderCashConfirmSchema = z
   .object({ amountCents: z.number().int().positive('Cargá el monto cobrado') })
   .strict();
 export type WebOrderCashConfirmInput = z.infer<typeof webOrderCashConfirmSchema>;
+
+/**
+ * Reembolsar un pago en línea (F22·5): sin monto, todo lo que queda por devolver.
+ * El sitio lo pide al proveedor y controla cuánto queda.
+ */
+export const webOrderRefundSchema = z
+  .object({
+    amountCents: z.number().int().positive('Cargá el monto a devolver').optional(),
+    reason: z.string().trim().min(3, 'Contá por qué se devuelve.').max(500),
+  })
+  .strict();
+export type WebOrderRefundInput = z.infer<typeof webOrderRefundSchema>;
 
 export const webPaymentMethodSchema = z.enum([
   'MERCADOPAGO',

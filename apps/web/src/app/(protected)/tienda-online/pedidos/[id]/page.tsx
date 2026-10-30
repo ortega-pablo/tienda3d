@@ -32,6 +32,9 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
     throw err;
   }
 
+  // Lo más nuevo primero: lo que el sitio pidió mirar (contracargo, pago tardío).
+  const alert = order.events.find((e) => e.kind === 'alert');
+
   return (
     <div className="space-y-6">
       <Link
@@ -62,6 +65,15 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
       {order.cancelReason && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">
           <span className="font-medium">Cancelado:</span> {order.cancelReason}
+        </p>
+      )}
+
+      {alert && order.paymentStatus !== 'REFUNDED' && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm"
+        >
+          <span className="font-medium">Revisá el pago:</span> {alert.message}
         </p>
       )}
 
@@ -159,7 +171,9 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
               <ol className="space-y-3 text-sm">
                 {order.events.map((e) => (
                   <li key={e.id} className="flex flex-wrap justify-between gap-x-4">
-                    <span>{e.message}</span>
+                    <span className={e.kind === 'alert' ? 'font-medium text-destructive' : ''}>
+                      {e.message}
+                    </span>
                     <span className="text-muted-foreground">
                       {formatDateTime(e.createdAt)} · {e.actorName ?? 'Tienda'}
                     </span>
@@ -241,6 +255,11 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
                   <p className="text-muted-foreground">
                     Confirmado: {formatCents(order.paidAmountCents)}
                     {order.paymentReference && ` · operación ${order.paymentReference}`}
+                  </p>
+                )}
+                {order.refundedCents > 0 && (
+                  <p className="text-muted-foreground">
+                    Reembolsado: {formatCents(order.refundedCents)}
                   </p>
                 )}
               </div>

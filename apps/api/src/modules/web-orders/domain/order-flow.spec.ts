@@ -3,6 +3,7 @@ import {
   canConfirmCash,
   canConfirmTransfer,
   canExtendPayment,
+  canRefund,
   canStartProduction,
   canMoveFulfillment,
   initialPayment,
@@ -28,6 +29,39 @@ describe('Pedidos web: qué puede hacer el admin (§5.6)', () => {
       'CANCELLED',
     ]);
     expect(allowedFulfillments({ ...pickup, paymentStatus: 'PENDING' })).toEqual(['CANCELLED']);
+  });
+
+  it('un contracargo frena lo que no salió del taller; lo enviado igual llega (F22·5)', () => {
+    const disputed = { ...pickup, paymentStatus: 'DISPUTED' } as const;
+    expect(allowedFulfillments(disputed)).toEqual(['CANCELLED']);
+    expect(allowedFulfillments({ ...disputed, fulfillmentStatus: 'PREPARING' })).toEqual([
+      'CANCELLED',
+    ]);
+    expect(allowedFulfillments({ ...disputed, fulfillmentStatus: 'READY_FOR_PICKUP' })).toEqual([
+      'CANCELLED',
+    ]);
+    expect(
+      allowedFulfillments({
+        ...shipping,
+        paymentStatus: 'DISPUTED',
+        fulfillmentStatus: 'SHIPPED',
+      }),
+    ).toEqual(['DELIVERED']);
+    expect(canStartProduction(disputed)).toBe(false);
+    expect(needsAttention({ paymentStatus: 'DISPUTED', fulfillmentStatus: 'SHIPPED' })).toBe(true);
+    expect(needsAttention({ paymentStatus: 'DISPUTED', fulfillmentStatus: 'CANCELLED' })).toBe(
+      false,
+    );
+  });
+
+  it('desde el panel se reembolsa un pago en línea acreditado (F22·5)', () => {
+    const online = { paymentMethod: 'MERCADOPAGO', paymentStatus: 'APPROVED' } as const;
+    expect(canRefund(online)).toBe(true);
+    expect(canRefund({ ...online, paymentMethod: 'MODO' })).toBe(true);
+    expect(canRefund({ ...online, paymentStatus: 'DISPUTED' })).toBe(false);
+    expect(canRefund({ ...online, paymentStatus: 'REFUNDED' })).toBe(false);
+    expect(canRefund({ ...online, paymentMethod: 'CASH' })).toBe(false);
+    expect(canRefund({ ...online, paymentMethod: 'BANK_TRANSFER' })).toBe(false);
   });
 
   it('el retiro pasa a listo para retirar; el envío, a enviado', () => {

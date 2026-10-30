@@ -27,14 +27,20 @@ const TRANSITIONS: Record<Fulfillment, Fulfillment[]> = {
   CANCELLED: [],
 };
 
-/** A qué puede pasar la preparación: según la entrega y solo con el pago aprobado. */
+/**
+ * A qué puede pasar la preparación: según la entrega y solo con el pago aprobado.
+ * Un contracargo frena lo que no salió del taller; lo enviado igual puede llegar.
+ */
 export function allowedFulfillments(order: OrderState): Fulfillment[] {
   return TRANSITIONS[order.fulfillmentStatus].filter((next) => {
     if (next === 'SHIPPED' && order.deliveryMethod === 'PICKUP') return false;
     if (next === 'READY_FOR_PICKUP' && order.deliveryMethod === 'SHIPPING') return false;
     // Preparar exige el pago aprobado; cancelar se puede hasta que sale del taller.
-    if (next !== 'CANCELLED' && order.paymentStatus !== 'APPROVED') return false;
-    return true;
+    if (next === 'CANCELLED') return true;
+    if (order.paymentStatus === 'DISPUTED') {
+      return order.fulfillmentStatus === 'SHIPPED' && next === 'DELIVERED';
+    }
+    return order.paymentStatus === 'APPROVED';
   });
 }
 
@@ -64,6 +70,10 @@ export function paymentStartIssue(
   }
   return null;
 }
+
+/** "$ 39.450,00": los montos de los pedidos web van en centavos. */
+export const pesos = (cents: number) =>
+  (cents / 100).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -95,6 +105,15 @@ export function canExtendPayment(order: Pick<OrderState, 'paymentStatus' | 'fulf
   return UNPAID.includes(order.paymentStatus) && order.fulfillmentStatus === 'RECEIVED';
 }
 
+/**
+ * Desde el panel se reembolsa un pago en línea acreditado, aunque el pedido esté
+ * cancelado (F22·5): la plata que llegó tarde también vuelve por acá. El efectivo y
+ * la transferencia se devuelven a mano.
+ */
+export function canRefund(order: Pick<OrderState, 'paymentMethod' | 'paymentStatus'>): boolean {
+  return !isManualMethod(order.paymentMethod) && order.paymentStatus === 'APPROVED';
+}
+
 /** El efectivo se cobra al retirar: solo en un pedido con retiro que espera el pago (F22·3). */
 export function canConfirmCash(order: OrderState): boolean {
   return (
@@ -115,10 +134,12 @@ export function canConfirmTransfer(order: OrderState): boolean {
 }
 
 /**
- * Espera algo del taller: confirmar la transferencia o empezar a prepararlo.
- * Un pago de Mercado Pago pendiente o rechazado espera al cliente, no al taller.
+ * Espera algo del taller: confirmar la transferencia, empezar a prepararlo o
+ * atender un contracargo. Un pago de Mercado Pago pendiente o rechazado espera al
+ * cliente, no al taller.
  */
 export function needsAttention(order: Pick<OrderState, 'paymentStatus' | 'fulfillmentStatus'>) {
+  if (order.paymentStatus === 'DISPUTED') return order.fulfillmentStatus !== 'CANCELLED';
   return (
     order.fulfillmentStatus === 'RECEIVED' &&
     (order.paymentStatus === 'AWAITING_TRANSFER' || order.paymentStatus === 'APPROVED')
