@@ -62,6 +62,8 @@ export interface QuoteItemDto {
   /** Desglose de cálculo (admin). Ausente/null si el usuario no tiene permiso
    *  o si el ítem es previo a esta feature. */
   pricingBreakdown?: QuoteItemPricingBreakdown | null;
+  /** Los colores que eligió el cliente en un pedido de la tienda (F21·3). */
+  colors?: Array<{ pieceName: string; colorName: string; colorHex: string | null }>;
 }
 
 /**
@@ -93,6 +95,8 @@ export interface QuoteSummaryDto<TDate = string> {
   channelName: string | null;
   total: number;
   itemCount: number;
+  /** Pedido que llegó de la tienda (F21·3). */
+  fromStore: boolean;
   createdAt: TDate;
   /**
    * Si la cotización es ADHOC y alguno de sus items tiene
@@ -116,7 +120,8 @@ export interface QuoteDto<TDate = string> extends QuoteSummaryDto<TDate> {
   discount: number;
   validUntil: TDate | null;
   notes: string | null;
-  createdById: string;
+  /** Null en un pedido de la tienda: lo mandó el cliente (F21·3). */
+  createdById: string | null;
 
   items: QuoteItemDto[];
 }

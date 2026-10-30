@@ -18,6 +18,11 @@ export default async function ProtectedLayout({ children }: { children: ReactNod
     if (attention) badges['/tienda-online/pedidos'] = attention.count;
     if (requests) badges['/tienda-online/solicitudes'] = requests.count;
   }
+  if (user.permissions.includes('quote:read')) {
+    // Pedidos B2B de la tienda que esperan respuesta (F21·3).
+    const pending = await api<{ count: number }>('/quotes/store-pending/count').catch(() => null);
+    if (pending) badges['/cotizaciones'] = pending.count;
+  }
   return (
     <UserProvider user={user}>
       <AppShell badges={badges}>{children}</AppShell>

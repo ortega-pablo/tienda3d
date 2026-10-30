@@ -116,6 +116,11 @@ export class StorefrontB2bCatalogService {
     return customer;
   }
 
+  /** La ficha de una cuenta con catálogo, o null (F21·3). */
+  customerOf(externalId: string) {
+    return this.find(externalId);
+  }
+
   private find(externalId: string) {
     return this.prisma.customer.findFirst({
       where: { externalId, isActive: true, hasPortalAccess: true, type: { in: B2B_TYPES } },

@@ -582,8 +582,11 @@ model Quote {
   validUntil DateTime?
   notes      String?
 
-  createdById String
-  createdBy   User     @relation("QuoteCreatedBy", fields: [createdById], references: [id])
+  /// Pedido B2B de la tienda (F21·3): el id del pedido en el sitio. Null: la hizo el equipo.
+  externalId  String?  @unique
+  /// Null en un pedido de la tienda: lo mandó el cliente.
+  createdById String?
+  createdBy   User?    @relation("QuoteCreatedBy", fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -606,6 +609,9 @@ model QuoteItem {
 
   // For ADHOC items: free-form payload (grams, time, filament, labor)
   adhocPayload Json?
+
+  /// Colores que eligió el cliente en un pedido de la tienda: { pieza: color } (F21·3).
+  filamentOverrides Json?
 
   // Snapshot del desglose de cálculo al crear (costo Logic C v3 + PriceLine
   // con markup/comisión/régimen + contexto). Se muestra a admins en el detalle

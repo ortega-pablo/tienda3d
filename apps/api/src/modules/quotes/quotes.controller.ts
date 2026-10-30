@@ -68,6 +68,13 @@ export class QuotesController {
     return this.quotes.list(query);
   }
 
+  /** Para el contador del menú: pedidos de la tienda sin responder (F21·3). */
+  @Permissions('quote:read')
+  @Get('store-pending/count')
+  async storePending() {
+    return { count: await this.quotes.storePendingCount() };
+  }
+
   @Permissions('quote:read')
   @Get(':id')
   get(@Param('id') id: string, @CurrentUser() user: AccessPayload) {

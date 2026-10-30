@@ -5,6 +5,7 @@ import { ChannelsModule } from '../channels/channels.module';
 import { CostingModule } from '../costing/costing.module';
 import { CustomersModule } from '../customers/customers.module';
 import { KeychainScaleTiersModule } from '../keychain-scale-tiers/keychain-scale-tiers.module';
+import { OutboxModule } from '../outbox/outbox.module';
 import { PricingModule } from '../pricing/pricing.module';
 import { WebQuoteRequestsModule } from '../web-quote-requests/web-quote-requests.module';
 import { PdfService } from './pdf.service';
@@ -19,6 +20,7 @@ import { QuotesService } from './quotes.service';
     CategoriesModule,
     CustomersModule,
     KeychainScaleTiersModule,
+    OutboxModule,
     WebQuoteRequestsModule,
   ],
   controllers: [QuotesController],

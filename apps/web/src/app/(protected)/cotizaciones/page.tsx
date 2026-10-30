@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, KeyRound, Package, Plus, Zap } from 'lucide-react';
+import { Download, KeyRound, Package, Plus, Store, Zap } from 'lucide-react';
 import { api } from '@/lib/api-server';
 import { requirePermission } from '@/lib/auth';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -16,6 +16,7 @@ interface QuoteSummary {
   channelName: string | null;
   total: number;
   itemCount: number;
+  fromStore: boolean;
   createdAt: string;
   templateKind: 'KEYCHAIN' | null;
 }
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'PRODUCT', label: 'Productos', icon: Package },
   { key: 'ADHOC', label: 'A medida', icon: Zap },
   { key: 'KEYCHAIN', label: 'Llaveros', icon: KeyRound },
+  { key: 'STORE', label: 'De la tienda', icon: Store },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -43,7 +45,9 @@ export default async function QuotesPage({
         ? '/quotes?type=ADHOC'
         : activeTab === 'KEYCHAIN'
           ? '/quotes?templateKind=KEYCHAIN'
-          : '/quotes';
+          : activeTab === 'STORE'
+            ? '/quotes?source=store'
+            : '/quotes';
   const [quotes, allQuotes] = await Promise.all([
     api<QuoteSummary[]>(path),
     activeTab === 'all' ? Promise.resolve(null) : api<QuoteSummary[]>('/quotes'),
@@ -54,9 +58,10 @@ export default async function QuotesPage({
       if (q.type === 'PRODUCT') acc.PRODUCT++;
       else acc.ADHOC++;
       if (q.templateKind === 'KEYCHAIN') acc.KEYCHAIN++;
+      if (q.fromStore) acc.STORE++;
       return acc;
     },
-    { all: 0, PRODUCT: 0, ADHOC: 0, KEYCHAIN: 0 } as Record<TabKey, number>,
+    { all: 0, PRODUCT: 0, ADHOC: 0, KEYCHAIN: 0, STORE: 0 } as Record<TabKey, number>,
   );
 
   const canCreate = user.permissions.includes('quote:create');
@@ -68,8 +73,8 @@ export default async function QuotesPage({
         <div>
           <h1 className="text-3xl font-bold">Cotizaciones</h1>
           <p className="text-muted-foreground">
-            Cotizá productos del catálogo, piezas a medida o llaveros en cantidad. Todo se
-            exporta a PDF.
+            Cotizá productos del catálogo, piezas a medida o llaveros en cantidad. Todo se exporta a
+            PDF.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -123,9 +128,7 @@ export default async function QuotesPage({
             >
               {Icon && <Icon className="h-3.5 w-3.5" />}
               {t.label}
-              <span className="rounded-full bg-background/60 px-1.5 text-xs">
-                {counts[t.key]}
-              </span>
+              <span className="rounded-full bg-background/60 px-1.5 text-xs">{counts[t.key]}</span>
             </Link>
           );
         })}
@@ -157,7 +160,14 @@ export default async function QuotesPage({
                 return (
                   <tr key={q.id}>
                     <td className="py-3 pr-4 font-mono">{q.code}</td>
-                    <td className="py-3 pr-4">{q.customerName}</td>
+                    <td className="py-3 pr-4">
+                      {q.customerName}
+                      {q.fromStore && (
+                        <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
+                          Tienda
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 pr-4">
                       <span
                         className={
@@ -175,11 +185,7 @@ export default async function QuotesPage({
                         ) : (
                           <Zap className="h-3 w-3" />
                         )}
-                        {q.type === 'PRODUCT'
-                          ? 'Producto'
-                          : isKeychain
-                            ? 'Llavero'
-                            : 'A medida'}
+                        {q.type === 'PRODUCT' ? 'Producto' : isKeychain ? 'Llavero' : 'A medida'}
                       </span>
                     </td>
                     <td className="py-3 pr-4 text-muted-foreground">{q.channelName ?? '—'}</td>

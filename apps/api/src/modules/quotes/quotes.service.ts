@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PieceScope, Prisma, QuoteStatus, QuoteType } from '@prisma/client';
 import { AuditService } from '@/modules/audit/audit.service';
+import { OutboxService } from '@/modules/outbox/outbox.service';
 import { WebQuoteRequestsService } from '@/modules/web-quote-requests/web-quote-requests.service';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { dec } from '@/common/utils/decimal';
@@ -93,6 +94,13 @@ type ResolvedCustomerContext = {
   snapshot: CustomerSnapshot;
 };
 
+/** Los estados de un pedido de la tienda que le interesan al cliente (F21·3). */
+const STORE_NOTIFIED: QuoteStatus[] = [
+  QuoteStatus.ACCEPTED,
+  QuoteStatus.REJECTED,
+  QuoteStatus.EXPIRED,
+];
+
 @Injectable()
 export class QuotesService {
   constructor(
@@ -106,16 +114,18 @@ export class QuotesService {
     private readonly keychainScaleTiers: KeychainScaleTiersService,
     private readonly codes: DocumentCodeService,
     private readonly webQuoteRequests: WebQuoteRequestsService,
+    private readonly outbox: OutboxService,
   ) {}
 
   async list(
-    filters: { type?: QuoteType; templateKind?: 'KEYCHAIN' } = {},
+    filters: { type?: QuoteType; templateKind?: 'KEYCHAIN'; source?: 'store' } = {},
   ): Promise<QuoteSummaryDto[]> {
     // Filtro por templateKind: como vive dentro del JSON `adhocPayload`,
     // usamos Prisma JSON path. Si pidieron keychain, forzamos type=ADHOC
     // y buscamos items con `templateKind: 'KEYCHAIN'` en el payload.
     const where: Prisma.QuoteWhereInput = {};
     if (filters.type) where.type = filters.type;
+    if (filters.source === 'store') where.externalId = { not: null };
     if (filters.templateKind === 'KEYCHAIN') {
       where.type = QuoteType.ADHOC;
       where.items = {
@@ -146,6 +156,7 @@ export class QuotesService {
       channelName: q.channel?.name ?? null,
       total: dec(q.total),
       itemCount: q.items.length,
+      fromStore: q.externalId !== null,
       createdAt: q.createdAt,
       templateKind: q.items.some(
         (i) =>
@@ -165,10 +176,56 @@ export class QuotesService {
       include: { items: true, channel: { select: { name: true } } },
     });
     if (!q) throw new NotFoundException('Cotización inexistente');
-    return this.toDto(q, includeBreakdown);
+    return this.withColors(this.toDto(q, includeBreakdown), q.items);
   }
 
-  async create(input: QuoteCreateInput, actorId: string): Promise<QuoteDto> {
+  /** Para el contador del menú: pedidos de la tienda que esperan respuesta (F21·3). */
+  async storePendingCount(): Promise<number> {
+    return this.prisma.quote.count({
+      where: { externalId: { not: null }, status: QuoteStatus.SENT },
+    });
+  }
+
+  /** Los colores elegidos en un pedido de la tienda, con sus nombres (F21·3). */
+  private async withColors(
+    dto: QuoteDto,
+    items: Array<{ id: string; filamentOverrides: Prisma.JsonValue }>,
+  ): Promise<QuoteDto> {
+    const chosen = new Map(
+      items.flatMap((i) =>
+        i.filamentOverrides && typeof i.filamentOverrides === 'object'
+          ? [[i.id, i.filamentOverrides as Record<string, string>]]
+          : [],
+      ),
+    );
+    if (chosen.size === 0) return dto;
+    const overrides = [...chosen.values()];
+    const [pieces, materials] = await Promise.all([
+      this.prisma.productPiece.findMany({
+        where: { id: { in: overrides.flatMap((o) => Object.keys(o)) } },
+        select: { id: true, name: true },
+      }),
+      this.prisma.material.findMany({
+        where: { id: { in: overrides.flatMap((o) => Object.values(o)) } },
+        select: { id: true, name: true, color: true, colorHex: true },
+      }),
+    ]);
+    const pieceName = new Map(pieces.map((p) => [p.id, p.name]));
+    const material = new Map(materials.map((m) => [m.id, m]));
+    return {
+      ...dto,
+      items: dto.items.map((item) => ({
+        ...item,
+        colors: Object.entries(chosen.get(item.id) ?? {}).map(([pieceId, materialId]) => ({
+          pieceName: pieceName.get(pieceId) ?? 'Pieza',
+          colorName: material.get(materialId)?.color ?? material.get(materialId)?.name ?? '—',
+          colorHex: material.get(materialId)?.colorHex ?? null,
+        })),
+      })),
+    };
+  }
+
+  async create(input: QuoteCreateInput, actorId: string | null): Promise<QuoteDto> {
     if (input.items.length === 0) {
       throw new BadRequestException('La cotización debe tener al menos un ítem');
     }
@@ -205,7 +262,12 @@ export class QuotesService {
     const built = await Promise.all(
       input.items.map((item) => this.buildItemRow(item, channelId, customerCtx, cache)),
     );
-    const itemsData = built.map((b) => b.row);
+    const itemsData = built.map((b, i) => {
+      const item = input.items[i]!;
+      return item.type === 'PRODUCT' && item.filamentOverrides
+        ? { ...b.row, filamentOverrides: item.filamentOverrides }
+        : b.row;
+    });
     // Cada lineTotal ya es múltiplo del paso (unitPrice y designSurcharge vienen
     // redondeados del motor), así que el subtotal también lo es. El descuento
     // puede romper el múltiplo, por eso el total se redondea hacia arriba tras
@@ -230,7 +292,9 @@ export class QuotesService {
         data: {
           code,
           type: quoteType,
-          status: QuoteStatus.DRAFT,
+          // Un pedido de la tienda nace enviado: el equipo lo acepta o lo rechaza (F21·3).
+          status: input.externalId ? QuoteStatus.SENT : QuoteStatus.DRAFT,
+          externalId: input.externalId ?? null,
           customerName,
           customerEmail,
           customerPhone,
@@ -350,6 +414,17 @@ export class QuotesService {
         throw new ConflictException(
           'La cotización cambió de estado mientras se procesaba. Recargá la página.',
         );
+      }
+
+      // Un pedido de la tienda (F21·3): el cliente lo ve en Mi cuenta y le llega un mail.
+      if (existing.externalId && STORE_NOTIFIED.includes(status)) {
+        await this.outbox.enqueue(tx, 'b2b_order.status_changed', {
+          externalId: existing.externalId,
+          code: existing.code,
+          status,
+          totalCents: Math.round(dec(existing.total) * 100),
+          changedAt: new Date().toISOString(),
+        });
       }
 
       // Tracking del volumen mensual: solo importa cuando hay customerId.
@@ -1099,7 +1174,8 @@ export class QuotesService {
       total: Prisma.Decimal;
       validUntil: Date | null;
       notes: string | null;
-      createdById: string;
+      createdById: string | null;
+      externalId: string | null;
       createdAt: Date;
       items: Array<{
         id: string;
@@ -1134,6 +1210,7 @@ export class QuotesService {
         includeBreakdown && i.pricingBreakdown && typeof i.pricingBreakdown === 'object'
           ? (i.pricingBreakdown as unknown as QuoteItemPricingBreakdown)
           : null,
+      colors: [],
     }));
     return {
       id: q.id,
@@ -1158,6 +1235,7 @@ export class QuotesService {
       validUntil: q.validUntil,
       notes: q.notes,
       createdById: q.createdById,
+      fromStore: q.externalId !== null,
       createdAt: q.createdAt,
       itemCount: items.length,
       templateKind: items.some((i) => i.adhocPayload?.templateKind === 'KEYCHAIN')

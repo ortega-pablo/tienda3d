@@ -7,11 +7,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { QuoteActions, type QuoteDto } from './quote-actions';
 import { QuoteItemBreakdown } from './quote-item-breakdown';
 
-export default async function QuoteDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission('quote:read');
   // El desglose de cálculo es solo para admins (mismo permiso que la config
   // sensible). El backend además lo omite del DTO si no hay permiso.
@@ -46,6 +42,11 @@ export default async function QuoteDetailPage({
             >
               {quote.withInvoice ? 'Con factura' : 'Sin factura'}
             </span>
+            {quote.fromStore && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">
+                Pedido de la tienda · se cobra en efectivo al retirar
+              </span>
+            )}
           </p>
         </div>
         <QuoteActions quote={quote} />
@@ -81,9 +82,7 @@ export default async function QuoteDetailPage({
                   const componentLines: string[] = [];
                   for (const p of i.adhocPayload?.pieces ?? []) {
                     const name = p.name?.trim() || 'Pieza';
-                    componentLines.push(
-                      p.filamentName ? `${name} (${p.filamentName})` : name,
-                    );
+                    componentLines.push(p.filamentName ? `${name} (${p.filamentName})` : name);
                   }
                   for (const m of i.adhocPayload?.materials ?? []) {
                     const name = m.materialName?.trim() || 'Insumo';
@@ -102,6 +101,19 @@ export default async function QuoteDetailPage({
                               ? `Llavero — tier ${i.adhocPayload.tierLabel ?? ''} (markup ${i.adhocPayload.appliedMarkupPct}%)`
                               : 'Pieza a medida'}
                         </div>
+                        {i.colors?.map((c) => (
+                          <div
+                            key={c.pieceName}
+                            className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+                          >
+                            <span
+                              aria-hidden
+                              className="inline-block h-3 w-3 rounded-full border"
+                              style={{ backgroundColor: c.colorHex ?? undefined }}
+                            />
+                            {c.pieceName}: {c.colorName}
+                          </div>
+                        ))}
                         {showComponents && (
                           <ul className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
                             {componentLines.map((line, idx) => (
@@ -139,9 +151,7 @@ export default async function QuoteDetailPage({
                   if (designSurcharge > 0) {
                     rows.push(
                       <tr key={`${i.id}-design`} className="text-muted-foreground">
-                        <td className="py-2 pr-4 pl-4 text-sm italic">
-                          Cargo único de diseño
-                        </td>
+                        <td className="py-2 pr-4 pl-4 text-sm italic">Cargo único de diseño</td>
                         <td colSpan={4} />
                         <td className="py-2 pr-4 text-right font-mono">
                           {formatMoney(designSurcharge)}
@@ -189,7 +199,9 @@ export default async function QuoteDetailPage({
                     <td colSpan={5} className="py-2 pr-4 text-right text-sm text-muted-foreground">
                       Descuento
                     </td>
-                    <td className="py-2 pr-4 text-right font-mono">- {formatMoney(quote.discount)}</td>
+                    <td className="py-2 pr-4 text-right font-mono">
+                      - {formatMoney(quote.discount)}
+                    </td>
                   </tr>
                 )}
                 <tr>
@@ -251,9 +263,7 @@ export default async function QuoteDetailPage({
             {quote.customerPhone && <Row label="Teléfono" value={quote.customerPhone} />}
             {quote.channelName && <Row label="Canal" value={quote.channelName} />}
             <Row label="Factura" value={quote.withInvoice ? 'Sí' : 'No'} />
-            {quote.validUntil && (
-              <Row label="Válida hasta" value={formatDate(quote.validUntil)} />
-            )}
+            {quote.validUntil && <Row label="Válida hasta" value={formatDate(quote.validUntil)} />}
             <Row label="Creada" value={formatDate(quote.createdAt)} />
             {!quote.customerId && (
               <p className="rounded-md border border-muted/40 bg-muted/20 p-2 text-xs text-muted-foreground">
