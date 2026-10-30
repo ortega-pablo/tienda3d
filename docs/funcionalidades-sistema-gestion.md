@@ -2,7 +2,7 @@
 
 > Informe de funcionalidades · Agosto 2026
 > Documento comercial y técnico. Todo lo que se describe está implementado y
-> funcionando salvo lo que se marca explícitamente como *preparado* o *pendiente*
+> funcionando salvo lo que se marca explícitamente como _preparado_ o _pendiente_
 > en la sección [Estado de madurez](#estado-de-madurez).
 
 ---
@@ -27,27 +27,27 @@ que necesita saber cuánto stock queda.
 
 **Qué obtiene el taller.**
 
-| | |
-|---|---|
-| **Un precio defendible en 30 segundos** | Se carga la pieza y el sistema devuelve costo, precio por canal, ganancia de bolsillo y el desglose completo de cómo llegó a ese número. |
-| **Ganancia real, no aparente** | El markup se aplica solo sobre lo que el taller fabrica. Los insumos comprados pasan con su propio recargo de reposición, así que agregar un insumo caro no infla artificialmente la ganancia reportada. |
-| **Precios distintos por canal, sin recalcular** | El mismo producto cotizado en Venta Directa, MercadoLibre o efectivo sin factura arroja precios distintos y **la misma ganancia de bolsillo**. |
-| **Stock que se descuenta solo** | Al cerrar una orden de producción, el consumo de filamento e insumos se imputa automáticamente, con su movimiento registrado. |
-| **Clientes mayoristas con reglas propias** | Catálogos restringidos, pisos de escala permanentes, exenciones de comisión o régimen, y compromisos mensuales de volumen con suspensión automática si no se cumplen. |
-| **Documentos listos para el cliente** | Cotización en PDF con desglose por ítem y catálogo personalizado en PDF por cliente, con sus precios. |
+|                                                 |                                                                                                                                                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Un precio defendible en 30 segundos**         | Se carga la pieza y el sistema devuelve costo, precio por canal, ganancia de bolsillo y el desglose completo de cómo llegó a ese número.                                                                 |
+| **Ganancia real, no aparente**                  | El markup se aplica solo sobre lo que el taller fabrica. Los insumos comprados pasan con su propio recargo de reposición, así que agregar un insumo caro no infla artificialmente la ganancia reportada. |
+| **Precios distintos por canal, sin recalcular** | El mismo producto cotizado en Venta Directa, MercadoLibre o efectivo sin factura arroja precios distintos y **la misma ganancia de bolsillo**.                                                           |
+| **Stock que se descuenta solo**                 | Al cerrar una orden de producción, el consumo de filamento e insumos se imputa automáticamente, con su movimiento registrado.                                                                            |
+| **Clientes mayoristas con reglas propias**      | Catálogos restringidos, pisos de escala permanentes, exenciones de comisión o régimen, y compromisos mensuales de volumen con suspensión automática si no se cumplen.                                    |
+| **Documentos listos para el cliente**           | Cotización en PDF con desglose por ítem y catálogo personalizado en PDF por cliente, con sus precios.                                                                                                    |
 
 **En números.**
 
-| Métrica | Valor |
-|---|---|
-| Módulos de negocio | 22 |
-| Endpoints de API | 101 |
-| Pantallas de la aplicación | 34 |
-| Modelos de datos | 30 tablas · 13 enums |
-| Migraciones versionadas | 29 |
-| Permisos atómicos | 29 de staff + 3 de portal |
-| Tests automatizados | 155 (131 unitarios + 24 de integración contra Postgres real) |
-| Código | 242 archivos TypeScript · ~31.700 líneas |
+| Métrica                    | Valor                                                        |
+| -------------------------- | ------------------------------------------------------------ |
+| Módulos de negocio         | 22                                                           |
+| Endpoints de API           | 101                                                          |
+| Pantallas de la aplicación | 34                                                           |
+| Modelos de datos           | 30 tablas · 13 enums                                         |
+| Migraciones versionadas    | 29                                                           |
+| Permisos atómicos          | 29 de staff + 3 de portal                                    |
+| Tests automatizados        | 155 (131 unitarios + 24 de integración contra Postgres real) |
+| Código                     | 242 archivos TypeScript · ~31.700 líneas                     |
 
 ---
 
@@ -67,7 +67,7 @@ Para productos que el taller ya tiene definidos con su receta.
 - Cliente opcional: si se elige un cliente persistido, el sistema valida que
   tenga acceso al producto y aplica su perfil de precios (markup propio, piso de
   escala, exenciones).
-- Cliente ocasional (*walk-in*): nombre, mail y teléfono como texto libre, sin
+- Cliente ocasional (_walk-in_): nombre, mail y teléfono como texto libre, sin
   crear ficha.
 - **Vista previa en vivo** antes de guardar: costo unitario, precio unitario,
   ganancia por unidad y total de línea.
@@ -100,19 +100,19 @@ imprimen en placa y el precio por unidad cae fuerte con la cantidad.
 
 - **Escala global de markup** por cantidad, editable por el administrador:
 
-  | Cantidad | Markup |
-  |---|---|
-  | 1 – 4 | 100 % |
-  | 5 – 24 | 80 % |
-  | 25 – 49 | 60 % |
-  | 50 – 99 | 50 % |
-  | 100 o más | 35 % |
+  | Cantidad  | Markup |
+  | --------- | ------ |
+  | 1 – 4     | 100 %  |
+  | 5 – 24    | 80 %   |
+  | 25 – 49   | 60 %   |
+  | 50 – 99   | 50 %   |
+  | 100 o más | 35 %   |
 
 - **Doble base de costo**: para 1–4 unidades se usa la pieza individual; para 5
   o más, la placa completa dividida por el tamaño de tanda configurado. Los
   insumos y los tiempos de armado no se dividen, porque son por unidad.
 - **Matriz comparativa**: con un solo cálculo, el vendedor ve el precio unitario
-  y el total en *todas* las escalas a la vez. Sirve para mostrarle al cliente el
+  y el total en _todas_ las escalas a la vez. Sirve para mostrarle al cliente el
   incentivo de saltar de escala sin recalcular pedido por pedido.
 - **Valores por defecto configurables**: pieza, gramaje, minutos, filamento,
   insumos y tiempos se precargan desde una configuración central, y el vendedor
@@ -164,14 +164,14 @@ querer, los tests fallan.
 
 ### 3.1 Componentes del costo
 
-| Componente | Cómo se calcula |
-|---|---|
-| **Filamento** | `(gramos / 1000) × precio_kg`, más su porcentaje de desperdicio, más su recargo de reposición de stock. |
-| **Hora-máquina** | Amortización `(costo − valor residual) / vida útil en horas`, más energía `(W / 1000) × costo_kWh` con recargo configurable, más mantenimiento `anual / horas de uso anuales`. |
-| **Mano de obra** | `(minutos de armado + minutos de gestión) / 60 × valor hora`, con recargo extra configurable. |
-| **Marketing** | Presupuesto mensual del producto dividido por sus unidades estimadas por mes. |
-| **Contingencia y reinversión** | Porcentajes globales aplicados sobre la suma anterior. |
-| **Otros insumos** | `cantidad × precio vigente`, más desperdicio, más recargo de reposición propio de cada insumo. |
+| Componente                     | Cómo se calcula                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Filamento**                  | `(gramos / 1000) × precio_kg`, más su porcentaje de desperdicio, más su recargo de reposición de stock.                                                                        |
+| **Hora-máquina**               | Amortización `(costo − valor residual) / vida útil en horas`, más energía `(W / 1000) × costo_kWh` con recargo configurable, más mantenimiento `anual / horas de uso anuales`. |
+| **Mano de obra**               | `(minutos de armado + minutos de gestión) / 60 × valor hora`, con recargo extra configurable.                                                                                  |
+| **Marketing**                  | Presupuesto mensual del producto dividido por sus unidades estimadas por mes.                                                                                                  |
+| **Contingencia y reinversión** | Porcentajes globales aplicados sobre la suma anterior.                                                                                                                         |
+| **Otros insumos**              | `cantidad × precio vigente`, más desperdicio, más recargo de reposición propio de cada insumo.                                                                                 |
 
 ### 3.2 La decisión de diseño que lo distingue
 
@@ -183,10 +183,10 @@ costo_total           = precio_de_fabricación + otros insumos (ya recompuestos)
 ```
 
 **El markup se aplica solo sobre el precio de fabricación.** Los insumos
-comprados —herrajes, packaging, hojas— pasan al precio *después* del margen,
+comprados —herrajes, packaging, hojas— pasan al precio _después_ del margen,
 recompuestos por su propio porcentaje de reposición.
 
-*Por qué importa comercialmente:* la ganancia que reporta el sistema es plata
+_Por qué importa comercialmente:_ la ganancia que reporta el sistema es plata
 que entra al bolsillo, no un número inflado por revender insumos. Y agregar un
 insumo caro a un producto no cambia mágicamente la rentabilidad aparente del
 trabajo del taller.
@@ -200,12 +200,12 @@ trabajo del taller.
 El mismo producto vale distinto según dónde se venda. El sistema modela cuatro
 tipos de canal, y trae tres configurados de fábrica:
 
-| Canal | Tipo | Comportamiento |
-|---|---|---|
-| **Venta Directa** | `DIRECT_SALE` | Comisión desde un parámetro global único; aplica régimen. |
-| **MercadoLibre** | `MARKETPLACE` | Comisión **obligatoria por producto** (varía por categoría del marketplace). Si falta, el sistema avisa en vez de calcular mal. |
-| **Efectivo** | `CASH` | Comisión cero y sin régimen: opera sin factura. |
-| *(definibles)* | `CUSTOM` | Canales propios con todos los campos libres. |
+| Canal             | Tipo          | Comportamiento                                                                                                                  |
+| ----------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Venta Directa** | `DIRECT_SALE` | Comisión desde un parámetro global único; aplica régimen.                                                                       |
+| **MercadoLibre**  | `MARKETPLACE` | Comisión **obligatoria por producto** (varía por categoría del marketplace). Si falta, el sistema avisa en vez de calcular mal. |
+| **Efectivo**      | `CASH`        | Comisión cero y sin régimen: opera sin factura.                                                                                 |
+| _(definibles)_    | `CUSTOM`      | Canales propios con todos los campos libres.                                                                                    |
 
 Los canales se crean y editan desde la aplicación. Antes de desactivar o borrar
 uno, el sistema muestra su **impacto**: cuántos productos lo tienen habilitado,
@@ -312,12 +312,12 @@ consignatarios y cuentas especiales.
 
 ### 6.1 Tipos de cliente
 
-| Tipo | Catálogo | Uso típico |
-|---|---|---|
-| **Mayorista** | Categorías habilitadas explícitamente | Revendedor que compra por volumen. |
-| **Consignación** | Categorías habilitadas explícitamente | Local que exhibe y liquida lo vendido. |
-| **Especial** | Productos puntuales asignados uno a uno | Cuenta con acuerdo a medida. |
-| **Estándar** | Sin ficha persistida | Cliente ocasional de mostrador. |
+| Tipo             | Catálogo                                | Uso típico                             |
+| ---------------- | --------------------------------------- | -------------------------------------- |
+| **Mayorista**    | Categorías habilitadas explícitamente   | Revendedor que compra por volumen.     |
+| **Consignación** | Categorías habilitadas explícitamente   | Local que exhibe y liquida lo vendido. |
+| **Especial**     | Productos puntuales asignados uno a uno | Cuenta con acuerdo a medida.           |
+| **Estándar**     | Sin ficha persistida                    | Cliente ocasional de mostrador.        |
 
 ### 6.2 Reglas de precio por cliente
 
@@ -348,11 +348,16 @@ Cada cliente puede tener:
 ### 6.4 Catálogo personalizado
 
 - **Vista de catálogo por cliente**: solo los productos que puede comprar, con
-  *sus* precios y sus escalas.
+  _sus_ precios y sus escalas.
 - **Exportación a PDF** del catálogo personalizado, lista para enviar.
 - **Matriz de precios**: comparación producto por producto de lo que paga ese
   cliente frente al precio de lista.
 - **Historial**: cotizaciones y volúmenes mensuales de la cuenta.
+- **En la tienda online**: con la casilla "Catálogo en la tienda" de la ficha, el
+  cliente que se registra con el email de su ficha ve en Mi cuenta su catálogo
+  con sus precios, los colores de cada pieza y su compromiso del mes, y manda
+  pedidos que entran como cotización enviada, para aceptar o rechazar. Se pagan
+  en efectivo al retirar.
 
 ---
 
@@ -475,13 +480,13 @@ equipo.
 
 ## 11. Arquitectura y tecnología
 
-| Capa | Tecnología |
-|---|---|
-| Frontend | Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 |
-| Backend | NestJS 11 · TypeScript · Zod |
-| Base de datos | PostgreSQL 16 · Prisma ORM |
-| Documentos | PDFKit (generación en servidor) |
-| Empaquetado | Docker Compose · monorepo pnpm |
+| Capa          | Tecnología                                           |
+| ------------- | ---------------------------------------------------- |
+| Frontend      | Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 |
+| Backend       | NestJS 11 · TypeScript · Zod                         |
+| Base de datos | PostgreSQL 16 · Prisma ORM                           |
+| Documentos    | PDFKit (generación en servidor)                      |
+| Empaquetado   | Docker Compose · monorepo pnpm                       |
 
 **Decisiones que importan a mediano plazo:**
 
@@ -551,10 +556,6 @@ panel y reportes · usuarios, roles y auditoría · parámetros · respaldos · 
 
 ### En el plan, no construido
 
-- **Portal de cliente**: acceso externo para que el cliente vea su catálogo y
-  genere pedidos por sí mismo. El modelo de datos y los permisos ya lo
-  contemplan (cuentas de portal vinculadas a la ficha del cliente); falta la
-  interfaz.
 - **Pruebas de extremo a extremo** con navegador automatizado.
 - **Notificaciones internas** y bus de eventos, para cuando el equipo crezca.
 
@@ -576,20 +577,20 @@ el repositorio.
 
 ## 14. Por qué este sistema y no una planilla
 
-| | Planilla | Plastik 3D |
-|---|---|---|
-| Cálculo de costo | Manual, replicado por producto | Automático, una sola fórmula auditada |
-| Precio por canal | Una columna por canal, mantenida a mano | Motor que resuelve comisión y régimen por canal |
-| Ganancia real | Difícil de aislar del costo de insumos | Separada por diseño, fija entre canales |
-| Stock | Aparte, si existe | Se descuenta solo al producir |
-| Clientes con precios propios | Una planilla por cliente | Perfil de reglas, catálogo y compromisos |
-| Quién cambió qué | No se sabe | Registro de auditoría completo |
-| Documentos al cliente | Copiar y pegar | PDF de cotización y de catálogo |
-| Varias personas a la vez | Se pisan | Usuarios, roles y control de concurrencia |
-| Historial de un precio | Se perdió al sobrescribir | Snapshot del cálculo en cada cotización |
+|                              | Planilla                                | Plastik 3D                                      |
+| ---------------------------- | --------------------------------------- | ----------------------------------------------- |
+| Cálculo de costo             | Manual, replicado por producto          | Automático, una sola fórmula auditada           |
+| Precio por canal             | Una columna por canal, mantenida a mano | Motor que resuelve comisión y régimen por canal |
+| Ganancia real                | Difícil de aislar del costo de insumos  | Separada por diseño, fija entre canales         |
+| Stock                        | Aparte, si existe                       | Se descuenta solo al producir                   |
+| Clientes con precios propios | Una planilla por cliente                | Perfil de reglas, catálogo y compromisos        |
+| Quién cambió qué             | No se sabe                              | Registro de auditoría completo                  |
+| Documentos al cliente        | Copiar y pegar                          | PDF de cotización y de catálogo                 |
+| Varias personas a la vez     | Se pisan                                | Usuarios, roles y control de concurrencia       |
+| Historial de un precio       | Se perdió al sobrescribir               | Snapshot del cálculo en cada cotización         |
 
 ---
 
-*Documento generado a partir del código fuente del sistema. Las cifras de
+_Documento generado a partir del código fuente del sistema. Las cifras de
 módulos, endpoints, tests y modelos de datos son recuentos directos sobre el
-repositorio.*
+repositorio._
