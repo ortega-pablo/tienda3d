@@ -1738,7 +1738,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
   - Qué hacer:
     - Leer la documentación de la API Redirect V1 (`gocuotas.com/api_redirect_docs`) y anotar en esta tarea el flujo exacto antes de programar.
     - El servidor:
-      - obtiene el token con el email y la contraseña de API, que van en archivos de secretos y no son los del portal;
+      - se autentica con la clave de API de la sucursal, que va en un archivo de secretos;
       - crea el checkout con el monto en centavos calculado en el servidor, la referencia del pedido y las URLs de vuelta;
       - manda al cliente a la URL que devuelve Go Cuotas.
     - El aviso de pago llega a una URL con un token único por pedido, porque Go Cuotas no documenta una firma: sin un token válido, se descarta.
@@ -1747,6 +1747,14 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
     - Reembolso por la API, si la tiene. Si no, se hace desde el portal de Go Cuotas y el panel lo registra.
     - En local queda simulado hasta tener credenciales.
   - Cierra cuando: hay tests de aviso con token válido, inválido y repetido, de monto distinto y de pedido ausente en la conciliación; y un e2e con Go Cuotas simulado.
+  - El flujo, según su documentación (referencia, colección de Postman y preguntas frecuentes, leídas el 30/10/2026):
+    1. Autenticación: `Authorization: Bearer <API_KEY>`. La clave es de la sucursal, una por entorno, y no vence; evita `/authentication` y los bloqueos cuando alguien cambia la contraseña del portal.
+    2. `POST /api_redirect/v1/checkouts` con JSON: `amount_in_cents`, `order_reference_id`, `url_success`, `url_failure`, `email`, `phone_number` y `webhook_url`, los dos últimos opcionales. Devuelve `url_init`, adonde va el comprador. El mínimo es de $ 1.500.
+    3. El aviso es un `POST` JSON con `order_reference_id`, `status`, `order_id`, `number_of_installments` y `amount_in_cents`. `approved` llega en el momento; `denied`, a los 30 min; `undefined` no se envía. Un carrito abandonado llega `denied` con `order_id` nulo. La referencia usa minúsculas y sus ejemplos, mayúscula inicial.
+    4. `GET /orders/:id` da la orden; `GET /orders` la busca por `order_reference_id`, con `delivered_start` y `delivered_end` obligatorios.
+    5. `DELETE /orders/:id`, con `amount_in_cents` si es parcial. Una orden se reembolsa una sola vez.
+    - Base: `www.gocuotas.com` en producción y `sandbox.gocuotas.com` en pruebas.
+  - Hecho así: [sf] `GoCuotasGateway` y sus reglas puras en `gocuotas-rules.ts`. `GOCUOTAS_API_KEY` es un archivo de secretos y `GOCUOTAS_ENVIRONMENT`, configuración; el sitio no arranca en producción con la de pruebas. Cada checkout lleva un `webhook_url` con el token por intento, un HMAC de la referencia con la clave de API: no hace falta una columna nueva. `/api/webhooks/gocuotas/` descarta el aviso sin token válido o de otro intento, y consulta la orden a la API; `applyProviderNotice` además controla que la orden sea de ese pedido. Las reglas son las mismas `decidePayment`. Conciliar busca cada intento por referencia; uno que no aparece queda pendiente, y un carrito abandonado no cambia nada: el pedido vence solo. Solo `approved` aprueba: un estado que no se entiende queda pendiente. Como Go Cuotas no informa lo devuelto al consultar, `applyPaymentUpdate` ya no deja bajar `refundedCents`, y el reembolso toma el resultado de lo que aceptó. El segundo reembolso de una orden se frena con `RefundNotAllowed` y un mensaje para el admin: el resto va por su portal. El checkout rechaza compras de menos de $ 1.500. **Se apartó del plan en dos cosas:** usa la clave de API, que no vence, en lugar de pedir un token con email y contraseña; y un carrito abandonado no se trata como rechazo, para no mandarle un mail de "rechazó el pago" a quien solo cerró la pestaña. **Falta confirmar en F22·8:** `GET /orders` documenta `status` como un texto, sin sus valores, y muestra un objeto donde se espera una lista; tampoco se sabe cómo se ve una orden reembolsada. Mientras tanto, una orden con otro estado queda pendiente. Tests: [sf] 246 unitarios: 30 de Go Cuotas, con el token válido, inválido, de otro intento y repetido, el monto distinto, el pedido ausente en la conciliación y el segundo reembolso. e2e con Go Cuotas simulado: se cobra, lo ve el panel y se devuelve, en escritorio y celular. Suite completa: 75 de 76; la falla fue "cada cliente ve solo sus compras" en celular, que se quedó sin tiempo cargando el registro, una pantalla que esta tarea no toca. Repetido 4 veces contra el mismo ecosistema pasó siempre, en 22 a 29 s, así que queda anotado como intermitente bajo carga, no como corregido.
 - [ ] **F22·9 [sf] Las acciones humanas piden un captcha**
   - Para qué: que un bot no cree cuentas, mande mails, reserve stock ni pruebe tarjetas.
   - Qué hacer:
@@ -1767,7 +1775,7 @@ transferencia → preparar → listo → cliente ve los estados y recibe 4 mails
     - Las credenciales de prueba van como archivos de secretos (`make secretos` no las genera: las carga Pablo):
       - Mercado Pago: los usuarios de prueba vendedor y comprador;
       - MODO: la preproducción y la app MODO Testing;
-      - Go Cuotas: las credenciales de API del entorno de pruebas.
+      - Go Cuotas: la API Key del entorno de pruebas.
     - Un túnel (cloudflared) para que los avisos lleguen al ecosistema local.
     - E2e contra los entornos de prueba: pago aprobado, pago rechazado, reembolso y un aviso falso rechazado.
     - El escaneo de ZAP de F16·2 sobre el checkout y los webhooks.
@@ -1791,7 +1799,7 @@ _MODO:_
 _Go Cuotas:_
 
 1. Cuenta de comercio en Go Cuotas, con una sucursal para la tienda online que tenga habilitada la API Redirect V1.
-2. Las credenciales de API (email y contraseña, distintas de las del portal), de pruebas y de producción.
+2. La API Key de esa sucursal, de pruebas y de producción: está en Sucursales → Editar → "Ver ApiKeys de la sucursal".
 
 _Mercado Pago:_ la cuenta del negocio y una aplicación en "Tus integraciones", con sus usuarios de prueba (vendedor y comprador).
 
@@ -1840,7 +1848,7 @@ _Mercado Pago:_ la cuenta del negocio y una aplicación en "Tus integraciones", 
 > La integración y el antifraude de cada medio se hacen en local, en F22 (D19). Acá quedan las
 > credenciales y la prueba con plata real.
 
-- [ ] **F19·1** Cargar en SSM las credenciales de producción de Mercado Pago (`mp_access_token`, `mp_webhook_secret`), MODO (usuario, clave y `processor_code`), Go Cuotas (email y contraseña de API) y Turnstile (clave del sitio y secreta, D20), y prender los switches de pago en el panel.
+- [ ] **F19·1** Cargar en SSM las credenciales de producción de Mercado Pago (`mp_access_token`, `mp_webhook_secret`), MODO (usuario, clave y `processor_code`), Go Cuotas (API Key de la sucursal) y Turnstile (clave del sitio y secreta, D20), y prender los switches de pago en el panel.
 - [ ] **F19·2** Configurar los webhooks de producción: Mercado Pago en su aplicación, MODO en el alta del comercio y Go Cuotas por checkout.
 - [ ] ~~**F19·3** Rechazos, reintento de pago, reembolsos y contracargos.~~ Pasa a F22·5 (D19).
 - [ ] **F19·4** Checklist de salida: descriptor de la tarjeta, URLs de retorno, control de monto e idempotencia, alertas de pagos en el mail de la tienda.
@@ -1904,3 +1912,4 @@ _Mercado Pago:_ la cuenta del negocio y una aplicación en "Tus integraciones", 
 | 2026-10-30 | F21   | Fase cerrada: los clientes B2B con la casilla "Catálogo en la tienda" ven en Mi cuenta su catálogo con sus precios, colores y compromiso del mes, bajan el PDF y mandan pedidos que entran al panel como cotización enviada; el taller responde y el cliente lo ve y lo recibe por mail. Se paga en efectivo al retirar. Para usarlo, cada ficha necesita el email del cliente.                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 2026-10-30 | F22·5 | Mercado Pago blindado: firma obligatoria también en localhost, controles de moneda, monto y pedido, contracargos en disputa, pagos tardíos sin reabrir, reembolso desde el panel y conciliación cada 10 min. Se corrigió un 308 en el aviso. Falta probarlo con credenciales reales (F22·8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | 2026-10-30 | F22·6 | MODO integrado contra su documentación real: redirección al site de pagos, aviso firmado con JWS y estado por API. Corrige el plan: no hay script en el navegador, las credenciales son usuario, clave y `processor_code`, y su documentación no trae contracargos. Falta confirmar el cuerpo del aviso con credenciales de prueba (F22·8).                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 2026-10-30 | F22·7 | Go Cuotas integrado con la API Redirect V1: clave de API en lugar de token, aviso con token por intento y estado por API. Una orden se reembolsa una sola vez. Falta confirmar los valores de `status` de sus órdenes con la clave de pruebas (F22·8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
