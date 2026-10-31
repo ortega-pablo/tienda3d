@@ -285,6 +285,10 @@ export class WebOrdersService {
       });
     }
     const paidAt = new Date();
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { name: true },
+    });
     const message =
       method === WebPaymentMethod.CASH
         ? `Cobrado en efectivo: ${pesos(amountCents)}`
@@ -307,6 +311,8 @@ export class WebOrdersService {
         paidAt: paidAt.toISOString(),
         method,
         amountCents,
+        // La tienda se entera por mail de quién lo confirmó (F22·10).
+        confirmedBy: actor?.name ?? 'un usuario del panel',
       });
     });
     await this.audit.record({

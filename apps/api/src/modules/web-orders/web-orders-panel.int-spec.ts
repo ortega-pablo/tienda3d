@@ -301,6 +301,7 @@ describe('[int] Pedidos web en el panel', () => {
           externalId,
           code,
           paidAt: expect.any(String),
+          confirmedBy: 'Test',
           method: 'BANK_TRANSFER',
           amountCents: expect.any(Number),
         },
@@ -391,7 +392,11 @@ describe('[int] Pedidos web en el panel', () => {
     const sent = await prisma.outboxEvent.findFirstOrThrow({
       where: { type: 'order.payment_confirmed_manually' },
     });
-    expect(sent.payload).toMatchObject({ method: 'BANK_TRANSFER', amountCents: await total(id) });
+    expect(sent.payload).toMatchObject({
+      method: 'BANK_TRANSFER',
+      amountCents: await total(id),
+      confirmedBy: expect.any(String),
+    });
   });
 
   it('el efectivo se cobra al retirar, con el monto exacto y el documento a la vista (F22·3)', async () => {
