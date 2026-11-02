@@ -1373,50 +1373,54 @@ enum WebDeliveryMethod {
 
 /// Un pedido de la tienda online. Los montos van en centavos, como en el sitio.
 model WebOrder {
-  id                 String              @id @default(cuid())
+  id                    String              @id @default(cuid())
   /// W-AAAA-NNNN, correlativo por año de Argentina.
-  code               String              @unique
+  code                  String              @unique
   /// Id del pedido en el sitio: un reintento del mismo pedido no lo duplica (F14·3).
-  externalId         String              @unique
+  externalId            String              @unique
   /// Número que ve el cliente en el sitio (#1004).
-  number             Int
-  customerId         String
-  customer           Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  paymentMethod      WebPaymentMethod
-  paymentStatus      WebOrderPayment
-  fulfillmentStatus  WebOrderFulfillment @default(RECEIVED)
-  deliveryMethod     WebDeliveryMethod
-  shippingStreet     String?
-  shippingNumber     String?
-  shippingApartment  String?
-  shippingCity       String?
-  shippingProvince   String?
-  shippingPostalCode String?
-  shippingLabel      String
+  number                Int
+  customerId            String
+  customer              Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  paymentMethod         WebPaymentMethod
+  paymentStatus         WebOrderPayment
+  fulfillmentStatus     WebOrderFulfillment @default(RECEIVED)
+  deliveryMethod        WebDeliveryMethod
+  shippingStreet        String?
+  shippingNumber        String?
+  shippingApartment     String?
+  shippingCity          String?
+  shippingProvince      String?
+  shippingPostalCode    String?
+  shippingLabel         String
   /// Null: el costo de envío se coordina con el cliente.
-  shippingCents      Int?
-  subtotalCents      Int
-  totalCents         Int
-  customerNote       String              @default("")
-  trackingCode       String?
-  internalNotes      String              @default("")
-  cancelReason       String?
+  shippingCents         Int?
+  subtotalCents         Int
+  totalCents            Int
+  customerNote          String              @default("")
+  trackingCode          String?
+  internalNotes         String              @default("")
+  cancelReason          String?
   /// Cuándo se hizo el pedido en el sitio.
-  placedAt           DateTime
-  paidAt             DateTime?
+  placedAt              DateTime
+  paidAt                DateTime?
   /// Cobro manual (F22·3): lo que el admin vio acreditado o cobró, y el número de operación de la transferencia.
-  paidAmountCents    Int?
-  paymentReference   String?
+  paidAmountCents       Int?
+  paymentReference      String?
   /// Cuánto se devolvió del pago (F22·5): lo informa el sitio.
-  refundedCents      Int                 @default(0)
+  refundedCents         Int                 @default(0)
   /// Hasta cuándo se puede pagar (F22·4): 48 h en efectivo o transferencia, 2 h en línea. Null: sin plazo (pedidos de antes).
-  paymentDueAt       DateTime?
+  paymentDueAt          DateTime?
   /// Cuándo se avisó al cliente que vence (efectivo y transferencia, 24 h antes).
-  paymentReminderAt  DateTime?
+  paymentReminderAt     DateTime?
   /// Cuándo cambió el pago en el sitio (su dueño): un aviso más viejo no lo pisa (F14·6).
-  paymentChangedAt   DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  paymentChangedAt      DateTime?
+  /// Arrepentimiento (F23·3): el código que recibió el cliente, cuándo lo pidió y cuándo lo cerró el taller.
+  withdrawalCode        String?
+  withdrawalRequestedAt DateTime?
+  withdrawalResolvedAt  DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   items  WebOrderItem[]
   events WebOrderEvent[]

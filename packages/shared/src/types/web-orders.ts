@@ -93,6 +93,8 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
   paymentReference: string | null;
   /** Hasta cuándo se puede pagar (F22·4); null en los pedidos de antes. */
   paymentDueAt: string | null;
+  /** El cliente se arrepintió de la compra (F23·3). */
+  withdrawal: { code: string; requestedAt: string; resolvedAt: string | null } | null;
   items: WebOrderItemDto[];
   events: WebOrderEventDto[];
   /** Lo que el admin puede hacer ahora, según §5.6. */
@@ -108,6 +110,8 @@ export interface WebOrderDetailDto extends WebOrderSummaryDto {
     production: boolean;
     fulfillment: Array<Exclude<WebOrderFulfillmentValue, 'RECEIVED' | 'CANCELLED'>>;
     cancel: boolean;
+    /** Cerrar a mano un arrepentimiento abierto (F23·3). */
+    resolveWithdrawal: boolean;
   };
 }
 

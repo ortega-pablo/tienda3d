@@ -100,6 +100,16 @@ export class WebOrdersController {
   }
 
   @Permissions('ecommerce:orders')
+  @Post(':id/withdrawal/resolve')
+  resolveWithdrawal(
+    @Param('id') id: string,
+    @Body(ZodValidation(webOrderCancelSchema)) body: WebOrderCancelInput,
+    @CurrentUser() user: AccessPayload,
+  ) {
+    return this.orders.resolveWithdrawal(id, body, user.sub);
+  }
+
+  @Permissions('ecommerce:orders')
   @Post(':id/cancel')
   cancel(
     @Param('id') id: string,
