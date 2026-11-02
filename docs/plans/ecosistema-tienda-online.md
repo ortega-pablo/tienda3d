@@ -1844,6 +1844,7 @@ _Go Cuotas:_
       - modificaciones: una compra ya hecha sigue con los términos con los que se hizo.
     - Alinear las preguntas frecuentes.
   - Cierra cuando: los puntos 5, 8, 9, 11, 12 y 13 están reescritos y marcados como borrador, y las preguntas frecuentes no contradicen los términos.
+  - Hecho así: [sf] `TERMS` en `content/pages.ts`, marcado como borrador en el comentario, igual que `PRIVACY`. Además de la lista, el punto 1 suma el domicilio (F23·4) y el 7 remite a las condiciones de personalización (F23·2).
 - [ ] **F23·2 [sf] Cambios, garantía y personalizados tienen sus condiciones**
   - Para qué: que el cliente sepa qué puede devolver y cómo antes de comprar, y que un pedido a medida aclare quién responde por el diseño.
   - Qué hacer:
@@ -1851,6 +1852,7 @@ _Go Cuotas:_
     - Condiciones de personalización: quien manda un archivo declara que puede usarlo y la tienda puede rechazar un pedido.
     - El formulario de personalización las acepta, con fecha, como el registro acepta los términos.
   - Cierra cuando: la página está en el pie como borrador y una solicitud no se envía sin aceptar las condiciones, con un e2e que lo prueba.
+  - Hecho así: [sf] `/cambios-y-devoluciones/` y `/condiciones-de-personalizacion/`, con `LegalPage`, que ahora usan también términos y privacidad. `quote_requests.acceptedConditionsAt` guarda la fecha de aceptación. La segunda página no va en el pie: se llega desde el formulario y desde los términos.
 - [ ] **F23·3 [sf][t3d] El cliente se arrepiente de una compra con un botón, sin iniciar sesión**
   - Para qué: cumplir la Disposición 954/2025 y que revocar una compra no dependa de mandar un mail.
   - Qué hacer:
@@ -1869,6 +1871,7 @@ _Go Cuotas:_
     - Enlaces a Defensa del Consumidor, de la Nación y de Mendoza.
     - Data Fiscal (formulario 960/D) en la página principal: lo saca el titular con su clave fiscal de ARCA.
   - Cierra cuando: un e2e ve en el pie los datos del vendedor, el canal de reclamos y los enlaces, y lo que depende de los dueños tiene su lugar listo a la espera del dato.
+  - Hecho así: [sf] `SELLER` en `content/site.ts`: lo que todavía es null (titular, CUIT, horario y Data Fiscal) no se muestra. Hay un solo enlace a Defensa del Consumidor, el nacional: Mendoza adhirió a esa ventanilla y su dirección vieja redirige a otro sitio. Suma el enlace a la ley, por la Resolución 104/2005.
 - [ ] **F23·6 [sf] Mayoristas y consignatarios tienen sus condiciones por escrito**
   - Para qué: dejar por escrito lo que la ley del consumidor no cubre en una compra para reventa.
   - Qué hacer:
@@ -1876,6 +1879,7 @@ _Go Cuotas:_
     - Borrador de condiciones de consignación: de quién es la mercadería, cómo se rinde y cómo se devuelve.
     - Se ven en el catálogo B2B de Mi cuenta.
   - Cierra cuando: un cliente B2B ve sus condiciones en Mi cuenta, marcadas como borrador.
+  - Hecho así: [sf] `B2B_CONDITIONS` en `content/pages.ts`, por tipo de cliente, en un desplegable de Mi catálogo. Salen de lo que hace el sistema: precios con factura, ajuste antes de aceptar, efectivo y suspensión por categoría. La liquidación de consignación no está definida en ningún lado: dice "en los plazos que acordemos" y queda como decisión de los dueños, porque el formulario de pedido igual dice que se paga en efectivo al retirar.
 - [ ] **F23·7 [sf] Los dueños validan los textos**
   - Para qué: que nada legal se publique sin que lo hayan leído y aceptado quienes responden por la tienda.
   - Qué hacer:
@@ -2012,3 +2016,4 @@ _Go Cuotas:_
 | 2026-11-01 | F23    | Fase nueva a pedido de Pablo (D22): botón de arrepentimiento, términos corregidos, condiciones de cambios, personalización y B2B y datos del vendedor. Todos los textos van como borradores que validan los dueños.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2026-11-01 | F23·5  | Descartada: las lámparas se venden igual y los textos no tocan el tema. La tienda no tiene estudio jurídico ni contador, así que F23·7 queda como validación de los dueños. F23·4 suma el domicilio y el mail como canal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 2026-11-01 | F23·3  | Botón de arrepentimiento sin iniciar sesión, con verificación por mail y código. Suma "Cerrar arrepentimiento" al panel, que el plan no tenía.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 2026-11-01 | F23·7  | Textos en borrador hechos (F23·1 a F23·6). El documento para los dueños ya está, con los datos que faltan y sus decisiones: titular, CUIT, horario, Data Fiscal y cómo se paga la consignación. Falta su validación.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
