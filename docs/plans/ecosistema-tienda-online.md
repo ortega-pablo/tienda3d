@@ -110,6 +110,7 @@ Definidas por Pablo el 2026-10-27. Las tareas del plan ya están escritas con es
 | D19 | ¿Con qué medios cobra la tienda y cómo se protege de estafas?                                                   | **Efectivo en el local** (solo con retiro, al mismo precio publicado), **transferencia**, **Mercado Pago** (Checkout Pro), **MODO** (SDK v2, sobre un procesador compatible) y **Go Cuotas** (API Redirect V1). Cada medio se prende o apaga con un **switch en los ajustes del panel** y solo se puede prender con sus credenciales cargadas. Los pedidos mayoristas (F21) se pagan solo en efectivo, con el precio con factura (D18). Un pedido sin pagar en efectivo o por transferencia **vence a las 48 h**. Controles antifraude por amenaza en `docs/seguridad-pagos.md` [sf]. Se integra **antes del despliegue**; las credenciales de prueba se cargan al final. Amplía D7. Definida el 2026-10-29. **MODO y Go Cuotas quedan hechos y apagados, sin conectar** (Pablo, 2026-11-01): no se piden sus altas ni se cargan sus credenciales, ni de prueba ni de producción, y sus switches no se pueden prender sin ellas (§8). | F21, F22, F19            |
 | D20 | ¿Cómo se frenan los bots en las acciones humanas de la tienda?                                                  | **Cloudflare Turnstile**, validado siempre en el servidor, en el registro, el reenvío de la verificación, la recuperación de la contraseña, la solicitud de personalización, la compra y el pedido mayorista; en el ingreso, después de 3 intentos fallidos. Se suma a los límites por IP. Si Turnstile no responde, la acción no corre. En local y en las e2e, sus claves de prueba públicas. Definida el 2026-10-29.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | F22·9, F19               |
 | D21 | ¿Se guarda la IP desde la que se hizo cada compra?                                                              | **Sí**, en el pedido del sitio, como evidencia ante un contracargo y con aviso en la política de privacidad. Solo sale del sitio en la alerta de contracargo y se borra a los 12 meses. Definida el 2026-11-01.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | F22                      |
+| D22 | ¿Qué le falta a la tienda para cumplir con el consumidor y quién valida los textos?                             | **Una fase propia (F23), antes del despliegue.** No va una "política de responsabilidad": ante un consumidor, un descargo no limita la responsabilidad por daños (art. 37, Ley 24.240). Todo texto legal, para consumidores o para clientes B2B, es un **borrador que validan los dueños**, y un estudio jurídico revisa la versión final. Definida el 2026-11-01.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | F23                      |
 
 **Siguen abiertas** (no bloquean empezar):
 
@@ -656,14 +657,15 @@ Cada fase indica el repo, de qué depende, la estimación propuesta y sus tareas
 | F16       | Prueba integral local y decisión       | infra, sf      | F12–F15        | 12–18 h       |
 | F21       | Catálogo y pedidos B2B en la tienda    | t3d, sf        | F13, F14, F15  | 23–33 h       |
 | F22       | Medios de pago y antifraude            | sf, t3d, infra | F14, F16       | 48–71 h       |
-| **Local** |                                        |                |                | **272–411 h** |
+| F23       | Cumplimiento legal de la tienda        | sf, t3d        | F14, F15, F21  | 15–25 h       |
+| **Local** |                                        |                |                | **287–436 h** |
 | F17       | Despliegue en EC2 (si F16 da "sí")     | infra          | F16            | 16–24 h       |
 | F18       | Base en RDS (largo plazo)              | infra          | F17            | 6–10 h        |
 | F19       | Medios de pago en producción           | sf, infra      | F17, F22       | 4–8 h         |
-| F20       | Lanzamiento y baja del WordPress       | infra, sf      | F17            | 6–10 h        |
+| F20       | Lanzamiento y baja del WordPress       | infra, sf      | F17, F23       | 6–10 h        |
 
 Lo que se puede hacer en paralelo: F4 con F2; F15 con F14; F9 en cuanto F8 permite cargar datos; F21·1 con F21·3.
-F21 y F22 se agregaron después de F16 y van antes de F17 (D18, D19); F22·5, F22·6 y F22·7 se pueden hacer en paralelo.
+F21 y F22 se agregaron después de F16 y van antes de F17 (D18, D19); F22·5, F22·6 y F22·7 se pueden hacer en paralelo. F23 también va antes de F17 (D22) y no espera a F22·8.
 
 ---
 
@@ -1822,6 +1824,87 @@ _Go Cuotas:_
 
 ---
 
+### F23 — Cumplimiento legal de la tienda · 15–25 h
+
+> **Objetivo:** que la tienda cumpla lo que exige vender a consumidores por internet, con términos
+> que digan lo que la ley permite y las lámparas en regla (D22). Todos los textos son borradores
+> hasta que los validen los dueños (F23·7). Va antes del despliegue (F17).
+
+**Base (relevada el 2026-11-01):** Disposiciones 954/2025 y 3/2026 (botón de arrepentimiento y atención al consumidor), Ley 24.240 (arts. 11, 34, 37 y 40), Código Civil y Comercial (arts. 1109, 1115 y 1116) y Resolución 16/2025 (seguridad eléctrica). No hacen falta el botón de baja, que es para servicios, ni el enlace de la Resolución 274/2021, derogada por la Disposición 890/2025.
+
+- [ ] **F23·1 [sf] Los términos dicen lo que la ley permite**
+  - Para qué: que ninguna cláusula quede sin efecto por contradecir la ley del consumidor y que los términos coincidan con lo que el sitio hace hoy.
+  - Qué hacer:
+    - Reescribir en borrador, marcados como la política de privacidad:
+      - jurisdicción: sacar la prórroga a Mendoza (art. 1109 del Código Civil y Comercial);
+      - garantía: los 6 meses legales para productos nuevos en lugar de las 72 h;
+      - devoluciones: revocar no le cuesta nada al consumidor (art. 1115);
+      - formas de pago: sumar el efectivo en el local;
+      - datos personales: remitir a la política de privacidad en lugar de resumirla;
+      - modificaciones: una compra ya hecha sigue con los términos con los que se hizo.
+    - Alinear las preguntas frecuentes.
+  - Cierra cuando: los puntos 5, 8, 9, 11, 12 y 13 están reescritos y marcados como borrador, y las preguntas frecuentes no contradicen los términos.
+- [ ] **F23·2 [sf] Cambios, garantía y personalizados tienen sus condiciones**
+  - Para qué: que el cliente sepa qué puede devolver y cómo antes de comprar, y que un pedido a medida aclare quién responde por el diseño.
+  - Qué hacer:
+    - Página propia de cambios, devoluciones y garantía, en el pie del sitio: plazos, qué queda afuera, cómo se inicia y cuándo vuelve la plata.
+    - Condiciones de personalización: quien manda un archivo declara que puede usarlo y la tienda puede rechazar un pedido.
+    - El formulario de personalización las acepta, con fecha, como el registro acepta los términos.
+  - Cierra cuando: la página está en el pie como borrador y una solicitud no se envía sin aceptar las condiciones, con un e2e que lo prueba.
+- [ ] **F23·3 [sf][t3d] El cliente se arrepiente de una compra con un botón, sin iniciar sesión**
+  - Para qué: cumplir la Disposición 954/2025 y que revocar una compra no dependa de mandar un mail.
+  - Qué hacer:
+    - [sf] Un enlace "BOTÓN DE ARREPENTIMIENTO" visible en el primer acceso, en todas las páginas.
+    - [sf] Un formulario sin registro previo: número de pedido y email de la compra, con captcha (D20) y un link a ese email para verificar la identidad (Disposición 3/2026).
+    - [sf] Un código de la solicitud por el mismo medio, dentro de las 24 h.
+    - [sf] Lo que no admite revocación se explica en pantalla: personalizados (art. 1116), compras para reventa y fuera de los 10 días corridos desde la entrega.
+    - [t3d] La solicitud llega al panel como alerta y por mail a la tienda, frena la preparación y se resuelve con el reembolso de F22·5.
+  - Cierra cuando: un e2e prueba que un cliente sin sesión revoca, recibe su código y el panel lo muestra y lo reembolsa, y que un pedido que no corresponde recibe la explicación.
+- [ ] **F23·4 [sf] La tienda dice quién vende y por dónde reclamar**
+  - Para qué: que cualquier cliente sepa con quién contrata y cómo hacer un reclamo.
+  - Qué hacer:
+    - Titular, CUIT y domicilio en el pie y en los términos.
+    - Canal de reclamos, área responsable y horario de atención publicados (art. 6 de la Disposición 954/2025: si la atención es solo electrónica, al menos 8 h de lunes a viernes).
+    - Enlaces a Defensa del Consumidor, de la Nación y de Mendoza.
+    - Data Fiscal (formulario 960/D) en la página principal.
+  - Cierra cuando: un e2e ve en el pie los datos del vendedor, el canal de reclamos y los enlaces, y lo que depende de los dueños tiene su lugar listo a la espera del dato.
+- [ ] **F23·5 [sf] Las lámparas se venden con instrucciones y con su situación eléctrica aclarada**
+  - Para qué: que quien compra una lámpara la use sin riesgo y que la tienda sepa qué le exige la norma. Es el riesgo más serio de la fase y el WordPress ya las vende: se pide en paralelo, sin esperar al resto.
+  - Qué hacer:
+    - Consultar por escrito a un organismo de certificación si una lámpara armada con componentes certificados está alcanzada por la Resolución 16/2025 y qué hace falta.
+    - Según la respuesta, tramitar la declaración jurada de conformidad o lo que corresponda.
+    - Borrador de instrucciones de uso y seguridad: solo LED, potencia máxima, no tapar, uso en interiores.
+    - Las instrucciones en la ficha de cada lámpara y en un impreso que va en el envío.
+    - Cotizar un seguro de responsabilidad por productos.
+  - Cierra cuando: hay una respuesta escrita del organismo y las instrucciones están en la ficha de cada lámpara como borrador.
+- [ ] **F23·6 [sf] Mayoristas y consignatarios tienen sus condiciones por escrito**
+  - Para qué: dejar por escrito lo que la ley del consumidor no cubre en una compra para reventa.
+  - Qué hacer:
+    - Borrador de condiciones para mayoristas: compromiso del mes, precio con factura, pago solo en efectivo y vencimiento del pedido (D18, D19).
+    - Borrador de condiciones de consignación: de quién es la mercadería, cómo se rinde y cómo se devuelve.
+    - Se ven en el catálogo B2B de Mi cuenta.
+  - Cierra cuando: un cliente B2B ve sus condiciones en Mi cuenta, marcadas como borrador.
+- [ ] **F23·7 [sf] Los dueños validan los textos y un estudio jurídico revisa la versión final**
+  - Para qué: que nada legal se publique sin que lo hayan leído y aceptado quienes responden por la tienda.
+  - Qué hacer:
+    - Un documento para los dueños, en lenguaje simple, con todos los borradores y lo que cada uno tiene que confirmar: política de privacidad (F13·7, F22·11), términos, cambios y garantía, personalización, instrucciones de las lámparas y condiciones B2B.
+    - Un estudio jurídico revisa la versión final.
+    - Confirmar con el contador o el estudio:
+      - si un producto del catálogo con colores a elegir cuenta como personalizado (art. 1116);
+      - Data Fiscal;
+      - el registro de bases de datos en la AAIP;
+      - el libro de quejas online en Mendoza;
+      - la vigencia de la Resolución 104/2005;
+      - los datos de Defensa del Consumidor en los comprobantes (Ley 9677 de Mendoza).
+    - Al validar cada texto, sacarle la marca de borrador y dejar registrada la fecha.
+  - Cierra cuando: cada texto tiene la validación de los dueños con fecha y no queda ninguna marca de borrador en el sitio.
+
+**Verificación:** verificación mínima de los dos repos, `make e2e` en verde con el botón de arrepentimiento y cada texto legal con su validación registrada.
+
+**Lo que necesitan los dueños:** titular, CUIT y domicilio de la tienda; canal y horario de atención; la consulta al organismo de certificación; y el contacto de un estudio jurídico y del contador.
+
+---
+
 ### F17 — Despliegue en EC2 · 16–24 h (solo si F16 da "sí")
 
 - [ ] **F17·1 Infraestructura AWS**
@@ -1934,3 +2017,4 @@ _Go Cuotas:_
 | 2026-10-31 | F22·10 | Revisado el mapa de amenazas contra el código: faltaban el mail a la tienda por cada cobro y reembolso y dos tests. La IP del pedido queda afuera hasta que Pablo decida.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 2026-11-01 | F22    | Pablo aprueba el mapa de amenazas y decide: MODO y Go Cuotas quedan hechos y apagados, sin conectar, así que F22·8 y F19 se reducen a Mercado Pago (D19); y la IP de cada compra se guarda como evidencia, con aviso en la política de privacidad (D21, F22·11).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 2026-11-01 | F22·11 | La IP de cada compra queda como evidencia: se guarda en el pedido, sale solo en la alerta de contracargo y el worker la borra a los 365 días. La política de privacidad lo avisa y suma a Cloudflare, que faltaba.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-11-01 | F23    | Fase nueva a pedido de Pablo (D22): botón de arrepentimiento, términos corregidos, condiciones de cambios, personalización y B2B, datos del vendedor y seguridad eléctrica de las lámparas. Todos los textos van como borradores que validan los dueños.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
