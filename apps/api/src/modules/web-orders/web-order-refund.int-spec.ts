@@ -155,6 +155,69 @@ describe('[int] Reembolsos y contracargos de los pedidos web', () => {
     request(app.getHttpServer()).post(`/web-orders${path}`).set('Authorization', `Bearer ${auth}`);
   const detail = (id: string) => app.get(WebOrdersService).get(id);
 
+  const withdraw = (externalId: string, key: string = randomUUID()) =>
+    app
+      .get(StorefrontOrderEventsService)
+      .apply(
+        externalId,
+        { type: 'withdrawal_requested', code: 'ARR-7K2M9Q', at: new Date(clock) },
+        key,
+      );
+
+  it('un arrepentimiento frena el pedido y se termina con el reembolso (F23·3)', async () => {
+    const order = await place('MERCADOPAGO');
+    await payment(order.externalId, 'APPROVED');
+    // En preparación y pagado no pide atención: la pide el arrepentimiento.
+    await post(`/${order.id}/fulfillment`).send({ status: 'PREPARING' }).expect(201);
+    expect(await app.get(WebOrdersService).attentionCount()).toBe(0);
+
+    const key = randomUUID();
+    expect(await withdraw(order.externalId, key)).toMatchObject({ applied: true });
+    expect(await withdraw(order.externalId, key)).toMatchObject({ replayed: true });
+
+    const open = await detail(order.id);
+    expect(open.withdrawal).toMatchObject({ code: 'ARR-7K2M9Q', resolvedAt: null });
+    expect(open.needsAttention).toBe(true);
+    expect(open.actions).toMatchObject({
+      resolveWithdrawal: true,
+      refund: true,
+      production: false,
+      cancel: true,
+      fulfillment: [],
+    });
+    expect(open.events.filter((e) => e.kind === 'withdrawal')).toHaveLength(1);
+    expect(await app.get(WebOrdersService).attentionCount()).toBe(1);
+
+    await payment(order.externalId, 'REFUNDED', open.totalCents);
+    const refunded = await detail(order.id);
+    expect(refunded.needsAttention).toBe(false);
+    expect(refunded.actions.resolveWithdrawal).toBe(false);
+  });
+
+  it('el taller cierra a mano un arrepentimiento y el pedido se destraba (F23·3)', async () => {
+    const order = await place('BANK_TRANSFER');
+    await withdraw(order.externalId);
+
+    await post(`/${order.id}/withdrawal/resolve`, firmar(['ecommerce:read']))
+      .send({ reason: 'Se le devolvió la plata' })
+      .expect(403);
+    const res = await post(`/${order.id}/withdrawal/resolve`)
+      .send({ reason: 'Se le devolvió la plata' })
+      .expect(201);
+
+    expect(res.body.withdrawal.resolvedAt).toEqual(expect.any(String));
+    expect(res.body.actions.resolveWithdrawal).toBe(false);
+    expect(res.body.events[0].message).toBe('Arrepentimiento cerrado: Se le devolvió la plata');
+    await post(`/${order.id}/withdrawal/resolve`).send({ reason: 'Otra vez' }).expect(422);
+  });
+
+  it('un aviso de arrepentimiento de un pedido desconocido no falla (F23·3)', async () => {
+    expect(await withdraw(randomUUID())).toMatchObject({
+      applied: false,
+      ignored: 'UNKNOWN_ORDER',
+    });
+  });
+
   it('reembolsa con el permiso de pagos: el sitio lo hace y queda registrado', async () => {
     const order = await place('MERCADOPAGO');
     await payment(order.externalId, 'APPROVED');

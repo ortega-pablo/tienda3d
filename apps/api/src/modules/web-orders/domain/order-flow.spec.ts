@@ -11,6 +11,7 @@ import {
   paymentDueAt,
   paymentStartIssue,
   productionColors,
+  withdrawalOpen,
   type OrderState,
 } from './order-flow';
 
@@ -235,5 +236,41 @@ describe('Pedidos web: el plazo para pagar (F22·4)', () => {
     expect(
       canExtendPayment({ paymentStatus: 'AWAITING_TRANSFER', fulfillmentStatus: 'CANCELLED' }),
     ).toBe(false);
+  });
+});
+
+describe('Pedidos web: el arrepentimiento (F23·3)', () => {
+  const paid: OrderState = {
+    paymentMethod: 'MERCADOPAGO',
+    paymentStatus: 'APPROVED',
+    fulfillmentStatus: 'PREPARING',
+    deliveryMethod: 'SHIPPING',
+    withdrawalRequestedAt: new Date('2026-11-01T12:00:00Z'),
+    withdrawalResolvedAt: null,
+  };
+
+  it('frena la preparación y pide atención, pero se puede cancelar', () => {
+    expect(allowedFulfillments(paid)).toEqual(['CANCELLED']);
+    expect(needsAttention(paid)).toBe(true);
+    expect(canStartProduction(paid)).toBe(false);
+    expect(canRefund(paid)).toBe(true);
+  });
+
+  it('lo enviado igual puede llegar', () => {
+    expect(allowedFulfillments({ ...paid, fulfillmentStatus: 'SHIPPED' })).toEqual(['DELIVERED']);
+  });
+
+  it('se termina al cancelar, con el reembolso total o cuando el taller lo cierra', () => {
+    expect(withdrawalOpen(paid)).toBe(true);
+    expect(withdrawalOpen({ ...paid, fulfillmentStatus: 'CANCELLED' })).toBe(false);
+    expect(withdrawalOpen({ ...paid, paymentStatus: 'REFUNDED' })).toBe(false);
+    const closed = { ...paid, withdrawalResolvedAt: new Date('2026-11-02T12:00:00Z') };
+    expect(withdrawalOpen(closed)).toBe(false);
+    expect(allowedFulfillments(closed)).toContain('SHIPPED');
+    expect(needsAttention(closed)).toBe(false);
+  });
+
+  it('sin pedido de arrepentimiento, nada cambia', () => {
+    expect(withdrawalOpen({ ...paid, withdrawalRequestedAt: null })).toBe(false);
   });
 });

@@ -23,6 +23,12 @@ export const webOrderEventSchema = z.discriminatedUnion('type', [
     message: z.string().min(1).max(500),
     at: z.coerce.date(),
   }),
+  /** El cliente se arrepintió de la compra (F23·3): frena la preparación. */
+  z.object({
+    type: z.literal('withdrawal_requested'),
+    code: z.string().min(1).max(20),
+    at: z.coerce.date(),
+  }),
 ]);
 export type WebOrderEventInput = z.infer<typeof webOrderEventSchema>;
 
@@ -58,6 +64,9 @@ export class StorefrontOrderEventsService {
 
   async apply(externalId: string, input: WebOrderEventInput, idempotencyKey: string) {
     if (input.type === 'payment_alert') return this.alert(externalId, input, idempotencyKey);
+    if (input.type === 'withdrawal_requested') {
+      return this.withdrawal(externalId, input, idempotencyKey);
+    }
     let before: WebOrderPayment | null = null;
     let orderId: string | null = null;
     const outcome = await this.inbound.once<WebOrderEventResult>(
@@ -110,6 +119,49 @@ export class StorefrontOrderEventsService {
         action: 'payment-updated',
         before: { paymentStatus: before },
         after: { paymentStatus: input.paymentStatus, refundedCents: input.refundedCents },
+      });
+    }
+    return { ...outcome.result, replayed: outcome.replayed };
+  }
+
+  /** El panel lo muestra hasta que se resuelve (ver `withdrawalOpen`). */
+  private async withdrawal(
+    externalId: string,
+    input: Extract<WebOrderEventInput, { type: 'withdrawal_requested' }>,
+    idempotencyKey: string,
+  ) {
+    let orderId: string | null = null;
+    const outcome = await this.inbound.once<WebOrderEventResult>(
+      'storefront:order-events',
+      idempotencyKey,
+      async (tx) => {
+        const order = await tx.webOrder.findUnique({
+          where: { externalId },
+          select: { id: true },
+        });
+        if (!order) return { applied: false, ignored: 'UNKNOWN_ORDER' };
+        await tx.webOrder.update({
+          where: { id: order.id },
+          data: { withdrawalCode: input.code, withdrawalRequestedAt: input.at },
+        });
+        await tx.webOrderEvent.create({
+          data: {
+            webOrderId: order.id,
+            kind: 'withdrawal',
+            message: `El cliente se arrepintió de la compra (código ${input.code})`,
+          },
+        });
+        orderId = order.id;
+        return { applied: true };
+      },
+    );
+    if (orderId && !outcome.replayed) {
+      await this.audit.record({
+        actorId: null,
+        entity: 'WebOrder',
+        entityId: orderId,
+        action: 'withdrawal-requested',
+        after: { code: input.code, at: input.at },
       });
     }
     return { ...outcome.result, replayed: outcome.replayed };

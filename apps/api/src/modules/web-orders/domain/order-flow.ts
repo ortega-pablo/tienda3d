@@ -16,6 +16,8 @@ export interface OrderState {
   paymentStatus: Payment;
   fulfillmentStatus: Fulfillment;
   deliveryMethod: Delivery;
+  withdrawalRequestedAt?: Date | null;
+  withdrawalResolvedAt?: Date | null;
 }
 
 const TRANSITIONS: Record<Fulfillment, Fulfillment[]> = {
@@ -28,8 +30,27 @@ const TRANSITIONS: Record<Fulfillment, Fulfillment[]> = {
 };
 
 /**
+ * El cliente se arrepintió de la compra (F23·3) y falta resolverlo: se termina con la
+ * cancelación, con el reembolso total o cuando el taller lo cierra a mano.
+ */
+export function withdrawalOpen(
+  order: Pick<
+    OrderState,
+    'paymentStatus' | 'fulfillmentStatus' | 'withdrawalRequestedAt' | 'withdrawalResolvedAt'
+  >,
+) {
+  return (
+    !!order.withdrawalRequestedAt &&
+    !order.withdrawalResolvedAt &&
+    order.fulfillmentStatus !== 'CANCELLED' &&
+    order.paymentStatus !== 'REFUNDED'
+  );
+}
+
+/**
  * A qué puede pasar la preparación: según la entrega y solo con el pago aprobado.
- * Un contracargo frena lo que no salió del taller; lo enviado igual puede llegar.
+ * Un contracargo o un arrepentimiento frenan lo que no salió del taller; lo enviado
+ * igual puede llegar.
  */
 export function allowedFulfillments(order: OrderState): Fulfillment[] {
   return TRANSITIONS[order.fulfillmentStatus].filter((next) => {
@@ -37,7 +58,7 @@ export function allowedFulfillments(order: OrderState): Fulfillment[] {
     if (next === 'READY_FOR_PICKUP' && order.deliveryMethod === 'SHIPPING') return false;
     // Preparar exige el pago aprobado; cancelar se puede hasta que sale del taller.
     if (next === 'CANCELLED') return true;
-    if (order.paymentStatus === 'DISPUTED') {
+    if (order.paymentStatus === 'DISPUTED' || withdrawalOpen(order)) {
       return order.fulfillmentStatus === 'SHIPPED' && next === 'DELIVERED';
     }
     return order.paymentStatus === 'APPROVED';
@@ -135,11 +156,17 @@ export function canConfirmTransfer(order: OrderState): boolean {
 
 /**
  * Espera algo del taller: confirmar la transferencia, empezar a prepararlo o
- * atender un contracargo. Un pago de Mercado Pago pendiente o rechazado espera al
- * cliente, no al taller.
+ * atender un contracargo o un arrepentimiento. Un pago de Mercado Pago pendiente o
+ * rechazado espera al cliente, no al taller.
  */
-export function needsAttention(order: Pick<OrderState, 'paymentStatus' | 'fulfillmentStatus'>) {
+export function needsAttention(
+  order: Pick<
+    OrderState,
+    'paymentStatus' | 'fulfillmentStatus' | 'withdrawalRequestedAt' | 'withdrawalResolvedAt'
+  >,
+) {
   if (order.paymentStatus === 'DISPUTED') return order.fulfillmentStatus !== 'CANCELLED';
+  if (withdrawalOpen(order)) return true;
   return (
     order.fulfillmentStatus === 'RECEIVED' &&
     (order.paymentStatus === 'AWAITING_TRANSFER' || order.paymentStatus === 'APPROVED')
@@ -157,10 +184,16 @@ export const FULFILLMENT_LABEL: Record<Fulfillment, string> = {
 };
 
 /** Se fabrica lo pagado que todavía no salió del taller (§5.6). */
-export function canStartProduction(order: Pick<OrderState, 'paymentStatus' | 'fulfillmentStatus'>) {
+export function canStartProduction(
+  order: Pick<
+    OrderState,
+    'paymentStatus' | 'fulfillmentStatus' | 'withdrawalRequestedAt' | 'withdrawalResolvedAt'
+  >,
+) {
   return (
     order.paymentStatus === 'APPROVED' &&
-    (order.fulfillmentStatus === 'RECEIVED' || order.fulfillmentStatus === 'PREPARING')
+    (order.fulfillmentStatus === 'RECEIVED' || order.fulfillmentStatus === 'PREPARING') &&
+    !withdrawalOpen(order)
   );
 }
 

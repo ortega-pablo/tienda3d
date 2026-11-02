@@ -55,6 +55,8 @@ export function OrderActions({
   const [refunding, setRefunding] = useState(false);
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const [resolution, setResolution] = useState('');
   const { actions } = order;
   const confirmTransfer = canPayments && actions.confirmTransfer;
   const confirmCash = canPayments && actions.confirmCash;
@@ -82,6 +84,8 @@ export function OrderActions({
       toast.success(done);
       setShipping(false);
       setCancelling(false);
+      setResolving(false);
+      setResolution('');
       closePaying();
       closeRefund();
       router.refresh();
@@ -104,7 +108,8 @@ export function OrderActions({
     !extendPayment &&
     !refund &&
     actions.fulfillment.length === 0 &&
-    !actions.cancel
+    !actions.cancel &&
+    !actions.resolveWithdrawal
   ) {
     return null;
   }
@@ -153,6 +158,48 @@ export function OrderActions({
           Cancelar pedido
         </Button>
       )}
+      {actions.resolveWithdrawal && (
+        <Button variant="outline" onClick={() => setResolving(true)} disabled={pending}>
+          Cerrar arrepentimiento
+        </Button>
+      )}
+
+      <Dialog
+        open={resolving}
+        onOpenChange={(open) => {
+          setResolving(open);
+          if (!open) setResolution('');
+        }}
+        title="Cerrar el arrepentimiento"
+        description="Para cuando el dinero se devolvió a mano o el cliente cambió de idea. El pedido deja de estar frenado."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setResolving(false)} disabled={pending}>
+              Volver
+            </Button>
+            <Button
+              onClick={() =>
+                run('withdrawal/resolve', { reason: resolution.trim() }, 'Arrepentimiento cerrado.')
+              }
+              disabled={pending || resolution.trim().length < 3}
+            >
+              Cerrar arrepentimiento
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="ped-resolucion">Cómo se resolvió</Label>
+          <Textarea
+            id="ped-resolucion"
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder="Por ejemplo: se le devolvió el efectivo en el taller."
+          />
+        </div>
+      </Dialog>
 
       <Dialog
         open={paying !== null}

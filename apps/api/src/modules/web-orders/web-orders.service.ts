@@ -38,6 +38,7 @@ import {
   PAYMENT_EXTENSION_MS,
   pesos,
   productionColors,
+  withdrawalOpen,
 } from './domain/order-flow';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -59,6 +60,8 @@ const SUMMARY_SELECT = {
   paymentMethod: true,
   paymentStatus: true,
   fulfillmentStatus: true,
+  withdrawalRequestedAt: true,
+  withdrawalResolvedAt: true,
   deliveryMethod: true,
   totalCents: true,
   placedAt: true,
@@ -78,6 +81,12 @@ const ATTENTION_WHERE: Prisma.WebOrderWhereInput = {
     {
       paymentStatus: WebOrderPayment.DISPUTED,
       fulfillmentStatus: { not: WebOrderFulfillment.CANCELLED },
+    },
+    {
+      withdrawalRequestedAt: { not: null },
+      withdrawalResolvedAt: null,
+      fulfillmentStatus: { not: WebOrderFulfillment.CANCELLED },
+      paymentStatus: { not: WebOrderPayment.REFUNDED },
     },
   ],
 };
@@ -155,6 +164,7 @@ export class WebOrdersService {
         paymentReference: true,
         refundedCents: true,
         paymentDueAt: true,
+        withdrawalCode: true,
         customer: { select: { id: true, name: true, email: true, phone: true, taxId: true } },
         items: {
           orderBy: { id: 'asc' },
@@ -199,6 +209,14 @@ export class WebOrdersService {
       paymentReference: order.paymentReference,
       refundedCents: order.refundedCents,
       paymentDueAt: order.paymentDueAt?.toISOString() ?? null,
+      withdrawal:
+        order.withdrawalCode && order.withdrawalRequestedAt
+          ? {
+              code: order.withdrawalCode,
+              requestedAt: order.withdrawalRequestedAt.toISOString(),
+              resolvedAt: order.withdrawalResolvedAt?.toISOString() ?? null,
+            }
+          : null,
       items: order.items.map((i) => ({
         id: i.id,
         webVariantId: i.webVariantId,
@@ -231,6 +249,7 @@ export class WebOrdersService {
           (s): s is WebOrderDetailDto['actions']['fulfillment'][number] => s !== 'CANCELLED',
         ),
         cancel: allowedFulfillments(order).includes('CANCELLED'),
+        resolveWithdrawal: withdrawalOpen(order),
       },
     };
   }
@@ -518,6 +537,43 @@ export class WebOrdersService {
    * 48 h más para pagar (F22·4): desde el vencimiento o, si ya pasó, desde ahora.
    * Vuelve a avisar al cliente 24 h antes y el sitio muestra el plazo nuevo.
    */
+  /**
+   * El taller cierra un arrepentimiento que no terminó en cancelación ni en reembolso
+   * por el panel (F23·3): la plata se devolvió a mano o el cliente cambió de idea.
+   */
+  async resolveWithdrawal(
+    id: string,
+    input: WebOrderCancelInput,
+    actorId: string,
+  ): Promise<WebOrderDetailDto> {
+    const order = await this.load(id);
+    if (!withdrawalOpen(order)) {
+      throw new UnprocessableEntityException('Este pedido no tiene un arrepentimiento abierto.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webOrder.update({
+        where: { id },
+        data: { withdrawalResolvedAt: new Date() },
+      });
+      await tx.webOrderEvent.create({
+        data: {
+          webOrderId: id,
+          kind: 'withdrawal',
+          message: `Arrepentimiento cerrado: ${input.reason}`,
+          actorId,
+        },
+      });
+    });
+    await this.audit.record({
+      actorId,
+      entity: 'WebOrder',
+      entityId: id,
+      action: 'withdrawal-resolved',
+      after: { reason: input.reason },
+    });
+    return this.get(id);
+  }
+
   async extendPayment(id: string, actorId: string): Promise<WebOrderDetailDto> {
     const order = await this.load(id);
     if (!canExtendPayment(order) || !order.paymentDueAt) {
@@ -729,6 +785,8 @@ export class WebOrdersService {
         totalCents: true,
         refundedCents: true,
         paymentDueAt: true,
+        withdrawalRequestedAt: true,
+        withdrawalResolvedAt: true,
       },
     });
     if (!order) throw new NotFoundException('Pedido inexistente');

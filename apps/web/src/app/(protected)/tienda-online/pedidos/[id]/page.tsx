@@ -68,6 +68,18 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
         </p>
       )}
 
+      {order.actions.resolveWithdrawal && order.withdrawal && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm"
+        >
+          <span className="font-medium">Arrepentimiento {order.withdrawal.code}:</span> el cliente
+          pidió revocar la compra y la preparación queda frenada. Si el pedido no salió del taller,
+          cancelalo. Si ya lo tiene, coordiná la devolución, cuyo envío corre por la tienda, y
+          devolvé el dinero.
+        </p>
+      )}
+
       {alert && order.paymentStatus !== 'REFUNDED' && (
         <p
           role="alert"
@@ -171,7 +183,13 @@ export default async function PedidoWebPage({ params }: { params: Promise<{ id: 
               <ol className="space-y-3 text-sm">
                 {order.events.map((e) => (
                   <li key={e.id} className="flex flex-wrap justify-between gap-x-4">
-                    <span className={e.kind === 'alert' ? 'font-medium text-destructive' : ''}>
+                    <span
+                      className={
+                        e.kind === 'alert' || e.kind === 'withdrawal'
+                          ? 'font-medium text-destructive'
+                          : ''
+                      }
+                    >
                       {e.message}
                     </span>
                     <span className="text-muted-foreground">
