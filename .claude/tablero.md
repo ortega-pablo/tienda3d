@@ -52,7 +52,7 @@ Tarea → sub-issue de su fase (cross-repo). La fase sigue a sus hijos.
 | ------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
 | `Status`      | Por hacer · En curso · En revisión · Bloqueada · Descartada · Hecha |                                                           |
 | `Tipo`        | Fase · Tarea                                                        |                                                           |
-| `Fase`        | F0 … F22                                                            | agrupar                                                   |
+| `Fase`        | F0 … F23                                                            | agrupar                                                   |
 | `Documento`   | texto: `docs/plans/ecosistema-tienda-online.md §6 F<n>`             |                                                           |
 | `Repositorio` | texto: `owner/repo`                                                 | dónde aterriza la tarea                                   |
 | `Rama`        | texto                                                               | la rama donde se mergea (`unificacion` o `main` en infra) |
